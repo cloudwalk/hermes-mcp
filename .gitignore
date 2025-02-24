@@ -24,3 +24,7 @@ hermes_mcp-*.tar
 
 # Dialyzer
 /priv/plts/
+
+# Python specific
+/priv/dev/**/__pycache__/
+/priv/dev/**/.venv/

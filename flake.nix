@@ -27,7 +27,7 @@
     in {
       default = mkShell {
         name = "hermes-ex";
-        packages = [elixir_1_18];
+        packages = with pkgs; [elixir_1_18 uv just];
       };
     });
   };
