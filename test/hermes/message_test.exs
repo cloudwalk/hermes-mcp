@@ -127,7 +127,7 @@ defmodule Hermes.MessageTest do
       msg = %{
         "jsonrpc" => "2.0",
         "error" => %{
-          "code" => -32600,
+          "code" => -32_600,
           "message" => "Invalid Request"
         },
         "id" => 1
@@ -274,7 +274,7 @@ defmodule Hermes.MessageTest do
     test "is_error/1 correctly identifies error messages" do
       error = %{
         "jsonrpc" => "2.0",
-        "error" => %{"code" => -32600, "message" => "Invalid Request"},
+        "error" => %{"code" => -32_600, "message" => "Invalid Request"},
         "id" => 1
       }
 
