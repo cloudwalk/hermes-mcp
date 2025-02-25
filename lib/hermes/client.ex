@@ -73,19 +73,6 @@ defmodule Hermes.Client do
   end
 
   @doc """
-  Initializes the connection with the MCP server.
-
-  This function performs the MCP initialization handshake, exchanging capabilities
-  with the server and preparing the connection for further operations.
-
-  Returns `{:ok, result}` on success, where `result` contains the server's
-  capabilities and protocol information.
-  """
-  def initialize(client, timeout \\ nil) do
-    GenServer.call(client, :initialize, timeout || @default_timeout)
-  end
-
-  @doc """
   Sends a ping request to the server to check connection health.
   """
   def ping(client, timeout \\ nil) do
@@ -248,25 +235,24 @@ defmodule Hermes.Client do
 
     with {:ok, request_data} <- encode_request("initialize", params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      pending = Map.put(state.pending_requests, request_id, :initialize)
+      pending = Map.put(state.pending_requests, request_id, {self(), "initialize"})
 
       {:noreply, %{state | pending_requests: pending}}
     end
   end
 
   @impl true
-  def handle_cast({:request, method, params}, state) do
+  def handle_call({:request, method, params}, from, state) do
     request_id = generate_request_id()
 
     with {:ok, request_data} <- encode_request(method, params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      pending = Map.put(state.pending_requests, request_id, method)
+      pending = Map.put(state.pending_requests, request_id, {from, method})
 
       {:noreply, %{state | pending_requests: pending}}
     end
   end
 
-  @impl true
   def handle_call({:merge_capabilities, additional_capabilities}, _from, state) do
     updated_capabilities = deep_merge(state.capabilities, additional_capabilities)
 
@@ -291,16 +277,12 @@ defmodule Hermes.Client do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
         Logger.error("Received error response: #{inspect(error)}")
-        {:noreply, state}
+        pending = Map.get(pending_requests, error["id"])
+        {:noreply, handle_error(error, pending, state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        if Map.has_key?(pending_requests, response["id"]) do
-          state = handle_response(response, state)
-          {:noreply, %{state | pending_requests: Map.delete(pending_requests, response["id"])}}
-        else
-          Logger.warning("Received response for unknown request ID: #{response["id"]}")
-          {:noreply, state}
-        end
+        pending = Map.get(pending_requests, response["id"])
+        {:noreply, handle_response(response, pending, state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
         Logger.debug("Received notification: #{notification["method"]}")
@@ -314,22 +296,49 @@ defmodule Hermes.Client do
 
   # Response handling
 
-  defp handle_response(%{"method" => "initialize", "result" => result}, state) do
+  defp handle_error(response, nil, state) do
+    Logger.warning("Received error response for unknown request ID: #{response["id"]}")
+    state
+  end
+
+  defp handle_error(%{"error" => error} = response, {from, _}, state) do
+    %{pending_requests: pending} = state
+
+    # unblocks original caller
+    GenServer.reply(from, {:error, error})
+
+    %{state | pending_requests: Map.delete(pending, response["id"])}
+  end
+
+  defp handle_response(response, nil, state) do
+    Logger.warning("Received response for unknown request ID: #{response["id"]}")
+    state
+  end
+
+  defp handle_response(%{"method" => "initialize"} = response, _, state) do
+    %{"result" => result} = response
+    %{pending_requests: pending} = state
+
     state = %{
       state
       | server_capabilities: result["capabilities"],
-        server_info: result["serverInfo"]
+        server_info: result["serverInfo"],
+        pending_requests: Map.delete(pending, response["id"])
     }
 
+    # we need to confirm to the server the handshake
     Task.start(fn -> send_notification(state, "notifications/initialized") end)
 
     state
   end
 
-  defp handle_response(response, state) do
-    result = response["result"]
-    Logger.info("Received response: #{inspect(result)}")
-    state
+  defp handle_response(%{"result" => result} = response, {from, _}, state) do
+    %{pending_requests: pending} = state
+
+    # unblocks original caller
+    GenServer.reply(from, {:ok, result})
+
+    %{state | pending_requests: Map.delete(pending, response["id"])}
   end
 
   # Helper functions
