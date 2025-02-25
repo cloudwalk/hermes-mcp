@@ -16,11 +16,11 @@ defmodule Hermes.MessageTest do
 
     test "decodes multiple messages" do
       json =
-        ~s({"jsonrpc":"2.0","method":"ping","id":1}\n{"jsonrpc":"2.0","method":"notifications/initialize"}\n)
+        ~s({"jsonrpc":"2.0","method":"ping","id":1}\n{"jsonrpc":"2.0","method":"notifications/initialized"}\n)
 
       assert {:ok, [msg1, msg2]} = Message.decode(json)
       assert msg1["method"] == "ping"
-      assert msg2["method"] == "notifications/initialize"
+      assert msg2["method"] == "notifications/initialized"
     end
 
     test "returns error for invalid JSON" do
@@ -94,7 +94,7 @@ defmodule Hermes.MessageTest do
     test "validates notification message" do
       msg = %{
         "jsonrpc" => "2.0",
-        "method" => "notifications/initialize"
+        "method" => "notifications/initialized"
       }
 
       assert {:ok, _} = Message.validate_message(msg)
@@ -117,6 +117,16 @@ defmodule Hermes.MessageTest do
       msg = %{
         "jsonrpc" => "2.0",
         "result" => %{"status" => "success"},
+        "id" => 1
+      }
+
+      assert {:ok, _} = Message.validate_message(msg)
+    end
+
+    test "validates pong response message" do
+      msg = %{
+        "jsonrpc" => "2.0",
+        "result" => %{},
         "id" => 1
       }
 
@@ -209,7 +219,7 @@ defmodule Hermes.MessageTest do
 
   describe "encode_notification/1" do
     test "encodes initialize notification" do
-      notif = %{"method" => "notifications/initialize"}
+      notif = %{"method" => "notifications/initialized"}
 
       assert {:ok, encoded} = Message.encode_notification(notif)
       assert is_binary(encoded)
@@ -217,7 +227,7 @@ defmodule Hermes.MessageTest do
 
       # Decode to validate
       {:ok, [decoded]} = Message.decode(encoded)
-      assert decoded["method"] == "notifications/initialize"
+      assert decoded["method"] == "notifications/initialized"
       refute Map.has_key?(decoded, "id")
     end
 
@@ -249,14 +259,14 @@ defmodule Hermes.MessageTest do
   describe "guards" do
     test "is_request/1 correctly identifies request messages" do
       request = %{"jsonrpc" => "2.0", "method" => "ping", "id" => 1}
-      not_request = %{"jsonrpc" => "2.0", "method" => "notifications/initialize"}
+      not_request = %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}
 
       assert Message.is_request(request)
       refute Message.is_request(not_request)
     end
 
     test "is_notification/1 correctly identifies notification messages" do
-      notification = %{"jsonrpc" => "2.0", "method" => "notifications/initialize"}
+      notification = %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}
       not_notification = %{"jsonrpc" => "2.0", "method" => "ping", "id" => 1}
 
       assert Message.is_notification(notification)
