@@ -29,7 +29,7 @@ defmodule Hermes.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:peri, "~> 0.4.0-rc1"},
+      {:peri, "~> 0.4.0-rc2"},
       {:mox, only: :test},
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
