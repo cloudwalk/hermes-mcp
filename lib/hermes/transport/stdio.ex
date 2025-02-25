@@ -9,6 +9,8 @@ defmodule Hermes.Transport.STDIO do
 
   alias Hermes.Transport.Behaviour, as: Transport
 
+  require Logger
+
   @behaviour Transport
 
   @type params_t :: Enumerable.t(option)
@@ -21,7 +23,7 @@ defmodule Hermes.Transport.STDIO do
 
   defschema :options_schema, %{
     name: {:atom, {:default, __MODULE__}},
-    client: {:required, :atom},
+    client: {:required, {:either, {:pid, :atom}}},
     command: {:required, :string},
     args: {{:list, :string}, {:default, nil}},
     env: {:map, {:default, nil}},
@@ -86,28 +88,28 @@ defmodule Hermes.Transport.STDIO do
 
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
-    IO.puts("Received data: #{inspect(data)}")
+    Logger.info("Received data: #{inspect(data)}")
     Process.send(state.client, {:response, data}, [:noconnect])
     {:noreply, state}
   end
 
   def handle_info({port, :closed}, %{port: port} = state) do
-    IO.puts("Port closed")
+    Logger.warning("Port closed, restarting")
     {:stop, :normal, state}
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
-    IO.puts("Port exited with status: #{status}")
+    Logger.warning("Port exited with status: #{status}")
     {:stop, status, state}
   end
 
   def handle_info({:DOWN, ref, :port, port, reason}, %{ref: ref, port: port} = state) do
-    IO.puts("Port monitor DOWN: #{inspect(reason)}")
+    Logger.error("Port monitor DOWN: #{inspect(reason)}")
     {:stop, reason, state}
   end
 
   def handle_info({:EXIT, port, reason}, %{port: port} = state) do
-    IO.puts("Port exited: #{inspect(reason)}")
+    Logger.error("Port exited: #{inspect(reason)}")
     {:stop, reason, state}
   end
 

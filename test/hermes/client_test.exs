@@ -3,6 +3,8 @@ defmodule Hermes.ClientTest do
 
   import Mox
 
+  @moduletag capture_log: true
+
   setup :set_mox_from_context
   setup :verify_on_exit!
 
@@ -387,7 +389,6 @@ defmodule Hermes.ClientTest do
       %{client: client}
     end
 
-    @tag capture_log: true
     test "handles error response", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn message ->
         decoded = JSON.decode!(message)
@@ -415,7 +416,6 @@ defmodule Hermes.ClientTest do
       send(client, {:response, encoded_response})
 
       expected_error = %{"code" => -32_601, "message" => "Method not found"}
-
       assert {:error, ^expected_error} = Task.await(task)
     end
 
