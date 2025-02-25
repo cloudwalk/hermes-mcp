@@ -93,11 +93,11 @@ defmodule Hermes.Message do
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" =>
       {:required,
-       {:enum, ~w(notifications/initialize notifications/cancelled notifications/progress)}},
+       {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress)}},
     "params" => {:dependent, &parse_notification_params_by_method/1}
   }
 
-  defp parse_notification_params_by_method(%{"method" => "notifications/initialize"}),
+  defp parse_notification_params_by_method(%{"method" => "notifications/initialized"}),
     do: {:ok, @init_noti_params_schema}
 
   defp parse_notification_params_by_method(%{"method" => "notifications/cancelled"}),
@@ -110,7 +110,7 @@ defmodule Hermes.Message do
 
   defschema :response_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
-    "result" => {:required, :map},
+    "result" => {:required, :any},
     "id" => {:required, {:either, {:string, :integer}}}
   }
 

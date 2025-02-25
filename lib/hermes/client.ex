@@ -49,7 +49,7 @@ defmodule Hermes.Client do
     {:name, {:atom, {:default, __MODULE__}}},
     {:transport, {:required, :atom}},
     {:client_info, {:required, :map}},
-    {:capabilities, :map},
+    {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
     {:request_timeout, {:integer, {:default, @default_timeout}}}
   ]
@@ -73,7 +73,7 @@ defmodule Hermes.Client do
   end
 
   @doc """
-  Sends a ping request to the server to check connection health.
+  Sends a ping request to the server to check connection health. Returns `:pong` if successful.
   """
   def ping(client, timeout \\ nil) do
     GenServer.call(client, {:request, "ping", %{}}, timeout || @default_timeout)
@@ -235,10 +235,18 @@ defmodule Hermes.Client do
 
     with {:ok, request_data} <- encode_request("initialize", params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      pending = Map.put(state.pending_requests, request_id, {self(), "initialize"})
+      from = {self(), generate_request_id()}
+      pending = Map.put(state.pending_requests, request_id, {from, "initialize"})
 
       {:noreply, %{state | pending_requests: pending}}
+    else
+      err -> {:stop, err, state}
     end
+  rescue
+    e ->
+      err = Exception.format(:error, e, __STACKTRACE__)
+      Logger.error("Failed to initialize client: #{err}")
+      {:stop, :unexpected, state}
   end
 
   @impl true
@@ -250,6 +258,8 @@ defmodule Hermes.Client do
       pending = Map.put(state.pending_requests, request_id, {from, method})
 
       {:noreply, %{state | pending_requests: pending}}
+    else
+      err -> {:reply, err, state}
     end
   end
 
@@ -281,8 +291,7 @@ defmodule Hermes.Client do
         {:noreply, handle_error(error, pending, state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        pending = Map.get(pending_requests, response["id"])
-        {:noreply, handle_response(response, pending, state)}
+        {:noreply, handle_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
         Logger.debug("Received notification: #{notification["method"]}")
@@ -310,35 +319,34 @@ defmodule Hermes.Client do
     %{state | pending_requests: Map.delete(pending, response["id"])}
   end
 
-  defp handle_response(response, nil, state) do
-    Logger.warning("Received response for unknown request ID: #{response["id"]}")
-    state
-  end
-
-  defp handle_response(%{"method" => "initialize"} = response, _, state) do
-    %{"result" => result} = response
+  defp handle_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
     %{pending_requests: pending} = state
 
     state = %{
       state
       | server_capabilities: result["capabilities"],
         server_info: result["serverInfo"],
-        pending_requests: Map.delete(pending, response["id"])
+        pending_requests: Map.delete(pending, id)
     }
 
     # we need to confirm to the server the handshake
-    Task.start(fn -> send_notification(state, "notifications/initialized") end)
+    :ok = send_notification(state, "notifications/initialized")
 
     state
   end
 
-  defp handle_response(%{"result" => result} = response, {from, _}, state) do
-    %{pending_requests: pending} = state
+  defp handle_response(%{"id" => id, "result" => result}, id, state) do
+    {{from, method}, pending} = Map.pop(state.pending_requests, id)
 
     # unblocks original caller
-    GenServer.reply(from, {:ok, result})
+    GenServer.reply(from, if(method == "ping", do: :pong, else: {:ok, result}))
 
-    %{state | pending_requests: Map.delete(pending, response["id"])}
+    %{state | pending_requests: pending}
+  end
+
+  defp handle_response(%{"id" => _} = response, _, state) do
+    Logger.warning("Received response for unknown request ID: #{response["id"]}")
+    state
   end
 
   # Helper functions
@@ -362,15 +370,14 @@ defmodule Hermes.Client do
   end
 
   defp send_to_transport(transport, data) do
-    with {:error, reason} <- transport.send(data) do
+    with {:error, reason} <- transport.send_message(data) do
       {:error, {:transport_error, reason}}
     end
   end
 
   defp send_notification(state, method, params \\ %{}) do
-    with {:ok, notification_data} <- encode_notification(method, params),
-         :ok <- send_to_transport(state.transport, notification_data) do
-      {:ok, state}
+    with {:ok, notification_data} <- encode_notification(method, params) do
+      send_to_transport(state.transport, notification_data)
     end
   end
 
