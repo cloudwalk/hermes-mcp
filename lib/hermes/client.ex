@@ -47,7 +47,7 @@ defmodule Hermes.Client do
 
   defschema :parse_options, [
     {:name, {:atom, {:default, __MODULE__}}},
-    {:transport, {:required, :atom}},
+    {:transport, {:required, {:either, {:pid, :atom}}}},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
@@ -344,7 +344,11 @@ defmodule Hermes.Client do
     {{from, method}, pending} = Map.pop(state.pending_requests, id)
 
     # unblocks original caller
-    GenServer.reply(from, if(method == "ping", do: :pong, else: {:ok, result}))
+    cond do
+      method == "ping" -> GenServer.reply(from, :pong)
+      result["isError"] -> GenServer.reply(from, {:error, result})
+      true -> GenServer.reply(from, {:ok, result})
+    end
 
     %{state | pending_requests: pending}
   end
