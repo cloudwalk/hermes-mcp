@@ -12,7 +12,6 @@ defmodule Mix.Tasks.Stdio.Echo do
 
   @shortdoc "Test the STDIO transport implementation."
 
-  @impl Mix.Task
   def run(_) do
     server_path = Path.expand("priv/dev/echo/index.py")
 
