@@ -5,13 +5,11 @@ defmodule Hermes.Transport.STDIO do
 
   use GenServer
 
+  import Peri
+
   alias Hermes.Transport.Behaviour, as: Transport
 
   @behaviour Transport
-
-  @type t :: %__MODULE__{port: port(), params: params_t, ref: reference()}
-
-  defstruct [:port, :params, :ref]
 
   @type params_t :: Enumerable.t(option)
   @type option ::
@@ -19,12 +17,15 @@ defmodule Hermes.Transport.STDIO do
           | {:args, list(String.t()) | nil}
           | {:env, map() | nil}
           | {:cwd, Path.t() | nil}
+          | Supervisor.init_option()
 
-  @schema %{
+  defschema :options_schema, %{
+    name: {:atom, {:default, __MODULE__}},
+    client: {:required, :atom},
     command: {:required, :string},
-    args: {{:list, :string}, {:default, []}},
-    env: {:map, {:default, %{}}},
-    cwd: {:string, {:default, ""}}
+    args: {{:list, :string}, {:default, nil}},
+    env: {:map, {:default, nil}},
+    cwd: {:string, {:default, nil}}
   }
 
   @win32_default_env [
@@ -43,55 +44,50 @@ defmodule Hermes.Transport.STDIO do
   @unix_default_env ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"]
 
   @impl Transport
+  @spec start_link(params_t) :: Supervisor.on_start()
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts)
+    opts = options_schema!(opts)
+    GenServer.start_link(__MODULE__, Map.new(opts), name: opts[:name])
   end
 
   @impl Transport
-  def send(pid, %{} = message) do
+  def send_message(pid \\ __MODULE__, message) when is_binary(message) do
     GenServer.call(pid, {:send, message})
   end
 
-  @impl Transport
-  def subscribe(pid) do
-    IO.puts("Subscribed to #{inspect(pid)}")
-  end
+  @impl GenServer
+  def init(%{} = opts) do
+    state = Map.merge(opts, %{port: nil, ref: nil})
 
-  @impl Transport
-  def notify(pid, notification) do
-    GenServer.call(pid, {:notify, notification})
-  end
-
-  def shutdown(pid) do
-    GenServer.cast(pid, :close_port)
+    {:ok, state, {:continue, :spawn}}
   end
 
   @impl GenServer
-  def init(opts) do
-    changeset = Peri.to_changeset!(@schema, Map.new(opts))
-
-    case Ecto.Changeset.apply_action(changeset, :parse) do
-      {:ok, params} -> {:ok, %__MODULE__{params: params}, {:continue, :spawn}}
-      {:error, changeset} -> {:stop, {:error, changeset}}
-    end
-  end
-
-  @impl GenServer
-  def handle_continue(:spawn, %{params: params} = state) do
-    if cmd = System.find_executable(params.command) do
-      env = Map.merge(get_default_env(), params.env)
+  def handle_continue(:spawn, state) do
+    if cmd = System.find_executable(state.command) do
       port = spawn_port(cmd, state)
       ref = Port.monitor(port)
 
-      {:noreply, %{state | port: port, ref: ref, params: %{params | env: env}}}
+      {:noreply, %{state | port: port, ref: ref}}
     else
-      {:stop, {:error, "Command not found: #{params.command}"}, state}
+      {:stop, {:error, "Command not found: #{state.command}"}, state}
     end
+  end
+
+  @impl GenServer
+  def handle_call({:send, message}, _, %{port: port} = state) when is_port(port) do
+    result = if Port.command(port, message), do: :ok, else: {:error, :port_not_connected}
+    {:reply, result, state}
+  end
+
+  def handle_call({:send, _message}, _, state) do
+    {:reply, {:error, :port_not_connected}, state}
   end
 
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
     IO.puts("Received data: #{inspect(data)}")
+    Process.send(state.client, {:response, data}, [:noconnect])
     {:noreply, state}
   end
 
@@ -121,14 +117,16 @@ defmodule Hermes.Transport.STDIO do
     {:stop, :normal, state}
   end
 
-  defp spawn_port(cmd, %{params: params}) do
-    env = Map.merge(get_default_env(), params.env) |> normalize_env_for_erlang()
+  defp spawn_port(cmd, state) do
+    default_env = get_default_env()
+    env = if is_nil(state.env), do: default_env, else: Map.merge(default_env, state.env)
+    env = normalize_env_for_erlang(env)
 
     opts =
       [:binary]
-      |> then(&if not Enum.empty?(params.args), do: Enum.concat(&1, args: params.args), else: &1)
-      |> then(&if not Enum.empty?(env), do: Enum.concat(&1, env: env), else: &1)
-      |> then(&if params.cwd != "", do: Enum.concat(&1, cd: params.cwd), else: &1)
+      |> then(&if is_nil(state.args), do: &1, else: Enum.concat(&1, args: state.args))
+      |> then(&if is_nil(state.env), do: &1, else: Enum.concat(&1, env: env))
+      |> then(&if is_nil(state.cwd), do: &1, else: Enum.concat(&1, cd: state.cwd))
 
     Port.open({:spawn_executable, cmd}, opts)
   end
