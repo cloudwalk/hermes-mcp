@@ -220,33 +220,7 @@ defmodule Hermes.Client do
       pending_requests: Map.new()
     }
 
-    {:ok, state, {:continue, :initialize}}
-  end
-
-  @impl true
-  def handle_continue(:initialize, state) do
-    params = %{
-      "protocolVersion" => state.protocol_version,
-      "capabilities" => state.capabilities,
-      "clientInfo" => state.client_info
-    }
-
-    request_id = generate_request_id()
-
-    with {:ok, request_data} <- encode_request("initialize", params, request_id),
-         :ok <- send_to_transport(state.transport, request_data) do
-      from = {self(), generate_request_id()}
-      pending = Map.put(state.pending_requests, request_id, {from, "initialize"})
-
-      {:noreply, %{state | pending_requests: pending}}
-    else
-      err -> {:stop, err, state}
-    end
-  rescue
-    e ->
-      err = Exception.format(:error, e, __STACKTRACE__)
-      Logger.error("Failed to initialize client: #{err}")
-      {:stop, :unexpected, state}
+    {:ok, state, :hibernate}
   end
 
   @impl true
@@ -283,6 +257,31 @@ defmodule Hermes.Client do
   end
 
   @impl true
+  def handle_info(:initialize, state) do
+    params = %{
+      "protocolVersion" => state.protocol_version,
+      "capabilities" => state.capabilities,
+      "clientInfo" => state.client_info
+    }
+
+    request_id = generate_request_id()
+
+    with {:ok, request_data} <- encode_request("initialize", params, request_id),
+         :ok <- send_to_transport(state.transport, request_data) do
+      from = {self(), generate_request_id()}
+      pending = Map.put(state.pending_requests, request_id, {from, "initialize"})
+
+      {:noreply, %{state | pending_requests: pending}}
+    else
+      err -> {:stop, err, state}
+    end
+  rescue
+    e ->
+      err = Exception.format(:error, e, __STACKTRACE__)
+      Logger.error("Failed to initialize client: #{err}")
+      {:stop, :unexpected, state}
+  end
+
   def handle_info({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
