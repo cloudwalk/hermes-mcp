@@ -30,6 +30,7 @@ defmodule Hermes.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:finch, "~> 0.19"},
       {:peri, "~> 0.4.0-rc2"},
       {:mox, only: :test},
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
