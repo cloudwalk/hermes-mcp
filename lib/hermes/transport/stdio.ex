@@ -57,6 +57,11 @@ defmodule Hermes.Transport.STDIO do
     GenServer.call(pid, {:send, message})
   end
 
+  @impl Transport
+  def shutdown(pid \\ __MODULE__) do
+    GenServer.cast(pid, :close_port)
+  end
+
   @impl GenServer
   def init(%{} = opts) do
     state = Map.merge(opts, %{port: nil, ref: nil})
@@ -70,6 +75,7 @@ defmodule Hermes.Transport.STDIO do
       port = spawn_port(cmd, state)
       ref = Port.monitor(port)
 
+      Process.send(state.client, :initialize, [:noconnect])
       {:noreply, %{state | port: port, ref: ref}}
     else
       {:stop, {:error, "Command not found: #{state.command}"}, state}
@@ -89,7 +95,6 @@ defmodule Hermes.Transport.STDIO do
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
     Logger.info("Received data from stdio server")
-    Process.send(state.client, :initialize, [:noconnect])
     Process.send(state.client, {:response, data}, [:noconnect])
     {:noreply, state}
   end

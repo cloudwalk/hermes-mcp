@@ -64,27 +64,27 @@ func main() {
 
 func handle_calculate_tool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	op := request.Params.Arguments["operation"].(string)
-	x := request.Params.Arguments["x"].(int64)
-	y := request.Params.Arguments["y"].(int64)
+	x := request.Params.Arguments["x"].(float64)
+	y := request.Params.Arguments["y"].(float64)
 
 	if op == "div" && y == 0 {
 		return mcp.NewToolResultError("Cannot divide by zero"), nil
 	}
 
 	if op == "add" {
-		return mcp.NewToolResultText(fmt.Sprintf("%d", x+y)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%v", x+y)), nil
 	}
 
 	if op == "mult" {
-		return mcp.NewToolResultText(fmt.Sprintf("%d", x*y)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%v", x*y)), nil
 	}
 
 	if op == "sub" {
-		return mcp.NewToolResultText(fmt.Sprintf("%d", x-y)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%v", x-y)), nil
 	}
 
 	if op == "div" {
-		return mcp.NewToolResultText(fmt.Sprintf("%d", x/y)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("%v", x/y)), nil
 	}
 
 	return mcp.NewToolResultError(fmt.Sprintf("operation %s isn't supported", op)), nil

@@ -8,6 +8,9 @@ defmodule Hermes.MockTransportImpl do
 
   @impl true
   def send_message(_ \\ nil, _), do: :ok
+
+  @impl true
+  def shutdown(_ \\ nil), do: :ok
 end
 
 Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)

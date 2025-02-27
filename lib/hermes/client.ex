@@ -227,7 +227,8 @@ defmodule Hermes.Client do
   def handle_call({:request, method, params}, from, state) do
     request_id = generate_request_id()
 
-    with {:ok, request_data} <- encode_request(method, params, request_id),
+    with :ok <- validate_capability(state, method),
+         {:ok, request_data} <- encode_request(method, params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
       pending = Map.put(state.pending_requests, request_id, {from, method})
 
@@ -251,8 +252,20 @@ defmodule Hermes.Client do
     {:reply, state.server_info, state}
   end
 
-  def handle_call(:close, _from, state) do
-    # Notify any pending requests of termination
+  def handle_call(:close, _from, %{transport: transport, pending_requests: pending} = state) do
+    if map_size(pending) > 0 do
+      Logger.warning("Closing client with #{map_size(pending)} pending requests")
+    end
+
+    for {request_id, _} <- pending do
+      send_notification(state, "notifications/cancelled", %{
+        "requestId" => request_id,
+        "reason" => "client closed"
+      })
+    end
+
+    transport.close()
+
     {:stop, :normal, state}
   end
 
@@ -362,6 +375,34 @@ defmodule Hermes.Client do
   end
 
   # Helper functions
+
+  defp validate_capability(%{server_capabilities: nil}, _method) do
+    {:error, :server_capabilities_not_set}
+  end
+
+  defp validate_capability(%{server_capabilities: server_capabilities}, method) do
+    capability = String.split(method, "/", parts: 2)
+
+    if valid_capability?(server_capabilities, capability) do
+      :ok
+    else
+      {:error, {:capability_not_supported, method}}
+    end
+  end
+
+  defp valid_capability?(_capabilities, ["initialize"]), do: true
+  defp valid_capability?(_capabilities, ["ping"]), do: true
+
+  defp valid_capability?(capabilities, ["resources", sub])
+       when sub in ~w(subscribe unsubscribe) do
+    if resources = Map.get(capabilities, "resources") do
+      valid_capability?(resources, [sub, nil])
+    end
+  end
+
+  defp valid_capability?(%{} = capabilities, [capability, _]) do
+    Map.has_key?(capabilities, capability)
+  end
 
   defp generate_request_id do
     binary = <<

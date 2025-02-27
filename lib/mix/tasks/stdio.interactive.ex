@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Stdio.Echo.Interactive do
+defmodule Mix.Tasks.Stdio.Interactive do
   @moduledoc """
   Mix task to test the STDIO transport implementation, interactively sending commands.
   """
@@ -12,25 +12,27 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
 
   @shortdoc "Test the STDIO transport implementation interactively."
 
-  def run(_) do
-    server_path = Path.expand("priv/dev/echo/index.py")
+  @switches [
+    command: :string,
+    args: :string
+  ]
 
-    Logger.info("Starting STDIO interaction on #{server_path} MCP server")
+  def run(args) do
+    {parsed, _} = OptionParser.parse!(args, strict: @switches, aliases: [c: :command])
+    cmd = parsed[:command] || "mcp"
+    args = String.split(parsed[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
-    if not File.exists?(server_path) do
-      Logger.error("Server path does not exist: #{server_path}")
-      System.halt(1)
-    end
+    Logger.info("Starting STDIO interaction MCP server")
 
-    if not (!!System.find_executable("mcp")) do
+    if cmd == "mcp" and not (!!System.find_executable("mcp")) do
       Logger.error("mcp executable not found in PATH, maybe you need to activate venv")
       System.halt(1)
     end
 
     {:ok, stdio} =
       STDIO.start_link(
-        command: "mcp",
-        args: ["run", server_path],
+        command: cmd,
+        args: args,
         client: :stdio_test
       )
 
@@ -72,7 +74,12 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
   defp exec(client, "get_prompt"), do: get_prompt(client)
   defp exec(client, "list_resources"), do: list_resources(client)
   defp exec(client, "read_resource"), do: read_resource(client)
-  defp exec(_, "exit"), do: Logger.info("Exiting interactive session")
+
+  defp exec(client, "exit") do
+    Logger.info("Exiting interactive session")
+    Client.close(client)
+  end
+
   defp exec(client, _), do: loop(client)
 
   defp print_help(client) do
@@ -90,8 +97,9 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
   end
 
   defp list_tools(client) do
-    {:ok, %{"tools" => tools}} = Client.list_tools(client)
-    IO.puts("Found #{length(tools)} tools")
+    with {:ok, %{"tools" => tools}} <- Client.list_tools(client) do
+      Logger.info("Found #{length(tools)} tools")
+    end
 
     loop(client)
   end
@@ -102,15 +110,17 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
     tool_args =
       IO.gets("Enter tool arguments (as JSON):") |> String.trim_trailing() |> Jason.decode!()
 
-    {:ok, result} = Client.call_tool(client, tool_name, tool_args)
-    IO.puts("Tool result: #{inspect(result)}")
+    with {:ok, result} <- Client.call_tool(client, tool_name, tool_args) do
+      Logger.info("Tool result: #{inspect(result)}")
+    end
 
     loop(client)
   end
 
   defp list_prompts(client) do
-    {:ok, %{"prompts" => prompts}} = Client.list_prompts(client)
-    IO.puts("Found #{length(prompts)} prompts")
+    with {:ok, %{"prompts" => prompts}} <- Client.list_prompts(client) do
+      Logger.info("Found #{length(prompts)} prompts")
+    end
 
     loop(client)
   end
@@ -123,15 +133,17 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
       |> String.trim_trailing()
       |> Jason.decode!()
 
-    {:ok, result} = Client.get_prompt(client, prompt_name, prompt_args)
-    IO.puts("Prompt result: #{inspect(result)}")
+    with {:ok, result} <- Client.get_prompt(client, prompt_name, prompt_args) do
+      Logger.info("Prompt result: #{inspect(result)}")
+    end
 
     loop(client)
   end
 
   defp list_resources(client) do
-    {:ok, %{"resources" => resources}} = Client.list_resources(client)
-    IO.puts("Found #{length(resources)} resources")
+    with {:ok, %{"resources" => resources}} <- Client.list_resources(client) do
+      Logger.info("Found #{length(resources)} resources")
+    end
 
     loop(client)
   end
@@ -139,8 +151,9 @@ defmodule Mix.Tasks.Stdio.Echo.Interactive do
   defp read_resource(client) do
     resource_name = IO.gets("Enter resource name:") |> String.trim_trailing()
 
-    {:ok, resource} = Client.read_resource(client, resource_name)
-    IO.puts("Resource: #{inspect(resource)}")
+    with {:ok, resource} <- Client.read_resource(client, resource_name) do
+      Logger.info("Resource: #{inspect(resource)}")
+    end
 
     loop(client)
   end

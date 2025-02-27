@@ -53,6 +53,11 @@ defmodule Hermes.Transport.SSE do
     GenServer.call(pid, {:send, message})
   end
 
+  @impl Transport
+  def shutdown(pid \\ __MODULE__) do
+    GenServer.cast(pid, :close_connection)
+  end
+
   @impl GenServer
   def init(%{} = opts) do
     state = Map.merge(opts, %{endpoint: nil, stream_task: nil, session_id: nil})
@@ -136,6 +141,12 @@ defmodule Hermes.Transport.SSE do
   def handle_info(msg, state) do
     Logger.debug("Unexpected message: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  @impl GenServer
+  def handle_cast(:close_connection, %{stream_task: task} = state) do
+    Task.shutdown(task)
+    {:stop, :normal, state}
   end
 
   @impl GenServer
