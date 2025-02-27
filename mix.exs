@@ -14,6 +14,7 @@ defmodule Hermes.MixProject do
       docs: docs(),
       package: package(),
       description: description(),
+      aliases: aliases(),
       dialyzer: [plt_local_path: "priv/plts", ignore_warnings: ".dialyzerignore.exs"],
       extra_applications: [:observer, :wx]
     ]
@@ -49,6 +50,10 @@ defmodule Hermes.MixProject do
       },
       files: ~w[lib mix.exs README.md LICENSE]
     }
+  end
+
+  defp aliases do
+    [setup: ["deps.get", "compile --force"]]
   end
 
   defp docs do

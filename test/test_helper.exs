@@ -39,6 +39,8 @@ defmodule StubClient do
     {:reply, :ok, []}
   end
 
+  def handle_info(:initialize, messages), do: {:noreply, messages}
+
   def handle_info({:response, data}, messages) do
     {:noreply, [data | messages]}
   end

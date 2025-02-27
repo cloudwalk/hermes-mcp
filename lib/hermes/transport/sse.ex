@@ -55,17 +55,21 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def init(%{} = opts) do
-    state = Map.merge(opts, %{endpoint: nil, stream_task: nil})
+    state = Map.merge(opts, %{endpoint: nil, stream_task: nil, session_id: nil})
 
     {:ok, state, {:continue, :connect}}
   end
 
   @impl GenServer
   def handle_continue(:connect, state) do
-    stream = SSE.connect(state.server_url, state.headers)
+    parent = self()
 
-    me = self()
-    task = Task.async(fn -> process_stream(stream, me) end)
+    task =
+      Task.async(fn ->
+        stream = SSE.connect(state.server_url, state.headers, dest: self())
+        process_stream(stream, parent)
+      end)
+
     Process.monitor(task.pid)
 
     {:noreply, %{state | stream_task: task}}
@@ -79,17 +83,15 @@ defmodule Hermes.Transport.SSE do
   end
 
   defp handle_sse_event(%Event{event: "endpoint", data: endpoint}, pid) do
-    Logger.info("Received SSE endpoint: #{endpoint}")
     send(pid, {:endpoint, endpoint})
   end
 
   defp handle_sse_event(%Event{event: "message", data: data}, pid) do
-    Logger.info("Received SSE message: #{inspect(data)}")
     send(pid, {:message, data})
   end
 
   defp handle_sse_event(event, _pid) do
-    Logger.debug("Unhandled SSE event: #{inspect(event)}")
+    Logger.warning("Unhandled SSE event from stream: #{inspect(event)}")
   end
 
   @impl GenServer
@@ -116,9 +118,9 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def handle_info({:endpoint, endpoint}, %{client: client} = state) do
-    Logger.info("Received SSE endpoint: #{endpoint}")
-    send(client, :initialize)
-    {:noreply, %{state | endpoint: endpoint}}
+    Process.send(client, :initialize, [:noconnect])
+    query = URI.parse(endpoint) |> then(&URI.decode_query(&1.query))
+    {:noreply, %{state | endpoint: endpoint, session_id: query["session_id"]}}
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
@@ -130,8 +132,6 @@ defmodule Hermes.Transport.SSE do
     Logger.error("SSE stream task terminated: #{inspect(reason)}")
     {:stop, {:stream_terminated, reason}, state}
   end
-
-  def handle_info({:chunk, _}, state), do: {:noreply, state}
 
   def handle_info(msg, state) do
     Logger.debug("Unexpected message: #{inspect(msg)}")

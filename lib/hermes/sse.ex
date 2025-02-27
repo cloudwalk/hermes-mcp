@@ -53,11 +53,11 @@ defmodule Hermes.SSE do
   end
 
   defp spawn_stream_task(%Finch.Request{} = req, ref, opts) do
-    me = self()
+    dest = Keyword.get(opts, :dest, self())
 
     Task.async(fn ->
       on_chunk = fn chunk, acc ->
-        send(me, {:chunk, chunk, ref})
+        send(dest, {:chunk, chunk, ref})
         {:cont, acc}
       end
 

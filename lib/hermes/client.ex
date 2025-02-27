@@ -258,6 +258,8 @@ defmodule Hermes.Client do
 
   @impl true
   def handle_info(:initialize, state) do
+    Logger.info("Making initial client <> server handshake")
+
     params = %{
       "protocolVersion" => state.protocol_version,
       "capabilities" => state.capabilities,
@@ -332,6 +334,8 @@ defmodule Hermes.Client do
         server_info: result["serverInfo"],
         pending_requests: Map.delete(pending, id)
     }
+
+    Logger.info("Client initialized successfully, notifing server")
 
     # we need to confirm to the server the handshake
     :ok = send_notification(state, "notifications/initialized")

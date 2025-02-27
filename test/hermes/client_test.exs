@@ -34,8 +34,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      # handle_continue
-      Process.sleep(100)
+      # trigger init handshake
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       assert Process.alive?(client)
     end
@@ -54,6 +55,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
@@ -370,6 +374,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
 
@@ -443,6 +450,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
       new_capabilities = %{"tools" => %{"listChanged" => true}}
 
       updated = Hermes.Client.merge_capabilities(client, new_capabilities)
@@ -473,6 +483,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
@@ -540,6 +553,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
