@@ -1,7 +1,7 @@
 defmodule Hermes.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.1"
   @source_url "https://github.com/cloudwalk/hermes-mcp"
 
   def project do
@@ -14,6 +14,7 @@ defmodule Hermes.MixProject do
       docs: docs(),
       package: package(),
       description: description(),
+      aliases: aliases(),
       dialyzer: [plt_local_path: "priv/plts", ignore_warnings: ".dialyzerignore.exs"],
       extra_applications: [:observer, :wx]
     ]
@@ -30,6 +31,7 @@ defmodule Hermes.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:finch, "~> 0.19"},
       {:peri, "~> 0.4.0-rc2"},
       {:mox, only: :test},
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
@@ -46,8 +48,12 @@ defmodule Hermes.MixProject do
         "GitHub" => @source_url,
         "Docs" => "https://hexdocs.pm/hermes_mcp"
       },
-      files: ~w[lib mix.exs README.md LICENSE]
+      files: ~w[lib/hermes.ex lib/hermes mix.exs README.md LICENSE]
     }
+  end
+
+  defp aliases do
+    [setup: ["deps.get", "compile --force"]]
   end
 
   defp docs do
@@ -65,7 +71,7 @@ defmodule Hermes.MixProject do
         "pages/rfc.md",
         "README.md",
         "CHANGELOG.md",
-        "pages/interactive_demo.livemd"
+        "LICENSE"
       ],
       groups_for_extras: [
         Guides: [
@@ -73,8 +79,7 @@ defmodule Hermes.MixProject do
           "pages/installation.md",
           "pages/client_usage.md",
           "pages/transport_options.md",
-          "pages/message_handling.md",
-          "pages/interactive_demo.livemd"
+          "pages/message_handling.md"
         ],
         Integration: [
           "pages/security.md"

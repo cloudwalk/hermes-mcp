@@ -16,7 +16,7 @@ defmodule Hermes.Transport.Behaviour do
   @callback start_link(keyword()) :: Supervisor.on_start()
   @callback send_message(message()) :: :ok | {:error, reason()}
   @callback send_message(t(), message()) :: :ok | {:error, reason()}
-  @callback close(t()) :: :ok
+  @callback shutdown(t()) :: :ok | {:error, reason()}
   
   @optional_callbacks send_message: 1
 end
@@ -76,22 +76,33 @@ The STDIO transport (`Hermes.Transport.STDIO`) enables communication with an MCP
 ]}
 ```
 
-## HTTP/SSE Transport (Planned)
+## HTTP/SSE Transport
 
 Support for HTTP with Server-Sent Events (SSE) transport is planned for future releases. This will enable communication with remote MCP servers over HTTP.
 
-### Planned Configuration
+### Configuration
 
 ```elixir
 {Hermes.Transport.HTTP, [
   name: MyApp.HTTPTransport,
   client: MyApp.MCPClient,
-  url: "https://example.com/mcp",
+  server_url: "https://example.com/mcp",
   headers: [{"Authorization", "Bearer token"}],
-  ssl_options: [verify: :verify_peer],
+  transport_opts: [verify: :verify_peer],
   http_options: [recv_timeout: 30_000]
 ]}
 ```
+
+### Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `:name` | atom | Registration name for the transport process | `__MODULE__` |
+| `:client` | atom or pid | The client process that will receive messages | Required |
+| `:server_url` | string | The SSE server URL to use | Required |
+| `:headers` | map | Additional request headers to be sent | `%{}` |
+| `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, yo ucan check the avaiable options on https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options | System defaults |
+| `:http_options` | string | Options passed directly to the HTTP Client, you can check the available options on https://hexdocs.pm/finch/Finch.html#t:request_opt/0 | Current directory |
 
 ## Custom Transport Implementation
 

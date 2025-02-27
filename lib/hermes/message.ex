@@ -215,6 +215,20 @@ defmodule Hermes.Message do
     |> encode_message(schema)
   end
 
+  @doc """
+  Encodes a response message to a JSON-RPC 2.0 compliant string.
+
+  Returns the encoded string with a newline character appended.
+  """
+  def encode_response(response, id) do
+    schema = get_schema(:response_schema)
+
+    response
+    |> Map.put("jsonrpc", "2.0")
+    |> Map.put("id", id)
+    |> encode_message(schema)
+  end
+
   defp encode_message(data, schema) do
     encoder = {schema, {:transform, fn data -> JSON.encode!(data) <> "\n" end}}
     Peri.validate(encoder, data)

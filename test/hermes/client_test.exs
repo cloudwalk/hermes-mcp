@@ -34,8 +34,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      # handle_continue
-      Process.sleep(100)
+      # trigger init handshake
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       assert Process.alive?(client)
     end
@@ -55,6 +56,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
 
@@ -62,7 +66,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -356,6 +360,80 @@ defmodule Hermes.ClientTest do
     end
   end
 
+  describe "non support request methods" do
+    setup do
+      expect(Hermes.MockTransport, :send_message, 2, fn _message -> :ok end)
+
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: Hermes.MockTransport,
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+
+      init_response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "capabilities" => %{"prompts" => %{}},
+          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
+          "protocolVersion" => "2024-11-05"
+        }
+      }
+
+      encoded_response = JSON.encode!(init_response)
+      send(client, {:response, encoded_response})
+
+      Process.sleep(50)
+
+      %{client: client}
+    end
+
+    test "ping sends correct request since it is always supported", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "ping"
+        assert decoded["params"] == %{}
+        assert decoded["jsonrpc"] == "2.0"
+        assert is_binary(decoded["id"])
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.ping(client) end)
+
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      [{request_id, {_from, "ping"}}] = state.pending_requests |> Map.to_list()
+
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{}
+      }
+
+      encoded_response = JSON.encode!(response)
+      send(client, {:response, encoded_response})
+
+      assert :pong = Task.await(task)
+    end
+
+    test "tools/list fails since this capability isn't supported", %{client: client} do
+      task = Task.async(fn -> Hermes.Client.list_tools(client) end)
+
+      assert {:error, {:capability_not_supported, "tools/list"}} = Task.await(task)
+    end
+  end
+
   describe "error handling" do
     setup do
       expect(Hermes.MockTransport, :send_message, 2, fn _message -> :ok end)
@@ -369,6 +447,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
@@ -443,6 +524,9 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
       new_capabilities = %{"tools" => %{"listChanged" => true}}
 
       updated = Hermes.Client.merge_capabilities(client, new_capabilities)
@@ -473,6 +557,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
@@ -540,6 +627,9 @@ defmodule Hermes.ClientTest do
         )
 
       allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
 
       state = :sys.get_state(client)
       [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()

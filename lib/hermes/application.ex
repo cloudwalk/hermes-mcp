@@ -8,8 +8,7 @@ defmodule Hermes.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: Hermes.Worker.start_link(arg)
-      # {Hermes.Worker, arg}
+      {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

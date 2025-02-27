@@ -54,13 +54,11 @@ Example of future HTTP transport configuration:
   client: MyApp.MCPClient,
   url: "https://example.com/mcp",
   headers: [{"Authorization", "Bearer #{token}"}],
-  ssl_options: [
+  transport_opts: [
     verify: :verify_peer,
     cacertfile: CAStore.file_path(),
     depth: 3,
-    customize_hostname_check: [
-      match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-    ]
+    verify_fun: :public_key.pkix_verify_hostname_match_fun(:https)
   ]
 ]}
 ```

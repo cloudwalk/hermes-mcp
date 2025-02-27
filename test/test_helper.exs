@@ -8,6 +8,9 @@ defmodule Hermes.MockTransportImpl do
 
   @impl true
   def send_message(_ \\ nil, _), do: :ok
+
+  @impl true
+  def shutdown(_ \\ nil), do: :ok
 end
 
 Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)
@@ -38,6 +41,8 @@ defmodule StubClient do
   def handle_call(:clear_messages, _from, _messages) do
     {:reply, :ok, []}
   end
+
+  def handle_info(:initialize, messages), do: {:noreply, messages}
 
   def handle_info({:response, data}, messages) do
     {:noreply, [data | messages]}

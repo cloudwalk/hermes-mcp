@@ -57,6 +57,11 @@ defmodule Hermes.Transport.STDIO do
     GenServer.call(pid, {:send, message})
   end
 
+  @impl Transport
+  def shutdown(pid \\ __MODULE__) do
+    GenServer.cast(pid, :close_port)
+  end
+
   @impl GenServer
   def init(%{} = opts) do
     state = Map.merge(opts, %{port: nil, ref: nil})
@@ -70,6 +75,7 @@ defmodule Hermes.Transport.STDIO do
       port = spawn_port(cmd, state)
       ref = Port.monitor(port)
 
+      Process.send(state.client, :initialize, [:noconnect])
       {:noreply, %{state | port: port, ref: ref}}
     else
       {:stop, {:error, "Command not found: #{state.command}"}, state}
@@ -88,28 +94,28 @@ defmodule Hermes.Transport.STDIO do
 
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
-    Logger.info("Received data: #{inspect(data)}")
+    Logger.info("Received data from stdio server")
     Process.send(state.client, {:response, data}, [:noconnect])
     {:noreply, state}
   end
 
   def handle_info({port, :closed}, %{port: port} = state) do
-    Logger.warning("Port closed, restarting")
+    Logger.warning("stdio server closed connection, restarting")
     {:stop, :normal, state}
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
-    Logger.warning("Port exited with status: #{status}")
+    Logger.warning("stdio server exited with status: #{status}")
     {:stop, status, state}
   end
 
   def handle_info({:DOWN, ref, :port, port, reason}, %{ref: ref, port: port} = state) do
-    Logger.error("Port monitor DOWN: #{inspect(reason)}")
+    Logger.error("stdio server monitor DOWN: #{inspect(reason)}")
     {:stop, reason, state}
   end
 
   def handle_info({:EXIT, port, reason}, %{port: port} = state) do
-    Logger.error("Port exited: #{inspect(reason)}")
+    Logger.error("stdio server exited: #{inspect(reason)}")
     {:stop, reason, state}
   end
 
