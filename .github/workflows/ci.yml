@@ -31,14 +31,14 @@ jobs:
           otp-version: ${{ matrix.otp }}
 
       - name: Cache Elixir deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: deps-cache
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ env.MIX_ENV }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
       - name: Cache Elixir _build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: build-cache
         with:
           path: _build
@@ -86,14 +86,14 @@ jobs:
           otp-version: ${{ matrix.otp }}
       
       - name: Cache Elixir deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: deps-cache
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ env.MIX_ENV }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
       - name: Cache Elixir _build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: build-cache
         with:
           path: _build
@@ -158,14 +158,14 @@ jobs:
           otp-version: ${{ matrix.otp }}
 
       - name: Cache Elixir deps
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: deps-cache
         with:
           path: deps
           key: ${{ runner.os }}-mix-${{ env.MIX_ENV }}-${{ hashFiles(format('{0}{1}', github.workspace, '/mix.lock')) }}
 
       - name: Cache Elixir _build
-        uses: actions/cache@v1
+        uses: actions/cache@v4
         id: build-cache
         with:
           path: _build
