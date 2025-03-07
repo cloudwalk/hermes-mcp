@@ -52,7 +52,7 @@ Example of future HTTP transport configuration:
 {Hermes.Transport.HTTP, [
   name: MyApp.HTTPTransport,
   client: MyApp.MCPClient,
-  url: "https://example.com/mcp",
+  server: [base_url: "https://example.com", base_path: "/mcp"],
   headers: [{"Authorization", "Bearer #{token}"}],
   transport_opts: [
     verify: :verify_peer,

@@ -50,7 +50,7 @@ defmodule Hermes.Transport.SSE do
     client: {:required, {:either, {:pid, :atom}}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
-      base_path: {:string, {:default, ""}},
+      base_path: {:string, {:default, "/"}},
       sse_path: {:string, {:default, "/sse"}}
     ],
     headers: {:map, {:default, %{}}},
@@ -77,10 +77,14 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def init(%{} = opts) do
+    server_url = make_server_url(opts.server)
+    sse_url = URI.append_path(server_url, opts.server[:sse_path])
+
     state =
       opts
-      |> Map.merge(%{endpoint: nil, stream_task: nil, session_id: nil})
-      |> Map.put_new_lazy(:server_url, fn -> make_server_url(opts.server) end)
+      |> Map.merge(%{message_url: nil, stream_task: nil})
+      |> Map.put(:server_url, server_url)
+      |> Map.put(:sse_url, sse_url)
 
     {:ok, state, {:continue, :connect}}
   end
@@ -88,11 +92,14 @@ defmodule Hermes.Transport.SSE do
   @impl GenServer
   def handle_continue(:connect, state) do
     parent = self()
+    parent_metadata = Logger.metadata()
 
     task =
       Task.async(fn ->
+        Logger.metadata(parent_metadata)
+
         stream =
-          SSE.connect(state.server_url, state.headers,
+          SSE.connect(state.sse_url, state.headers,
             dest: self(),
             transport_opts: state.transport_opts
           )
@@ -113,12 +120,12 @@ defmodule Hermes.Transport.SSE do
   end
 
   defp handle_sse_event(%Event{event: "endpoint", data: endpoint}, pid) do
-    Logger.debug("[#{__MODULE__}] => received endpoint event from server")
+    Logger.debug("Received endpoint event from server")
     send(pid, {:endpoint, endpoint})
   end
 
   defp handle_sse_event(%Event{event: "message", data: data}, pid) do
-    Logger.debug("[#{__MODULE__}] => received message event from server")
+    Logger.debug("Received message event from server")
     send(pid, {:message, data})
   end
 
@@ -127,26 +134,19 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_call({:send, _}, _from, %{endpoint: nil} = state) do
+  def handle_call({:send, _}, _from, %{message_url: nil} = state) do
     {:reply, {:error, :not_connected}, state}
   end
 
-  def handle_call({:send, message}, _from, %{endpoint: endpoint, server_url: base} = state) do
-    request =
-      HTTP.build(
-        :post,
-        Path.join(base, endpoint),
-        state.headers,
-        message,
-        [transport_opts: state.transport_opts] ++ state.http_options
-      )
+  def handle_call({:send, message}, _from, state) do
+    request = make_message_request(message, state)
 
     case HTTP.follow_redirect(request) do
       {:ok, %Finch.Response{status: status}} when status in 200..299 ->
         {:reply, :ok, state}
 
       {:ok, %Finch.Response{status: status, body: body}} ->
-        Logger.error("[#{__MODULE__}] => HTTP error: #{status}, #{body}")
+        Logger.error("HTTP error: #{status}, #{body}")
         {:reply, {:error, {:http_error, status, body}}, state}
 
       {:error, reason} ->
@@ -155,10 +155,10 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_info({:endpoint, endpoint}, %{client: client} = state) do
+  def handle_info({:endpoint, endpoint}, %{client: client, server_url: base} = state) do
     Process.send(client, :initialize, [:noconnect])
-    query = URI.parse(endpoint) |> then(&URI.decode_query(&1.query))
-    {:noreply, %{state | endpoint: endpoint, session_id: query["sessionId"]}}
+    message_url = URI.append_path(base, endpoint)
+    {:noreply, %{state | message_url: message_url}}
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
@@ -167,18 +167,18 @@ defmodule Hermes.Transport.SSE do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{stream_task: %Task{pid: pid}} = state) do
-    Logger.error("[#{__MODULE__}] => SSE stream task terminated: #{inspect(reason)}")
+    Logger.error("SSE stream task terminated: #{inspect(reason)}")
     {:stop, {:stream_terminated, reason}, state}
   end
 
   def handle_info(msg, state) do
-    Logger.debug("[#{__MODULE__}] => unexpected genserver message: #{inspect(msg)}")
+    Logger.debug("Unexpected genserver message: #{inspect(msg)}")
     {:noreply, state}
   end
 
   @impl GenServer
   def handle_cast(:close_connection, %{stream_task: task} = state) do
-    Task.shutdown(task)
+    Task.shutdown(task, :timer.seconds(3))
     {:stop, :normal, state}
   end
 
@@ -190,9 +190,20 @@ defmodule Hermes.Transport.SSE do
 
   def terminate(_reason, _state), do: :ok
 
-  defp make_server_url(%{base_url: url, base_path: path, sse_path: sse}) do
-    url
-    |> URI.append_path(path)
-    |> URI.append_path(sse)
+  defp make_message_request(message, %{message_url: endpoint} = state) do
+    HTTP.build(
+      :post,
+      endpoint,
+      state.headers,
+      message,
+      [transport_opts: state.transport_opts] ++ state.http_options
+    )
+  end
+
+  defp make_server_url(server_opts) do
+    url = server_opts[:base_url]
+    path = server_opts[:base_path]
+
+    URI.append_path(url, path)
   end
 end

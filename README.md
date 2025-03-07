@@ -1,5 +1,9 @@
 # Hermes MCP
 
+> [!WARNING]
+>
+> This library is under active development, may expect breaking changes
+
 A high-performance Model Context Protocol (MCP) implementation in Elixir with first-class Phoenix support.
 
 ## Overview
@@ -23,7 +27,7 @@ Add Hermes MCP to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.2.0"}
+    {:hermes_mcp, "~> 0.2"}
   ]
 end
 ```
@@ -98,6 +102,12 @@ Once your client is running, you can interact with the MCP server:
 # Get a prompt with arguments
 {:ok, prompt} = Hermes.Client.get_prompt(MyApp.MCPClient, "example_prompt", %{"arg" => "value"})
 ```
+
+### Logging
+
+`hermes-mcp` follows the [Logger](https://hexdocs.pm/logger) standards and also provide additional metadata:
+- `mcp_client`: the current `Hermes.MCP.Client` process
+- `mcp_transport`: the current `Hermes.Transport` layer being used by the client, either `STDIO` or `SSE`
 
 ### Error Handling
 

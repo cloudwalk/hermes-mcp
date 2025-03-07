@@ -23,12 +23,13 @@ defmodule Hermes.HTTP do
     build(:post, url, headers, body)
   end
 
-  defp parse_uri(url) when is_binary(url) do
+  defp parse_uri(url) do
     with {:error, _} <- URI.new(url), do: {:error, :invalid_url}
   end
 
   @max_redirects 3
 
+  @spec follow_redirect(Finch.Request.t(), number) :: {:ok, Finch.Response.t()} | {:error, term}
   def follow_redirect(%Finch.Request{} = request, attempts \\ @max_redirects) do
     with {:ok, resp} <- Finch.request(request, Hermes.Finch),
          do: do_follow_redirect(request, resp, attempts)
@@ -36,7 +37,8 @@ defmodule Hermes.HTTP do
 
   defp do_follow_redirect(_req, _resp, 0), do: {:error, :max_redirects}
 
-  defp do_follow_redirect(req, %Finch.Response{status: 307, headers: headers}, attempts) do
+  defp do_follow_redirect(req, %Finch.Response{status: 307, headers: headers}, attempts)
+       when is_integer(attempts) do
     location = List.keyfind(headers, "location", 0)
 
     Logger.info("Following redirect to: #{location}, attempts left: #{attempts}")

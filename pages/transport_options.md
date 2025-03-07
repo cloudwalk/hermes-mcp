@@ -86,7 +86,11 @@ Support for HTTP with Server-Sent Events (SSE) transport is planned for future r
 {Hermes.Transport.HTTP, [
   name: MyApp.HTTPTransport,
   client: MyApp.MCPClient,
-  server_url: "https://example.com/mcp",
+  server: [
+    base_url: "https://example.com",
+    base_path: "/mcp", # defaults to "/"
+    sse_path: "/sse" # defaults to "/sse"
+  ],
   headers: [{"Authorization", "Bearer token"}],
   transport_opts: [verify: :verify_peer],
   http_options: [recv_timeout: 30_000]
@@ -99,7 +103,10 @@ Support for HTTP with Server-Sent Events (SSE) transport is planned for future r
 |--------|------|-------------|---------|
 | `:name` | atom | Registration name for the transport process | `__MODULE__` |
 | `:client` | atom or pid | The client process that will receive messages | Required |
-| `:server_url` | string | The SSE server URL to use | Required |
+| `:server` | keyword | The SSE server config | Required |
+| `:server.base_url` | string | The SSE server base url | Required |
+| `:server.base_path` | string | The SSE server base path | `"/"`|
+| `:server.sse_path` | string | The SSE server base path for starting a SSE connection | `"/sse"`|
 | `:headers` | map | Additional request headers to be sent | `%{}` |
 | `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, yo ucan check the avaiable options on https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options | System defaults |
 | `:http_options` | string | Options passed directly to the HTTP Client, you can check the available options on https://hexdocs.pm/finch/Finch.html#t:request_opt/0 | Current directory |

@@ -220,6 +220,8 @@ defmodule Hermes.Client do
       pending_requests: Map.new()
     }
 
+    Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
+
     {:ok, state, :hibernate}
   end
 
@@ -271,7 +273,7 @@ defmodule Hermes.Client do
 
   @impl true
   def handle_info(:initialize, state) do
-    Logger.info("Making initial client <> server handshake")
+    Logger.debug("Making initial client <> server handshake")
 
     params = %{
       "protocolVersion" => state.protocol_version,
@@ -300,15 +302,15 @@ defmodule Hermes.Client do
   def handle_info({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
-        Logger.error("Received error response: #{inspect(error)}")
+        Logger.debug("Received server error response: #{inspect(error)}")
         {:noreply, handle_error(error, error["id"], state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        Logger.info("Received response: #{response["id"]}")
+        Logger.debug("Received server response: #{response["id"]}")
         {:noreply, handle_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
-        Logger.debug("Received notification: #{notification["method"]}")
+        Logger.debug("Received server notification: #{notification["method"]}")
         {:noreply, state}
 
       {:error, reason} ->
@@ -348,7 +350,7 @@ defmodule Hermes.Client do
         pending_requests: Map.delete(pending, id)
     }
 
-    Logger.info("Client initialized successfully, notifing server")
+    Logger.info("Initialized successfully, notifing server")
 
     # we need to confirm to the server the handshake
     :ok = send_notification(state, "notifications/initialized")

@@ -41,7 +41,7 @@ defmodule Hermes.SSE do
     end
   end
 
-  defp parse_uri(url) when is_binary(url) do
+  defp parse_uri(url) do
     with {:error, _} <- URI.new(url), do: {:error, :invalid_url}
   end
 
@@ -60,15 +60,9 @@ defmodule Hermes.SSE do
 
   defp process_stream({ref, _task} = state) do
     receive do
-      {:chunk, {:data, data}, ^ref} ->
-        {Parser.run(data), state}
-
-      {:chunk, {:status, status}, ^ref} ->
-        Logger.debug("[#{__MODULE__}] => SSE stream session status: #{status}")
-        {[], state}
-
-      {:chunk, {:headers, _headers}, ^ref} ->
-        {[], state}
+      {:chunk, {:data, data}, ^ref} -> {Parser.run(data), state}
+      {:chunk, {:status, _status}, ^ref} -> {[], state}
+      {:chunk, {:headers, _headers}, ^ref} -> {[], state}
     end
   end
 
