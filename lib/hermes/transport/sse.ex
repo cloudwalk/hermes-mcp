@@ -155,9 +155,9 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_info({:endpoint, endpoint}, %{client: client, server_url: base} = state) do
+  def handle_info({:endpoint, endpoint}, %{client: client, server: server} = state) do
     Process.send(client, :initialize, [:noconnect])
-    message_url = URI.append_path(base, endpoint)
+    message_url = URI.append_path(server[:base_url], endpoint)
     {:noreply, %{state | message_url: message_url}}
   end
 
