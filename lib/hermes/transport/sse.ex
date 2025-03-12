@@ -46,7 +46,7 @@ defmodule Hermes.Transport.SSE do
           | Supervisor.init_option()
 
   defschema :options_schema, %{
-    name: {:atom, {:default, __MODULE__}},
+    name: {:required, :atom},
     client: {:required, {:either, {:pid, :atom}}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
@@ -66,12 +66,12 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl Transport
-  def send_message(pid \\ __MODULE__, message) when is_binary(message) do
+  def send_message(pid, message) when is_binary(message) do
     GenServer.call(pid, {:send, message})
   end
 
   @impl Transport
-  def shutdown(pid \\ __MODULE__) do
+  def shutdown(pid) do
     GenServer.cast(pid, :close_connection)
   end
 

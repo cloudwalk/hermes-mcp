@@ -7,10 +7,10 @@ defmodule Hermes.MockTransportImpl do
   def start_link(_opts), do: {:ok, self()}
 
   @impl true
-  def send_message(_ \\ nil, _), do: :ok
+  def send_message(_, _), do: :ok
 
   @impl true
-  def shutdown(_ \\ nil), do: :ok
+  def shutdown(_), do: :ok
 end
 
 Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)
