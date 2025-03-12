@@ -268,7 +268,8 @@ defmodule Hermes.Client do
     {:reply, state.server_info, state}
   end
 
-  def handle_call(:close, _from, %{transport: transport, pending_requests: pending} = state) do
+  @impl true
+  def handle_cast(:close, %{transport: transport, pending_requests: pending} = state) do
     if map_size(pending) > 0 do
       Logger.warning("Closing client with #{map_size(pending)} pending requests")
     end

@@ -13,6 +13,11 @@ defmodule Hermes.SSE do
     "connection" => "keep-alive"
   }
 
+  @default_http_opts [
+    receive_timeout: :infinity,
+    request_timeout: :infinity
+  ]
+
   @doc """
   Connects to a server-sent event stream.
 
@@ -30,6 +35,8 @@ defmodule Hermes.SSE do
   """
   @spec connect(String.t(), map(), Keyword.t()) :: Enumerable.t()
   def connect(server_url, headers \\ %{}, opts \\ []) do
+    opts = Keyword.merge(@default_http_opts, opts)
+
     with {:ok, uri} <- parse_uri(server_url) do
       headers = Map.merge(headers, @connection_headers) |> Map.to_list()
 
@@ -37,7 +44,7 @@ defmodule Hermes.SSE do
       ref = make_ref()
       task = spawn_stream_task(req, ref, opts)
 
-      Stream.resource(fn -> {ref, task} end, &process_stream/1, &shutdown_task/1)
+      Stream.resource(fn -> {ref, task} end, &process_task_stream/1, &shutdown_task/1)
     end
   end
 
@@ -48,21 +55,50 @@ defmodule Hermes.SSE do
   defp spawn_stream_task(%Finch.Request{} = req, ref, opts) do
     dest = Keyword.get(opts, :dest, self())
 
-    Task.async(fn ->
-      on_chunk = fn chunk, acc ->
-        send(dest, {:chunk, chunk, ref})
-        {:cont, acc}
-      end
-
-      Finch.stream_while(req, Hermes.Finch, nil, on_chunk, opts)
-    end)
+    Task.async(fn -> loop_sse_stream(req, ref, dest, opts) end)
   end
 
-  defp process_stream({ref, _task} = state) do
+  defp loop_sse_stream(req, ref, dest, opts) do
+    on_chunk = &process_sse_stream(&1, &2, dest, ref)
+
+    case Finch.stream_while(req, Hermes.Finch, nil, on_chunk, opts) do
+      {:ok, _} ->
+        Logger.debug("SSE streaming closed with success, reconnecting...")
+        loop_sse_stream(req, ref, dest, opts)
+
+      {:error, err} ->
+        Logger.error("SSE streaming closed with reason: #{inspect(err)}, reconnecting...")
+        loop_sse_stream(req, ref, dest, opts)
+    end
+  end
+
+  # the raw streaming response
+  defp process_sse_stream({:status, status}, acc, _dest, _ref)
+       when status != 200,
+       do: {:halt, acc}
+
+  defp process_sse_stream(chunk, acc, dest, ref) do
+    send(dest, {:chunk, chunk, ref})
+    {:cont, acc}
+  end
+
+  defp process_task_stream({ref, _task} = state) do
     receive do
-      {:chunk, {:data, data}, ^ref} -> {Parser.run(data), state}
-      {:chunk, {:status, _status}, ^ref} -> {[], state}
-      {:chunk, {:headers, _headers}, ^ref} -> {[], state}
+      {:chunk, {:data, data}, ^ref} ->
+        Logger.debug("Received sse streaming data chunk")
+        {Parser.run(data), state}
+
+      {:chunk, {:status, status}, ^ref} ->
+        Logger.debug("Received sse streaming status #{status}")
+        {[], state}
+
+      {:chunk, {:headers, _headers}, ^ref} ->
+        Logger.debug("Received sse streaming headers")
+        {[], state}
+
+      {:chunk, unknown, ^ref} ->
+        Logger.debug("Received unknonw chunk: #{inspect(unknown)}")
+        {[], state}
     end
   end
 

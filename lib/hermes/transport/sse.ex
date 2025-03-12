@@ -46,7 +46,7 @@ defmodule Hermes.Transport.SSE do
           | Supervisor.init_option()
 
   defschema :options_schema, %{
-    name: {:required, :atom},
+    name: {:atom, {:default, __MODULE__}},
     client: {:required, {:either, {:pid, :atom}}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
