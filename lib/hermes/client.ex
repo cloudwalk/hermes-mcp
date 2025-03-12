@@ -45,14 +45,23 @@ defmodule Hermes.Client do
           | {:request_timeout, integer}
           | Supervisor.init_option()
 
-  defschema :parse_options, [
+  @transports [Hermes.Transport.STDIO, Hermes.Transport.SSE]
+
+  defschema(:parse_options, [
     {:name, {:atom, {:default, __MODULE__}}},
-    {:transport, {:required, {:either, {:pid, :atom}}}},
+    {:transport,
+     [
+       layer:
+         {:required,
+          {:enum,
+           if(Hermes.dev_env?(), do: [Hermes.MockTransport | @transports], else: @transports)}},
+       name: :atom
+     ]},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
     {:request_timeout, {:integer, {:default, @default_timeout}}}
-  ]
+  ])
 
   @doc """
   Starts a new MCP client process.
@@ -209,8 +218,13 @@ defmodule Hermes.Client do
 
   @impl true
   def init(%{} = opts) do
+    layer = opts.transport[:layer]
+    name = opts.transport[:name] || layer
+
+    transport = %{layer: layer, name: name}
+
     state = %{
-      transport: opts.transport,
+      transport: transport,
       client_info: opts.client_info,
       capabilities: opts.capabilities,
       server_capabilities: nil,
@@ -266,7 +280,7 @@ defmodule Hermes.Client do
       })
     end
 
-    transport.close()
+    transport.layer.shutdown(transport.name)
 
     {:stop, :normal, state}
   end
@@ -425,7 +439,7 @@ defmodule Hermes.Client do
   end
 
   defp send_to_transport(transport, data) do
-    with {:error, reason} <- transport.send_message(data) do
+    with {:error, reason} <- transport.layer.send_message(transport.name, data) do
       {:error, {:transport_error, reason}}
     end
   end
