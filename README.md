@@ -40,6 +40,9 @@ Based on the provided documents, I'll create a section for the README that demon
 
 The following example shows how to integrate Hermes MCP into your application's supervision tree for robust client management:
 
+> [!NOTE]
+> We recommend to start an isolated Supervisor for each pair of client <> transport using the `:one_for_all` strategy, since both processes depends on each other
+
 ```elixir
 defmodule MyApp.Application do
   use Application
@@ -57,15 +60,14 @@ defmodule MyApp.Application do
       # Start the MCP client using the transport
       {Hermes.Client, [
         name: MyApp.MCPClient,
-        transport: MyApp.MCPTransport,
+        transport: [layer: Hermes.Transport.STDIO, name: MyApp.MCPTransport],
         client_info: %{
           "name" => "MyApp",
           "version" => "1.0.0"
         },
         capabilities: %{
-          "resources" => %{},
-          "tools" => %{},
-          "prompts" => %{}
+          "roots" => %{},
+          "sampling" => %{},
         }
       ]}
       
@@ -73,7 +75,7 @@ defmodule MyApp.Application do
       # ...
     ]
     
-    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+    opts = [strategy: :one_for_all, name: MyApp.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end
@@ -137,7 +139,7 @@ The library is structured around several core components:
 - Client Components: Manages client-side operations and capability negotiation
 - Supervision Trees: Ensures fault tolerance and automatic recovery
 
-Check out our technical [RFC](./rfc.md) that describe each component more in deep.
+Check out our technical [RFC](./pages/rfc.md) that describe each component more in deep.
 
 ## Development Status
 

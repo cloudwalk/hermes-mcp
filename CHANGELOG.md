@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.2.3](https://github.com/cloudwalk/hermes-mcp) - 2025-03-12
+
+### Added
+- Enhanced SSE transport with graceful shutdown capabilities (#25)
+- Improved SSE streaming with automatic reconnection handling (#25)
+
+## [0.2.2](https://github.com/cloudwalk/hermes-mcp) - 2025-03-05
+
+### Added
+- Support for multiple concurrent client <> transport pairs (#24)
+- Improved client resource management
+
+## [0.2.1](https://github.com/cloudwalk/hermes-mcp) - 2025-02-28
+
+### Added
+- Support for custom base and SSE paths in HTTP/SSE client (#19)
+- Enhanced configuration options for SSE endpoints
+
+## [0.2.0](https://github.com/cloudwalk/hermes-mcp) - 2025-02-27
+
+### Added
+- Implemented HTTP/SSE transport (#7)
+  - Support for server-sent events communication
+  - HTTP client integration for MCP protocol
+  - Streaming response handling
+
+### Documentation
+- Extensive guides and documentation improvements
+
 ## [0.1.0](https://github.com/cloudwalk/hermes-mcp) - 2025-02-26
 
 ### Added

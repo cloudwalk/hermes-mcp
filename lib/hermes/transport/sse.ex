@@ -46,7 +46,7 @@ defmodule Hermes.Transport.SSE do
           | Supervisor.init_option()
 
   defschema :options_schema, %{
-    name: {:required, :atom},
+    name: {:atom, {:default, __MODULE__}},
     client: {:required, {:either, {:pid, :atom}}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
@@ -117,6 +117,11 @@ defmodule Hermes.Transport.SSE do
     stream
     |> Stream.each(&handle_sse_event(&1, pid))
     |> Stream.run()
+  end
+
+  defp handle_sse_event({:error, :halted}, pid) do
+    Logger.debug("Received halt notification from SSE streaming, transport will be restarted")
+    shutdown(pid)
   end
 
   defp handle_sse_event(%Event{event: "endpoint", data: endpoint}, pid) do

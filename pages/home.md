@@ -10,6 +10,7 @@ Hermes MCP provides a unified solution for building both MCP clients and servers
 
 - ✅ Complete client implementation with protocol lifecycle management
 - ✅ STDIO transport for local process communication
+- ✅ HTTP/SSE transport for production-ready and async process communication
 - ✅ Comprehensive capability negotiation
 - ✅ Robust error handling and recovery
 - 🔄 Phoenix integration (in progress)
