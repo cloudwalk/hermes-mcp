@@ -50,6 +50,23 @@ defmodule Hermes.MCP.ID do
   end
   
   @doc """
+  Generates a unique request ID.
+  
+  Creates a standard ID with a "req_" prefix for clarity.
+  Request IDs are used to correlate requests with their responses.
+  
+  ## Examples
+  
+      iex> id = Hermes.MCP.ID.generate_request_id()
+      iex> String.starts_with?(id, "req_")
+      true
+  """
+  @spec generate_request_id() :: String.t()
+  def generate_request_id do
+    "req_" <> generate()
+  end
+  
+  @doc """
   Generates a unique progress token.
   
   Creates a standard request ID with a "progress_" prefix for clarity.
@@ -123,6 +140,30 @@ defmodule Hermes.MCP.ID do
     end
   end
   def valid?(_), do: false
+  
+  @doc """
+  Checks if a string appears to be a valid request ID.
+  
+  Validates that the string starts with "req_" and the 
+  remainder is a valid MCP ID.
+  
+  ## Examples
+  
+      iex> id = Hermes.MCP.ID.generate_request_id()
+      iex> Hermes.MCP.ID.valid_request_id?(id)
+      true
+      
+      iex> Hermes.MCP.ID.valid_request_id?("not-an-id")
+      false
+  """
+  @spec valid_request_id?(term()) :: boolean()
+  def valid_request_id?(id) when is_binary(id) do
+    case String.split_at(id, 4) do
+      {"req_", rest} -> valid?(rest)
+      _ -> false
+    end
+  end
+  def valid_request_id?(_), do: false
   
   @doc """
   Checks if a string appears to be a valid progress token.

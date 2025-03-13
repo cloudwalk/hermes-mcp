@@ -27,6 +27,28 @@ defmodule Hermes.MCP.IDTest do
     end
   end
   
+  describe "generate_request_id/0" do
+    test "generates an ID with req_ prefix" do
+      id = ID.generate_request_id()
+      
+      assert is_binary(id)
+      assert String.starts_with?(id, "req_")
+    end
+    
+    test "generates unique request IDs" do
+      id1 = ID.generate_request_id()
+      id2 = ID.generate_request_id()
+      
+      assert id1 != id2
+    end
+    
+    test "generated request IDs can be validated" do
+      id = ID.generate_request_id()
+      
+      assert ID.valid_request_id?(id)
+    end
+  end
+  
   describe "generate_progress_token/0" do
     test "generates a token with progress_ prefix" do
       token = ID.generate_progress_token()
@@ -81,6 +103,33 @@ defmodule Hermes.MCP.IDTest do
     end
   end
   
+  describe "valid_request_id?/1" do
+    test "returns true for valid request IDs" do
+      id = ID.generate_request_id()
+      
+      assert ID.valid_request_id?(id)
+    end
+    
+    test "returns false for normal IDs" do
+      id = ID.generate()
+      
+      assert ID.valid_request_id?(id) == false
+    end
+    
+    test "returns false for progress tokens" do
+      token = ID.generate_progress_token()
+      
+      assert ID.valid_request_id?(token) == false
+    end
+    
+    test "returns false for invalid IDs" do
+      assert ID.valid_request_id?("req_invalid") == false
+      assert ID.valid_request_id?("not-a-request-id") == false
+      assert ID.valid_request_id?("") == false
+      assert ID.valid_request_id?(nil) == false
+    end
+  end
+  
   describe "valid_progress_token?/1" do
     test "returns true for valid progress tokens" do
       token = ID.generate_progress_token()
@@ -90,6 +139,12 @@ defmodule Hermes.MCP.IDTest do
     
     test "returns false for normal IDs" do
       id = ID.generate()
+      
+      assert ID.valid_progress_token?(id) == false
+    end
+    
+    test "returns false for request IDs" do
+      id = ID.generate_request_id()
       
       assert ID.valid_progress_token?(id) == false
     end

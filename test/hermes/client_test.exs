@@ -498,8 +498,10 @@ defmodule Hermes.ClientTest do
       encoded_response = JSON.encode!(error_response)
       send(client, {:response, encoded_response})
 
-      expected_error = %{"code" => -32_601, "message" => "Method not found"}
-      assert {:error, ^expected_error} = Task.await(task)
+      {:error, error} = Task.await(task)
+      assert error.code == -32_601
+      assert error.reason == :method_not_found
+      assert error.data[:original_message] == "Method not found"
     end
 
     test "handles transport error", %{client: client} do
