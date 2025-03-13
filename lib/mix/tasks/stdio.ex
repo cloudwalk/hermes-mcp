@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Stdio do
+  @shortdoc "Test the STDIO transport implementation."
+
   @moduledoc """
   Mix task to test the STDIO transport implementation.
   """
@@ -9,8 +11,6 @@ defmodule Mix.Tasks.Stdio do
   alias Hermes.Transport.STDIO
 
   require Logger
-
-  @shortdoc "Test the STDIO transport implementation."
 
   @switches [
     command: :string,
@@ -83,7 +83,7 @@ defmodule Mix.Tasks.Stdio do
     Process.sleep(1_000)
 
     Logger.info("Sending ping request")
-    Client.ping(client) |> then(&Logger.info("Ping response: #{inspect(&1)}"))
+    client |> Client.ping() |> then(&Logger.info("Ping response: #{inspect(&1)}"))
 
     Process.sleep(1_000)
 

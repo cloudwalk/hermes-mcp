@@ -58,23 +58,17 @@ defmodule Hermes.Message do
   defp parse_request_params_by_method(%{"method" => "initialize"}), do: {:ok, @init_params_schema}
   defp parse_request_params_by_method(%{"method" => "ping"}), do: {:ok, @ping_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "resources/list"}),
-    do: {:ok, @resources_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "resources/list"}), do: {:ok, @resources_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "resources/read"}),
-    do: {:ok, @resources_read_params_schema}
+  defp parse_request_params_by_method(%{"method" => "resources/read"}), do: {:ok, @resources_read_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "prompts/list"}),
-    do: {:ok, @prompts_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "prompts/list"}), do: {:ok, @prompts_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "prompts/get"}),
-    do: {:ok, @prompts_get_params_schema}
+  defp parse_request_params_by_method(%{"method" => "prompts/get"}), do: {:ok, @prompts_get_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "tools/list"}),
-    do: {:ok, @tools_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "tools/list"}), do: {:ok, @tools_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "tools/call"}),
-    do: {:ok, @tools_call_params_schema}
+  defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
 
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
@@ -85,15 +79,13 @@ defmodule Hermes.Message do
   }
   @progress_notif_params_schema %{
     "progressToken" => {:required, {:either, {:string, :integer}}},
-    "progress" => {:required, :float},
-    "total" => :float
+    "progress" => {:required, {:either, {:float, :integer}}},
+    "total" => {:either, {:float, :integer}}
   }
 
   defschema :notification_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
-    "method" =>
-      {:required,
-       {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress)}},
+    "method" => {:required, {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress)}},
     "params" => {:dependent, &parse_notification_params_by_method/1}
   }
 
@@ -216,6 +208,34 @@ defmodule Hermes.Message do
   end
 
   @doc """
+  Encodes a progress notification message to a JSON-RPC 2.0 compliant string.
+
+  ## Parameters
+
+    * `progress_token` - The token that was provided in the original request (string or integer)
+    * `progress` - The current progress value (number)
+    * `total` - Optional total value for the operation (number)
+
+  Returns the encoded string with a newline character appended.
+  """
+  @spec encode_progress_notification(String.t() | integer(), number(), number() | nil) ::
+          {:ok, String.t()} | {:error, term()}
+  def encode_progress_notification(progress_token, progress, total \\ nil)
+      when (is_binary(progress_token) or is_integer(progress_token)) and is_number(progress) do
+    params = %{
+      "progressToken" => progress_token,
+      "progress" => progress
+    }
+
+    params = if total, do: Map.put(params, "total", total), else: params
+
+    encode_notification(%{
+      "method" => "notifications/progress",
+      "params" => params
+    })
+  end
+
+  @doc """
   Encodes a response message to a JSON-RPC 2.0 compliant string.
 
   Returns the encoded string with a newline character appended.
@@ -232,5 +252,22 @@ defmodule Hermes.Message do
   defp encode_message(data, schema) do
     encoder = {schema, {:transform, fn data -> JSON.encode!(data) <> "\n" end}}
     Peri.validate(encoder, data)
+  end
+
+  @doc """
+  Generates a unique progress token that can be used for tracking progress.
+
+  This is a convenience function to create tokens for the progress notification system.
+  Returns a string token with "progress_" prefix followed by a Base64-encoded unique identifier.
+  """
+  @spec generate_progress_token() :: String.t()
+  def generate_progress_token do
+    binary = <<
+      System.system_time(:nanosecond)::64,
+      :erlang.phash2({node(), self()}, 16_777_216)::24,
+      :erlang.unique_integer()::32
+    >>
+
+    "progress_" <> Base.url_encode64(binary)
   end
 end

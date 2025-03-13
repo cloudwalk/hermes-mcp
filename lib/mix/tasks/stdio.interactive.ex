@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Stdio.Interactive do
+  @shortdoc "Test the STDIO transport implementation interactively."
+
   @moduledoc """
   Mix task to test the STDIO transport implementation, interactively sending commands.
   """
@@ -9,8 +11,6 @@ defmodule Mix.Tasks.Stdio.Interactive do
   alias Hermes.Transport.STDIO
 
   require Logger
-
-  @shortdoc "Test the STDIO transport implementation interactively."
 
   @switches [
     command: :string,
@@ -64,7 +64,7 @@ defmodule Mix.Tasks.Stdio.Interactive do
   end
 
   def loop(client) do
-    exec(client, IO.gets(">>> ") |> String.trim_trailing())
+    exec(client, ">>> " |> IO.gets() |> String.trim_trailing())
   end
 
   defp exec(client, "help"), do: print_help(client)
@@ -105,10 +105,10 @@ defmodule Mix.Tasks.Stdio.Interactive do
   end
 
   defp call_tool(client) do
-    tool_name = IO.gets("Enter tool name:") |> String.trim_trailing()
+    tool_name = "Enter tool name:" |> IO.gets() |> String.trim_trailing()
 
     tool_args =
-      IO.gets("Enter tool arguments (as JSON):") |> String.trim_trailing() |> Jason.decode!()
+      "Enter tool arguments (as JSON):" |> IO.gets() |> String.trim_trailing() |> Jason.decode!()
 
     with {:ok, result} <- Client.call_tool(client, tool_name, tool_args) do
       Logger.info("Tool result: #{inspect(result)}")
@@ -126,10 +126,11 @@ defmodule Mix.Tasks.Stdio.Interactive do
   end
 
   defp get_prompt(client) do
-    prompt_name = IO.gets("Enter prompt name:") |> String.trim_trailing()
+    prompt_name = "Enter prompt name:" |> IO.gets() |> String.trim_trailing()
 
     prompt_args =
-      IO.gets("Enter prompt arguments (as JSON):")
+      "Enter prompt arguments (as JSON):"
+      |> IO.gets()
       |> String.trim_trailing()
       |> Jason.decode!()
 
@@ -149,7 +150,7 @@ defmodule Mix.Tasks.Stdio.Interactive do
   end
 
   defp read_resource(client) do
-    resource_name = IO.gets("Enter resource name:") |> String.trim_trailing()
+    resource_name = "Enter resource name:" |> IO.gets() |> String.trim_trailing()
 
     with {:ok, resource} <- Client.read_resource(client, resource_name) do
       Logger.info("Resource: #{inspect(resource)}")

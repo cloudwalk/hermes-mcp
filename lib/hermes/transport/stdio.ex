@@ -3,6 +3,8 @@ defmodule Hermes.Transport.STDIO do
   A transport implementation that uses standard input/output.
   """
 
+  @behaviour Hermes.Transport.Behaviour
+
   use GenServer
 
   import Peri
@@ -10,8 +12,6 @@ defmodule Hermes.Transport.STDIO do
   alias Hermes.Transport.Behaviour, as: Transport
 
   require Logger
-
-  @behaviour Transport
 
   @type params_t :: Enumerable.t(option)
   @type option ::
@@ -146,12 +146,12 @@ defmodule Hermes.Transport.STDIO do
     |> Enum.filter(fn {k, _} -> Enum.member?(default_env, k) end)
     # remove functions, for security risks
     |> Enum.reject(fn {_, v} -> String.starts_with?(v, "()") end)
-    |> Enum.into(%{})
+    |> Map.new()
   end
 
   defp normalize_env_for_erlang(%{} = env) do
     env
     |> Map.new(fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
-    |> Enum.into([])
+    |> Enum.to_list()
   end
 end

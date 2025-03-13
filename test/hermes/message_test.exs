@@ -2,6 +2,7 @@ defmodule Hermes.MessageTest do
   use ExUnit.Case, async: true
 
   alias Hermes.Message
+
   require Hermes.Message
 
   describe "decode/1" do

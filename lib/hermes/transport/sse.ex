@@ -22,20 +22,18 @@ defmodule Hermes.Transport.SSE do
   - `http_options`: Additional HTTP request options as keyword to pass to the HTTP client, you can check the available options on https://hexdocs.pm/finch/Finch.html#t:request_opt/0
   """
 
+  @behaviour Hermes.Transport.Behaviour
+
   use GenServer
 
   import Peri
 
-  alias Hermes.Transport.Behaviour, as: Transport
-
+  alias Hermes.HTTP
   alias Hermes.SSE
   alias Hermes.SSE.Event
-
-  alias Hermes.HTTP
+  alias Hermes.Transport.Behaviour, as: Transport
 
   require Logger
-
-  @behaviour Transport
 
   @type params_t :: Enumerable.t(option)
   @type option ::
@@ -114,9 +112,7 @@ defmodule Hermes.Transport.SSE do
 
   # this function will run indefinitely
   defp process_stream(stream, pid) do
-    stream
-    |> Stream.each(&handle_sse_event(&1, pid))
-    |> Stream.run()
+    Enum.each(stream, &handle_sse_event(&1, pid))
   end
 
   defp handle_sse_event({:error, :halted}, pid) do
@@ -183,7 +179,7 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def handle_cast(:close_connection, %{stream_task: task} = state) do
-    Task.shutdown(task, :timer.seconds(3))
+    Task.shutdown(task, to_timeout(second: 3))
     {:stop, :normal, state}
   end
 

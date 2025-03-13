@@ -1,6 +1,7 @@
 ExUnit.start()
 
 defmodule Hermes.MockTransportImpl do
+  @moduledoc false
   @behaviour Hermes.Transport.Behaviour
 
   @impl true
@@ -16,6 +17,7 @@ end
 Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)
 
 defmodule StubClient do
+  @moduledoc false
   use GenServer
 
   def start_link(_opts \\ []) do

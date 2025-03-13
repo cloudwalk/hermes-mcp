@@ -19,6 +19,7 @@ The library implements the full [Model Context Protocol specification](https://s
 - Robust stdio transport for local process communication
 - Built-in connection supervision and automatic recovery
 - Comprehensive capability negotiation
+- Progress notification support for tracking long-running operations
 
 ## Installation
 
@@ -103,7 +104,21 @@ Once your client is running, you can interact with the MCP server:
 
 # Get a prompt with arguments
 {:ok, prompt} = Hermes.Client.get_prompt(MyApp.MCPClient, "example_prompt", %{"arg" => "value"})
+
+# Example with progress tracking
+progress_token = Hermes.Message.generate_progress_token()
+{:ok, result} = Hermes.Client.call_tool(MyApp.MCPClient, "long_running_tool", %{},
+  progress: [
+    token: progress_token,
+    callback: fn token, progress, total ->
+      percentage = if total, do: Float.round(progress / total * 100, 1), else: nil
+      IO.puts("Progress: #{progress}/#{total || "unknown"} (#{percentage || "calculating..."}%)")
+    end
+  ]
+)
 ```
+
+For more details on progress tracking, see the [Progress Tracking](./pages/progress_tracking.md) documentation.
 
 ### Logging
 
