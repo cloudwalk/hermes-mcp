@@ -20,6 +20,7 @@ The library implements the full [Model Context Protocol specification](https://s
 - Built-in connection supervision and automatic recovery
 - Comprehensive capability negotiation
 - Progress notification support for tracking long-running operations
+- Structured logging system with log level control
 
 ## Installation
 
@@ -119,6 +120,17 @@ progress_token = Hermes.Message.generate_progress_token()
 ```
 
 For more details on progress tracking, see the [Progress Tracking](./pages/progress_tracking.md) documentation.
+
+# Example with logging
+Hermes.Client.set_log_level(MyApp.MCPClient, "info")
+
+# Register a callback for handling log messages
+Hermes.Client.register_log_callback(MyApp.MCPClient, fn level, data, logger ->
+  IO.puts("[#{level}] #{if logger, do: "(#{logger}) ", else: ""}#{inspect(data)}")
+end)
+```
+
+For comprehensive logging documentation, see the [Logging Guide](./pages/logging.md).
 
 ### Logging
 

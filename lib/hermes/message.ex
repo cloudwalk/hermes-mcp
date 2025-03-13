@@ -9,7 +9,7 @@ defmodule Hermes.Message do
 
   # MCP message schemas
 
-  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list)
+  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel)
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
@@ -48,6 +48,12 @@ defmodule Hermes.Message do
     "arguments" => :map
   }
 
+  @log_levels ~w(debug info notice warning error critical alert emergency)
+
+  @set_log_level_params_schema %{
+    "level" => {:required, {:enum, @log_levels}}
+  }
+
   defschema :request_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" => {:required, {:enum, @request_methods}},
@@ -70,6 +76,8 @@ defmodule Hermes.Message do
 
   defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
 
+  defp parse_request_params_by_method(%{"method" => "logging/setLevel"}), do: {:ok, @set_log_level_params_schema}
+
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
   @init_noti_params_schema :map
@@ -82,10 +90,17 @@ defmodule Hermes.Message do
     "progress" => {:required, {:either, {:float, :integer}}},
     "total" => {:either, {:float, :integer}}
   }
+  @logging_message_notif_params_schema %{
+    "level" => {:required, {:enum, @log_levels}},
+    "data" => {:required, :any},
+    "logger" => :string
+  }
 
   defschema :notification_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
-    "method" => {:required, {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress)}},
+    "method" =>
+      {:required,
+       {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress notifications/message)}},
     "params" => {:dependent, &parse_notification_params_by_method/1}
   }
 
@@ -97,6 +112,9 @@ defmodule Hermes.Message do
 
   defp parse_notification_params_by_method(%{"method" => "notifications/progress"}),
     do: {:ok, @progress_notif_params_schema}
+
+  defp parse_notification_params_by_method(%{"method" => "notifications/message"}),
+    do: {:ok, @logging_message_notif_params_schema}
 
   defp parse_notification_params_by_method(_), do: {:ok, :map}
 
@@ -270,4 +288,28 @@ defmodule Hermes.Message do
 
     "progress_" <> Base.url_encode64(binary)
   end
+
+  @doc """
+  Encodes a log message notification to be sent to the client.
+
+  ## Parameters
+
+    * `level` - The log level (debug, info, notice, warning, error, critical, alert, emergency)
+    * `data` - The data to be logged (any JSON-serializable value)
+    * `logger` - Optional name of the logger issuing the message
+
+  Returns the encoded notification string with a newline character appended.
+  """
+  @spec encode_log_message(String.t(), term(), String.t() | nil) :: {:ok, String.t()} | {:error, term()}
+  def encode_log_message(level, data, logger \\ nil) when level in @log_levels do
+    params = maybe_add_logger(%{"level" => level, "data" => data}, logger)
+
+    encode_notification(%{
+      "method" => "notifications/message",
+      "params" => params
+    })
+  end
+
+  defp maybe_add_logger(params, nil), do: params
+  defp maybe_add_logger(params, logger) when is_binary(logger), do: Map.put(params, "logger", logger)
 end
