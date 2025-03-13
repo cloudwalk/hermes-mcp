@@ -17,8 +17,8 @@ defmodule Hermes.SSE do
     receive_timeout: :infinity,
     request_timeout: :infinity,
     max_reconnections: 5,
-    default_backoff: :timer.seconds(1),
-    max_backoff: :timer.seconds(15)
+    default_backoff: to_timeout(second: 1),
+    max_backoff: to_timeout(second: 15)
   ]
 
   @retry_opts [:max_reconnections, :default_backoff, :max_backoff]
@@ -43,7 +43,7 @@ defmodule Hermes.SSE do
     opts = Keyword.merge(@default_http_opts, opts)
 
     with {:ok, uri} <- parse_uri(server_url) do
-      headers = Map.merge(headers, @connection_headers) |> Map.to_list()
+      headers = headers |> Map.merge(@connection_headers) |> Map.to_list()
 
       req = Finch.build(:get, uri, headers)
       ref = make_ref()
@@ -81,7 +81,7 @@ defmodule Hermes.SSE do
 
         {:error, err} ->
           Logger.error("SSE streaming closed with reason: #{inspect(err)}, reconnecting...")
-          Process.sleep(backoff + :timer.seconds(1))
+          Process.sleep(backoff + to_timeout(second: 1))
           loop_sse_stream(req, ref, dest, opts, attempt + 1)
       end
     else
@@ -95,9 +95,7 @@ defmodule Hermes.SSE do
   end
 
   # the raw streaming response
-  defp process_sse_stream({:status, status}, acc, _dest, _ref)
-       when status != 200,
-       do: {:halt, acc}
+  defp process_sse_stream({:status, status}, acc, _dest, _ref) when status != 200, do: {:halt, acc}
 
   defp process_sse_stream(chunk, acc, dest, ref) do
     send(dest, {:chunk, chunk, ref})

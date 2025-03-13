@@ -29,12 +29,12 @@ defmodule Hermes.Client do
   import Peri
 
   alias Hermes.Message
-  require Hermes.Message
 
+  require Hermes.Message
   require Logger
 
   @default_protocol_version "2024-11-05"
-  @default_timeout :timer.seconds(30)
+  @default_timeout to_timeout(second: 30)
 
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type option ::
@@ -52,10 +52,7 @@ defmodule Hermes.Client do
     {:name, {:atom, {:default, __MODULE__}}},
     {:transport,
      [
-       layer:
-         {:required,
-          {:enum,
-           if(Hermes.dev_env?(), do: [Hermes.MockTransport | @transports], else: @transports)}},
+       layer: {:required, {:enum, if(Hermes.dev_env?(), do: [Hermes.MockTransport | @transports], else: @transports)}},
        name: :atom
      ]},
     {:client_info, {:required, :map}},
@@ -88,7 +85,7 @@ defmodule Hermes.Client do
   def ping(client, opts \\ []) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout)
     progress_opts = Keyword.get(opts, :progress)
-    
+
     if progress_opts do
       GenServer.call(client, {:request, "ping", %{}, progress_opts}, timeout || @default_timeout)
     else
@@ -113,7 +110,7 @@ defmodule Hermes.Client do
     progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    
+
     if progress_opts do
       GenServer.call(client, {:request, "resources/list", params, progress_opts}, timeout || @default_timeout)
     else
@@ -136,7 +133,7 @@ defmodule Hermes.Client do
     progress_opts = Keyword.get(opts, :progress)
 
     params = %{"uri" => uri}
-    
+
     if progress_opts do
       GenServer.call(client, {:request, "resources/read", params, progress_opts}, timeout || @default_timeout)
     else
@@ -161,7 +158,7 @@ defmodule Hermes.Client do
     progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    
+
     if progress_opts do
       GenServer.call(client, {:request, "prompts/list", params, progress_opts}, timeout || @default_timeout)
     else
@@ -210,7 +207,7 @@ defmodule Hermes.Client do
     progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    
+
     if progress_opts do
       GenServer.call(client, {:request, "tools/list", params, progress_opts}, timeout || @default_timeout)
     else
@@ -266,17 +263,17 @@ defmodule Hermes.Client do
   def get_server_info(client) do
     GenServer.call(client, :get_server_info)
   end
-  
+
   @doc """
   Registers a callback function to be called when progress notifications are received
   for the specified progress token.
-  
+
   ## Parameters
-  
+
     * `client` - The client process
     * `progress_token` - The progress token to watch for (string or integer)
     * `callback` - A function that takes three arguments: progress_token, progress, and total
-  
+
   The callback function will be called whenever a progress notification with the
   matching token is received.
   """
@@ -286,37 +283,36 @@ defmodule Hermes.Client do
       when is_function(callback, 3) and (is_binary(progress_token) or is_integer(progress_token)) do
     GenServer.call(client, {:register_progress_callback, progress_token, callback})
   end
-  
+
   @doc """
   Unregisters a previously registered progress callback for the specified token.
-  
+
   ## Parameters
-  
+
     * `client` - The client process
     * `progress_token` - The progress token to stop watching (string or integer)
   """
   @spec unregister_progress_callback(GenServer.server(), String.t() | integer()) :: :ok
-  def unregister_progress_callback(client, progress_token)
-      when is_binary(progress_token) or is_integer(progress_token) do
+  def unregister_progress_callback(client, progress_token) when is_binary(progress_token) or is_integer(progress_token) do
     GenServer.call(client, {:unregister_progress_callback, progress_token})
   end
-  
+
   @doc """
   Sends a progress notification to the server for a long-running operation.
 
   ## Parameters
-  
+
     * `client` - The client process
     * `progress_token` - The progress token provided in the original request (string or integer)
     * `progress` - The current progress value (number)
     * `total` - The optional total value for the operation (number)
-  
+
   Returns `:ok` if notification was sent successfully, or `{:error, reason}` otherwise.
   """
   @spec send_progress(GenServer.server(), String.t() | integer(), number(), number() | nil) ::
           :ok | {:error, term()}
-  def send_progress(client, progress_token, progress, total \\ nil) when is_number(progress) and
-                                                                      (is_binary(progress_token) or is_integer(progress_token)) do
+  def send_progress(client, progress_token, progress, total \\ nil)
+      when is_number(progress) and (is_binary(progress_token) or is_integer(progress_token)) do
     GenServer.call(client, {:send_progress, progress_token, progress, total})
   end
 
@@ -367,7 +363,7 @@ defmodule Hermes.Client do
       err -> {:reply, err, state}
     end
   end
-  
+
   def handle_call({:request, method, params, progress_opts}, from, state) do
     request_id = generate_request_id()
     state = maybe_register_progress_callback(state, progress_opts)
@@ -397,23 +393,23 @@ defmodule Hermes.Client do
   def handle_call(:get_server_info, _from, state) do
     {:reply, state.server_info, state}
   end
-  
+
   def handle_call({:register_progress_callback, token, callback}, _from, state) do
     progress_callbacks = Map.put(state.progress_callbacks, token, callback)
     {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
   end
-  
+
   def handle_call({:unregister_progress_callback, token}, _from, state) do
     progress_callbacks = Map.delete(state.progress_callbacks, token)
     {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
   end
-  
+
   def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
-    result = 
+    result =
       with {:ok, notification} <- Message.encode_progress_notification(progress_token, progress, total) do
         send_to_transport(state.transport, notification)
       end
-    
+
     {:reply, result, state}
   end
 
@@ -476,13 +472,13 @@ defmodule Hermes.Client do
       {:ok, [notification]} when Message.is_notification(notification) ->
         method = notification["method"]
         Logger.debug("Received server notification: #{method}")
-        
-        state = 
+
+        state =
           case method do
             "notifications/progress" -> handle_progress_notification(notification, state)
             _ -> state
           end
-        
+
         {:noreply, state}
 
       {:error, reason} ->
@@ -547,38 +543,46 @@ defmodule Hermes.Client do
     Logger.warning("Received response for unknown request ID: #{response["id"]}")
     state
   end
-  
+
   defp handle_progress_notification(%{"params" => params}, state) do
     progress_token = params["progressToken"]
     progress = params["progress"]
     total = Map.get(params, "total")
-    
+
     if callback = Map.get(state.progress_callbacks, progress_token) do
       # Execute the callback in a separate process to avoid blocking
       Task.start(fn -> callback.(progress_token, progress, total) end)
     end
-    
+
     state
   end
-  
+
   defp maybe_register_progress_callback(state, nil), do: state
+
   defp maybe_register_progress_callback(state, progress_opts) do
     case Keyword.get(progress_opts, :callback) do
-      nil -> state
+      nil ->
+        state
+
       callback when is_function(callback, 3) ->
         case Keyword.get(progress_opts, :token) do
-          nil -> state
-          token -> 
+          nil ->
+            state
+
+          token ->
             progress_callbacks = Map.put(state.progress_callbacks, token, callback)
             %{state | progress_callbacks: progress_callbacks}
         end
     end
   end
-  
+
   defp maybe_add_progress_token(params, nil), do: params
+
   defp maybe_add_progress_token(params, progress_opts) do
     case Keyword.get(progress_opts, :token) do
-      nil -> params
+      nil ->
+        params
+
       token when is_binary(token) or is_integer(token) ->
         meta = %{"progressToken" => token}
         Map.put(params, "_meta", meta)
@@ -604,8 +608,7 @@ defmodule Hermes.Client do
   defp valid_capability?(_capabilities, ["initialize"]), do: true
   defp valid_capability?(_capabilities, ["ping"]), do: true
 
-  defp valid_capability?(capabilities, ["resources", sub])
-       when sub in ~w(subscribe unsubscribe) do
+  defp valid_capability?(capabilities, ["resources", sub]) when sub in ~w(subscribe unsubscribe) do
     if resources = Map.get(capabilities, "resources") do
       valid_capability?(resources, [sub, nil])
     end

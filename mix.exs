@@ -34,6 +34,7 @@ defmodule Hermes.MixProject do
       {:finch, "~> 0.19"},
       {:peri, "~> 0.4.0-rc2"},
       {:mox, only: :test},
+      {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false}
@@ -69,6 +70,7 @@ defmodule Hermes.MixProject do
         "pages/troubleshooting.md",
         "pages/examples.md",
         "pages/rfc.md",
+        "pages/progress_tracking.md",
         "README.md",
         "CHANGELOG.md",
         "LICENSE"
@@ -79,7 +81,8 @@ defmodule Hermes.MixProject do
           "pages/installation.md",
           "pages/client_usage.md",
           "pages/transport_options.md",
-          "pages/message_handling.md"
+          "pages/message_handling.md",
+          "pages/progress_tracking.md"
         ],
         Integration: [
           "pages/security.md"

@@ -3,6 +3,8 @@ defmodule Hermes.ClientTest do
 
   import Mox
 
+  alias Hermes.Message
+
   @moduletag capture_log: true
 
   setup :set_mox_from_context
@@ -60,7 +62,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,
@@ -95,7 +97,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -122,7 +124,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -157,7 +159,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -192,7 +194,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "resources/read"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "resources/read"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -225,7 +227,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "prompts/list"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "prompts/list"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -268,7 +270,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "prompts/get"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "prompts/get"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -301,7 +303,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "tools/list"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "tools/list"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -337,7 +339,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "tools/call"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "tools/call"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -378,7 +380,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,
@@ -413,7 +415,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
 
       response = %{
         "id" => request_id,
@@ -452,7 +454,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,
@@ -482,7 +484,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
 
       error_response = %{
         "id" => request_id,
@@ -562,7 +564,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,
@@ -619,7 +621,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,
@@ -638,22 +640,22 @@ defmodule Hermes.ClientTest do
 
       %{client: client}
     end
-    
+
     test "registers and calls progress callback when notification is received", %{client: client} do
       # Variables for progress tracking
       test_pid = self()
       progress_token = "test_progress_token"
       progress_value = 50
       total_value = 100
-      
+
       # Register a callback
-      :ok = Hermes.Client.register_progress_callback(client, progress_token, fn token, progress, total ->
-        send(test_pid, {:progress_callback, token, progress, total})
-      end)
-      
+      :ok =
+        Hermes.Client.register_progress_callback(client, progress_token, fn token, progress, total ->
+          send(test_pid, {:progress_callback, token, progress, total})
+        end)
+
       # Simulate receiving a progress notification
       progress_notification = %{
-        "jsonrpc" => "2.0",
         "method" => "notifications/progress",
         "params" => %{
           "progressToken" => progress_token,
@@ -661,27 +663,28 @@ defmodule Hermes.ClientTest do
           "total" => total_value
         }
       }
-      
-      encoded_notification = JSON.encode!(progress_notification) <> "\n"
+
+      assert {:ok, encoded_notification} = Message.encode_notification(progress_notification)
       send(client, {:response, encoded_notification})
-      
+
       # Verify callback was triggered with correct parameters
       assert_receive {:progress_callback, ^progress_token, ^progress_value, ^total_value}, 1000
     end
-    
-    test "unregisters progress callback", %{client: client} do      
+
+    test "unregisters progress callback", %{client: client} do
       # Variables for progress tracking
       test_pid = self()
       progress_token = "unregister_test_token"
-      
+
       # Register callback
-      :ok = Hermes.Client.register_progress_callback(client, progress_token, fn _, _, _ ->
-        send(test_pid, :should_not_be_called)
-      end)
-      
+      :ok =
+        Hermes.Client.register_progress_callback(client, progress_token, fn _, _, _ ->
+          send(test_pid, :should_not_be_called)
+        end)
+
       # Unregister callback
       :ok = Hermes.Client.unregister_progress_callback(client, progress_token)
-      
+
       # Simulate receiving a progress notification
       progress_notification = %{
         "jsonrpc" => "2.0",
@@ -692,17 +695,17 @@ defmodule Hermes.ClientTest do
           "total" => 100
         }
       }
-      
+
       encoded_notification = JSON.encode!(progress_notification) <> "\n"
       send(client, {:response, encoded_notification})
-      
+
       # Verify callback was NOT triggered
       refute_receive :should_not_be_called, 500
     end
-    
+
     test "request with progress token includes it in params", %{client: client} do
       progress_token = "request_token_test"
-      
+
       # Set expectation for the message
       expect(Hermes.MockTransport, :send_message, fn _, message ->
         decoded = JSON.decode!(message)
@@ -710,18 +713,19 @@ defmodule Hermes.ClientTest do
         assert get_in(decoded, ["params", "_meta", "progressToken"]) == progress_token
         :ok
       end)
-      
+
       # Make the request with progress token
-      task = Task.async(fn -> 
-        Hermes.Client.list_resources(client, progress: [token: progress_token]) 
-      end)
-      
+      task =
+        Task.async(fn ->
+          Hermes.Client.list_resources(client, progress: [token: progress_token])
+        end)
+
       Process.sleep(50)
-      
+
       # Simulate a response to complete the request
       state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = state.pending_requests |> Map.to_list()
-      
+      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
+
       response = %{
         "id" => request_id,
         "jsonrpc" => "2.0",
@@ -730,18 +734,18 @@ defmodule Hermes.ClientTest do
           "nextCursor" => nil
         }
       }
-      
+
       encoded_response = JSON.encode!(response)
       send(client, {:response, encoded_response})
-      
+
       # Ensure the task completes
       assert {:ok, _} = Task.await(task)
     end
-    
+
     test "generates unique progress tokens" do
       token1 = Hermes.Message.generate_progress_token()
       token2 = Hermes.Message.generate_progress_token()
-      
+
       assert is_binary(token1)
       assert is_binary(token2)
       assert token1 != token2
@@ -749,7 +753,7 @@ defmodule Hermes.ClientTest do
       assert String.starts_with?(token2, "progress_")
     end
   end
-  
+
   describe "notification handling" do
     test "sends initialized notification after init" do
       Hermes.MockTransport
@@ -781,7 +785,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
 
       init_response = %{
         "id" => request_id,

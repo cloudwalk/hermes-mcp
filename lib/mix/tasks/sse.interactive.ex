@@ -1,4 +1,6 @@
 defmodule Mix.Tasks.Sse.Interactive do
+  @shortdoc "Test the SSE transport implementation interactively."
+
   @moduledoc """
   Mix task to test the SSE transport implementation, interactively sending commands.
   """
@@ -7,12 +9,9 @@ defmodule Mix.Tasks.Sse.Interactive do
 
   alias Hermes.Client
   alias Hermes.Transport.SSE
-
   alias Mix.Tasks.Stdio
 
   require Logger
-
-  @shortdoc "Test the SSE transport implementation interactively."
 
   @switches [
     base_url: :string,

@@ -30,8 +30,8 @@ defmodule Hermes.SSE.Parser do
 
   defp parse_event_line(line, event) do
     case String.split(line, ":", parts: 2) do
-      ["id", value] -> %Event{event | id: String.trim_leading(value)}
-      ["event", value] -> %Event{event | event: String.trim_leading(value)}
+      ["id", value] -> %{event | id: String.trim_leading(value)}
+      ["event", value] -> %{event | event: String.trim_leading(value)}
       ["data", value] -> handle_data(event, String.trim_leading(value))
       ["retry", value] -> handle_retry(event, String.trim_leading(value))
       [_, _] -> event
@@ -40,16 +40,16 @@ defmodule Hermes.SSE.Parser do
   end
 
   defp handle_data(%Event{data: ""} = event, data) do
-    %Event{event | data: data}
+    %{event | data: data}
   end
 
   defp handle_data(%Event{data: current_data} = event, data) do
-    %Event{event | data: current_data <> "\n" <> data}
+    %{event | data: current_data <> "\n" <> data}
   end
 
   defp handle_retry(%Event{retry: _} = event, value) do
     case Integer.parse(value) do
-      {retry, _} -> %Event{event | retry: retry}
+      {retry, _} -> %{event | retry: retry}
       :error -> event
     end
   end
