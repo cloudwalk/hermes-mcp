@@ -820,21 +820,22 @@ defmodule Hermes.ClientTest do
       assert {:ok, %{}} = Task.await(task)
     end
 
-    test "register_log_callback adds callback to state", %{client: client} do
-      :ok = Hermes.Client.register_log_callback(client, fn _, _, _ -> nil end)
+    test "register_log_callback sets the callback", %{client: client} do
+      callback = fn _, _, _ -> nil end
+      :ok = Hermes.Client.register_log_callback(client, callback)
 
       state = :sys.get_state(client)
-      assert length(state.log_callbacks) == 1
+      assert state.log_callback == callback
     end
 
-    test "unregister_log_callback removes callback from state", %{client: client} do
+    test "unregister_log_callback removes the callback", %{client: client} do
       callback = fn _, _, _ -> nil end
 
       :ok = Hermes.Client.register_log_callback(client, callback)
       :ok = Hermes.Client.unregister_log_callback(client, callback)
 
       state = :sys.get_state(client)
-      assert Enum.empty?(state.log_callbacks)
+      assert is_nil(state.log_callback)
     end
 
     test "handles log notifications and triggers callbacks", %{client: client} do

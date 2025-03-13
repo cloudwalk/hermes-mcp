@@ -387,7 +387,7 @@ defmodule Hermes.Client do
       pending_requests: Map.new(),
       progress_callbacks: Map.new(),
       log_level: nil,
-      log_callbacks: []
+      log_callback: nil
     }
 
     Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
@@ -441,13 +441,11 @@ defmodule Hermes.Client do
   end
 
   def handle_call({:register_log_callback, callback}, _from, state) do
-    log_callbacks = [callback | state.log_callbacks]
-    {:reply, :ok, %{state | log_callbacks: log_callbacks}}
+    {:reply, :ok, %{state | log_callback: callback}}
   end
 
-  def handle_call({:unregister_log_callback, callback}, _from, state) do
-    log_callbacks = List.delete(state.log_callbacks, callback)
-    {:reply, :ok, %{state | log_callbacks: log_callbacks}}
+  def handle_call({:unregister_log_callback, _callback}, _from, state) do
+    {:reply, :ok, %{state | log_callback: nil}}
   end
 
   def handle_call({:register_progress_callback, token, callback}, _from, state) do
@@ -623,41 +621,37 @@ defmodule Hermes.Client do
     data = params["data"]
     logger = Map.get(params, "logger")
 
-    # Update the client's known log level if needed
-    state = update_log_level(state, level)
-
-    # Execute all registered log callbacks
-    Enum.each(state.log_callbacks, fn callback ->
+    # Execute callback if registered
+    if callback = state.log_callback do
       Task.start(fn -> callback.(level, data, logger) end)
-    end)
+    end
 
-    # Also log to Elixir's Logger for convenience
+    # Log to Elixir's Logger for convenience
     log_to_logger(level, data, logger)
 
     state
   end
 
-  defp update_log_level(state, level) do
-    if state.log_level do
-      state
-    else
-      %{state | log_level: level}
-    end
-  end
-
   defp log_to_logger(level, data, logger) do
-    logger_prefix = if logger, do: "[#{logger}] ", else: ""
+    prefix = if logger, do: "[#{logger}] ", else: ""
+    message = "#{prefix}#{inspect(data)}"
 
+    # Map MCP log levels to Elixir Logger levels
     case level do
-      "debug" -> Logger.debug("#{logger_prefix}#{inspect(data)}")
-      "info" -> Logger.info("#{logger_prefix}#{inspect(data)}")
-      "notice" -> Logger.info("#{logger_prefix}[NOTICE] #{inspect(data)}")
-      "warning" -> Logger.warning("#{logger_prefix}#{inspect(data)}")
-      "error" -> Logger.error("#{logger_prefix}#{inspect(data)}")
-      "critical" -> Logger.error("#{logger_prefix}[CRITICAL] #{inspect(data)}")
-      "alert" -> Logger.error("#{logger_prefix}[ALERT] #{inspect(data)}")
-      "emergency" -> Logger.error("#{logger_prefix}[EMERGENCY] #{inspect(data)}")
-      _ -> Logger.info("#{logger_prefix}#{inspect(data)}")
+      level when level in ["debug"] ->
+        Logger.debug(message)
+
+      level when level in ["info", "notice"] ->
+        Logger.info(message)
+
+      level when level in ["warning"] ->
+        Logger.warning(message)
+
+      level when level in ["error", "critical", "alert", "emergency"] ->
+        Logger.error(message)
+
+      _ ->
+        Logger.info(message)
     end
   end
 
