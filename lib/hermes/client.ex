@@ -28,11 +28,11 @@ defmodule Hermes.Client do
 
   import Peri
 
-  alias Hermes.MCP.Message
   alias Hermes.MCP.Error
-  alias Hermes.MCP.Response
   alias Hermes.MCP.ID
-  
+  alias Hermes.MCP.Message
+  alias Hermes.MCP.Response
+
   require Hermes.MCP.Message
   require Logger
 
