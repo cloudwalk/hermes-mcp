@@ -33,7 +33,7 @@ defmodule Hermes.MixProject do
     [
       {:finch, "~> 0.19"},
       {:peri, "~> 0.4.0-rc2"},
-      {:mox, only: :test},
+      {:mox, "~> 1.2", only: :test},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
