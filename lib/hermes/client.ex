@@ -557,35 +557,25 @@ defmodule Hermes.Client do
     state
   end
 
-  defp maybe_register_progress_callback(state, nil), do: state
-
   defp maybe_register_progress_callback(state, progress_opts) do
-    case Keyword.get(progress_opts, :callback) do
-      nil ->
-        state
-
-      callback when is_function(callback, 3) ->
-        case Keyword.get(progress_opts, :token) do
-          nil ->
-            state
-
-          token ->
-            progress_callbacks = Map.put(state.progress_callbacks, token, callback)
-            %{state | progress_callbacks: progress_callbacks}
-        end
+    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
+         {:ok, callback} when is_function(callback, 3) <- {:ok, Keyword.get(opts, :callback)},
+         {:ok, token} when not is_nil(token) <- {:ok, Keyword.get(opts, :token)} do
+      progress_callbacks = Map.put(state.progress_callbacks, token, callback)
+      %{state | progress_callbacks: progress_callbacks}
+    else
+      _ -> state
     end
   end
 
-  defp maybe_add_progress_token(params, nil), do: params
-
   defp maybe_add_progress_token(params, progress_opts) do
-    case Keyword.get(progress_opts, :token) do
-      nil ->
-        params
-
-      token when is_binary(token) or is_integer(token) ->
-        meta = %{"progressToken" => token}
-        Map.put(params, "_meta", meta)
+    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
+         {:ok, token} when not is_nil(token) and (is_binary(token) or is_integer(token)) <-
+           {:ok, Keyword.get(opts, :token)} do
+      meta = %{"progressToken" => token}
+      Map.put(params, "_meta", meta)
+    else
+      _ -> params
     end
   end
 
