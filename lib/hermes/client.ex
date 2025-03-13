@@ -36,6 +36,7 @@ defmodule Hermes.Client do
   @default_protocol_version "2024-11-05"
   @default_timeout :timer.seconds(30)
 
+  @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type option ::
           {:name, atom}
           | {:transport, module}
@@ -84,8 +85,15 @@ defmodule Hermes.Client do
   @doc """
   Sends a ping request to the server to check connection health. Returns `:pong` if successful.
   """
-  def ping(client, timeout \\ nil) do
-    GenServer.call(client, {:request, "ping", %{}}, timeout || @default_timeout)
+  def ping(client, opts \\ []) when is_list(opts) do
+    timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
+    
+    if progress_opts do
+      GenServer.call(client, {:request, "ping", %{}, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "ping", %{}}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -95,13 +103,22 @@ defmodule Hermes.Client do
 
     * `:cursor` - Pagination cursor for continuing a previous request
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def list_resources(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    GenServer.call(client, {:request, "resources/list", params}, timeout || @default_timeout)
+    
+    if progress_opts do
+      GenServer.call(client, {:request, "resources/list", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "resources/list", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -110,12 +127,21 @@ defmodule Hermes.Client do
   ## Options
 
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def read_resource(client, uri, opts \\ []) do
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = %{"uri" => uri}
-    GenServer.call(client, {:request, "resources/read", params}, timeout || @default_timeout)
+    
+    if progress_opts do
+      GenServer.call(client, {:request, "resources/read", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "resources/read", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -125,13 +151,22 @@ defmodule Hermes.Client do
 
     * `:cursor` - Pagination cursor for continuing a previous request
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def list_prompts(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    GenServer.call(client, {:request, "prompts/list", params}, timeout || @default_timeout)
+    
+    if progress_opts do
+      GenServer.call(client, {:request, "prompts/list", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "prompts/list", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -140,14 +175,22 @@ defmodule Hermes.Client do
   ## Options
 
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def get_prompt(client, name, arguments \\ nil, opts \\ []) do
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = %{"name" => name}
     params = if arguments, do: Map.put(params, "arguments", arguments), else: params
 
-    GenServer.call(client, {:request, "prompts/get", params}, timeout || @default_timeout)
+    if progress_opts do
+      GenServer.call(client, {:request, "prompts/get", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "prompts/get", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -157,13 +200,22 @@ defmodule Hermes.Client do
 
     * `:cursor` - Pagination cursor for continuing a previous request
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def list_tools(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
-    GenServer.call(client, {:request, "tools/list", params}, timeout || @default_timeout)
+    
+    if progress_opts do
+      GenServer.call(client, {:request, "tools/list", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "tools/list", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -172,14 +224,22 @@ defmodule Hermes.Client do
   ## Options
 
     * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   def call_tool(client, name, arguments \\ nil, opts \\ []) do
     timeout = Keyword.get(opts, :timeout)
+    progress_opts = Keyword.get(opts, :progress)
 
     params = %{"name" => name}
     params = if arguments, do: Map.put(params, "arguments", arguments), else: params
 
-    GenServer.call(client, {:request, "tools/call", params}, timeout || @default_timeout)
+    if progress_opts do
+      GenServer.call(client, {:request, "tools/call", params, progress_opts}, timeout || @default_timeout)
+    else
+      GenServer.call(client, {:request, "tools/call", params}, timeout || @default_timeout)
+    end
   end
 
   @doc """
@@ -206,6 +266,59 @@ defmodule Hermes.Client do
   def get_server_info(client) do
     GenServer.call(client, :get_server_info)
   end
+  
+  @doc """
+  Registers a callback function to be called when progress notifications are received
+  for the specified progress token.
+  
+  ## Parameters
+  
+    * `client` - The client process
+    * `progress_token` - The progress token to watch for (string or integer)
+    * `callback` - A function that takes three arguments: progress_token, progress, and total
+  
+  The callback function will be called whenever a progress notification with the
+  matching token is received.
+  """
+  @spec register_progress_callback(GenServer.server(), String.t() | integer(), progress_callback()) ::
+          :ok
+  def register_progress_callback(client, progress_token, callback)
+      when is_function(callback, 3) and (is_binary(progress_token) or is_integer(progress_token)) do
+    GenServer.call(client, {:register_progress_callback, progress_token, callback})
+  end
+  
+  @doc """
+  Unregisters a previously registered progress callback for the specified token.
+  
+  ## Parameters
+  
+    * `client` - The client process
+    * `progress_token` - The progress token to stop watching (string or integer)
+  """
+  @spec unregister_progress_callback(GenServer.server(), String.t() | integer()) :: :ok
+  def unregister_progress_callback(client, progress_token)
+      when is_binary(progress_token) or is_integer(progress_token) do
+    GenServer.call(client, {:unregister_progress_callback, progress_token})
+  end
+  
+  @doc """
+  Sends a progress notification to the server for a long-running operation.
+
+  ## Parameters
+  
+    * `client` - The client process
+    * `progress_token` - The progress token provided in the original request (string or integer)
+    * `progress` - The current progress value (number)
+    * `total` - The optional total value for the operation (number)
+  
+  Returns `:ok` if notification was sent successfully, or `{:error, reason}` otherwise.
+  """
+  @spec send_progress(GenServer.server(), String.t() | integer(), number(), number() | nil) ::
+          :ok | {:error, term()}
+  def send_progress(client, progress_token, progress, total \\ nil) when is_number(progress) and
+                                                                      (is_binary(progress_token) or is_integer(progress_token)) do
+    GenServer.call(client, {:send_progress, progress_token, progress, total})
+  end
 
   @doc """
   Closes the client connection and terminates the process.
@@ -231,7 +344,8 @@ defmodule Hermes.Client do
       server_info: nil,
       protocol_version: opts.protocol_version,
       request_timeout: opts.request_timeout,
-      pending_requests: Map.new()
+      pending_requests: Map.new(),
+      progress_callbacks: Map.new()
     }
 
     Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
@@ -242,6 +356,22 @@ defmodule Hermes.Client do
   @impl true
   def handle_call({:request, method, params}, from, state) do
     request_id = generate_request_id()
+
+    with :ok <- validate_capability(state, method),
+         {:ok, request_data} <- encode_request(method, params, request_id),
+         :ok <- send_to_transport(state.transport, request_data) do
+      pending = Map.put(state.pending_requests, request_id, {from, method})
+
+      {:noreply, %{state | pending_requests: pending}}
+    else
+      err -> {:reply, err, state}
+    end
+  end
+  
+  def handle_call({:request, method, params, progress_opts}, from, state) do
+    request_id = generate_request_id()
+    state = maybe_register_progress_callback(state, progress_opts)
+    params = maybe_add_progress_token(params, progress_opts)
 
     with :ok <- validate_capability(state, method),
          {:ok, request_data} <- encode_request(method, params, request_id),
@@ -266,6 +396,25 @@ defmodule Hermes.Client do
 
   def handle_call(:get_server_info, _from, state) do
     {:reply, state.server_info, state}
+  end
+  
+  def handle_call({:register_progress_callback, token, callback}, _from, state) do
+    progress_callbacks = Map.put(state.progress_callbacks, token, callback)
+    {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
+  end
+  
+  def handle_call({:unregister_progress_callback, token}, _from, state) do
+    progress_callbacks = Map.delete(state.progress_callbacks, token)
+    {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
+  end
+  
+  def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
+    result = 
+      with {:ok, notification} <- Message.encode_progress_notification(progress_token, progress, total) do
+        send_to_transport(state.transport, notification)
+      end
+    
+    {:reply, result, state}
   end
 
   @impl true
@@ -325,7 +474,15 @@ defmodule Hermes.Client do
         {:noreply, handle_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
-        Logger.debug("Received server notification: #{notification["method"]}")
+        method = notification["method"]
+        Logger.debug("Received server notification: #{method}")
+        
+        state = 
+          case method do
+            "notifications/progress" -> handle_progress_notification(notification, state)
+            _ -> state
+          end
+        
         {:noreply, state}
 
       {:error, reason} ->
@@ -389,6 +546,43 @@ defmodule Hermes.Client do
   defp handle_response(%{"id" => _} = response, _, state) do
     Logger.warning("Received response for unknown request ID: #{response["id"]}")
     state
+  end
+  
+  defp handle_progress_notification(%{"params" => params}, state) do
+    progress_token = params["progressToken"]
+    progress = params["progress"]
+    total = Map.get(params, "total")
+    
+    if callback = Map.get(state.progress_callbacks, progress_token) do
+      # Execute the callback in a separate process to avoid blocking
+      Task.start(fn -> callback.(progress_token, progress, total) end)
+    end
+    
+    state
+  end
+  
+  defp maybe_register_progress_callback(state, nil), do: state
+  defp maybe_register_progress_callback(state, progress_opts) do
+    case Keyword.get(progress_opts, :callback) do
+      nil -> state
+      callback when is_function(callback, 3) ->
+        case Keyword.get(progress_opts, :token) do
+          nil -> state
+          token -> 
+            progress_callbacks = Map.put(state.progress_callbacks, token, callback)
+            %{state | progress_callbacks: progress_callbacks}
+        end
+    end
+  end
+  
+  defp maybe_add_progress_token(params, nil), do: params
+  defp maybe_add_progress_token(params, progress_opts) do
+    case Keyword.get(progress_opts, :token) do
+      nil -> params
+      token when is_binary(token) or is_integer(token) ->
+        meta = %{"progressToken" => token}
+        Map.put(params, "_meta", meta)
+    end
   end
 
   # Helper functions

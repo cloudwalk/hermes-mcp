@@ -32,3 +32,5 @@ hermes_mcp-*.tar
 # golang specific
 /.gopath/
 /priv/dev/calculator/calculator
+
+/.context/

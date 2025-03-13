@@ -601,6 +601,155 @@ defmodule Hermes.ClientTest do
     end
   end
 
+  describe "progress tracking" do
+    setup do
+      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
+
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      [{request_id, {_pid, "initialize"}}] = state.pending_requests |> Map.to_list()
+
+      init_response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}},
+          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
+          "protocolVersion" => "2024-11-05"
+        }
+      }
+
+      encoded_response = JSON.encode!(init_response)
+      send(client, {:response, encoded_response})
+
+      Process.sleep(50)
+
+      %{client: client}
+    end
+    
+    test "registers and calls progress callback when notification is received", %{client: client} do
+      # Variables for progress tracking
+      test_pid = self()
+      progress_token = "test_progress_token"
+      progress_value = 50
+      total_value = 100
+      
+      # Register a callback
+      :ok = Hermes.Client.register_progress_callback(client, progress_token, fn token, progress, total ->
+        send(test_pid, {:progress_callback, token, progress, total})
+      end)
+      
+      # Simulate receiving a progress notification
+      progress_notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "notifications/progress",
+        "params" => %{
+          "progressToken" => progress_token,
+          "progress" => progress_value,
+          "total" => total_value
+        }
+      }
+      
+      encoded_notification = JSON.encode!(progress_notification) <> "\n"
+      send(client, {:response, encoded_notification})
+      
+      # Verify callback was triggered with correct parameters
+      assert_receive {:progress_callback, ^progress_token, ^progress_value, ^total_value}, 1000
+    end
+    
+    test "unregisters progress callback", %{client: client} do      
+      # Variables for progress tracking
+      test_pid = self()
+      progress_token = "unregister_test_token"
+      
+      # Register callback
+      :ok = Hermes.Client.register_progress_callback(client, progress_token, fn _, _, _ ->
+        send(test_pid, :should_not_be_called)
+      end)
+      
+      # Unregister callback
+      :ok = Hermes.Client.unregister_progress_callback(client, progress_token)
+      
+      # Simulate receiving a progress notification
+      progress_notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "notifications/progress",
+        "params" => %{
+          "progressToken" => progress_token,
+          "progress" => 75,
+          "total" => 100
+        }
+      }
+      
+      encoded_notification = JSON.encode!(progress_notification) <> "\n"
+      send(client, {:response, encoded_notification})
+      
+      # Verify callback was NOT triggered
+      refute_receive :should_not_be_called, 500
+    end
+    
+    test "request with progress token includes it in params", %{client: client} do
+      progress_token = "request_token_test"
+      
+      # Set expectation for the message
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/list"
+        assert get_in(decoded, ["params", "_meta", "progressToken"]) == progress_token
+        :ok
+      end)
+      
+      # Make the request with progress token
+      task = Task.async(fn -> 
+        Hermes.Client.list_resources(client, progress: [token: progress_token]) 
+      end)
+      
+      Process.sleep(50)
+      
+      # Simulate a response to complete the request
+      state = :sys.get_state(client)
+      [{request_id, {_from, "resources/list"}}] = state.pending_requests |> Map.to_list()
+      
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "resources" => [],
+          "nextCursor" => nil
+        }
+      }
+      
+      encoded_response = JSON.encode!(response)
+      send(client, {:response, encoded_response})
+      
+      # Ensure the task completes
+      assert {:ok, _} = Task.await(task)
+    end
+    
+    test "generates unique progress tokens" do
+      token1 = Hermes.Message.generate_progress_token()
+      token2 = Hermes.Message.generate_progress_token()
+      
+      assert is_binary(token1)
+      assert is_binary(token2)
+      assert token1 != token2
+      assert String.starts_with?(token1, "progress_")
+      assert String.starts_with?(token2, "progress_")
+    end
+  end
+  
   describe "notification handling" do
     test "sends initialized notification after init" do
       Hermes.MockTransport
