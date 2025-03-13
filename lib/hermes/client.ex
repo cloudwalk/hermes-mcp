@@ -28,9 +28,12 @@ defmodule Hermes.Client do
 
   import Peri
 
-  alias Hermes.Message
+  alias Hermes.MCP.Error
+  alias Hermes.MCP.ID
+  alias Hermes.MCP.Message
+  alias Hermes.MCP.Response
 
-  require Hermes.Message
+  require Hermes.MCP.Message
   require Logger
 
   @default_protocol_version "2024-11-05"
@@ -528,8 +531,8 @@ defmodule Hermes.Client do
         Logger.debug("Received server notification: #{method}")
         {:noreply, handle_notification(notification, state)}
 
-      {:error, reason} ->
-        Logger.error("Failed to decode response: #{inspect(reason)}")
+      {:error, error} ->
+        Logger.error("Failed to decode response: #{inspect(error)}")
         {:noreply, state}
     end
   rescue
@@ -541,8 +544,11 @@ defmodule Hermes.Client do
 
   # Response handling
 
-  defp handle_error(%{"error" => error, "id" => id}, id, state) do
+  defp handle_error(%{"error" => json_error, "id" => id}, id, state) do
     {{from, _method}, pending} = Map.pop(state.pending_requests, id)
+
+    # Convert JSON-RPC error to our domain error
+    error = Error.from_json_rpc(json_error)
 
     # unblocks original caller
     GenServer.reply(from, {:error, error})
@@ -576,11 +582,14 @@ defmodule Hermes.Client do
   defp handle_response(%{"id" => id, "result" => result}, id, state) do
     {{from, method}, pending} = Map.pop(state.pending_requests, id)
 
+    # Convert to our domain response
+    response = Response.from_json_rpc(%{"result" => result, "id" => id})
+
     # unblocks original caller
     cond do
       method == "ping" -> GenServer.reply(from, :pong)
-      result["isError"] -> GenServer.reply(from, {:error, result})
-      true -> GenServer.reply(from, {:ok, result})
+      Response.error?(response) -> GenServer.reply(from, {:error, response.result})
+      true -> GenServer.reply(from, {:ok, response.result})
     end
 
     %{state | pending_requests: pending}
@@ -707,13 +716,7 @@ defmodule Hermes.Client do
   end
 
   defp generate_request_id do
-    binary = <<
-      System.system_time(:nanosecond)::64,
-      :erlang.phash2({node(), self()}, 16_777_216)::24,
-      :erlang.unique_integer()::32
-    >>
-
-    Base.url_encode64(binary)
+    ID.generate_request_id()
   end
 
   defp encode_request(method, params, request_id) do
