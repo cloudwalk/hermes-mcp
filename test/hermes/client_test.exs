@@ -754,6 +754,118 @@ defmodule Hermes.ClientTest do
     end
   end
 
+  describe "logging" do
+    setup do
+      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
+
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.MockTransport, self(), client)
+
+      # Initialize the client
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+
+      init_response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "logging" => %{}},
+          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
+          "protocolVersion" => "2024-11-05"
+        }
+      }
+
+      encoded_response = JSON.encode!(init_response)
+      send(client, {:response, encoded_response})
+
+      Process.sleep(50)
+
+      %{client: client}
+    end
+
+    test "set_log_level sends the correct request", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "logging/setLevel"
+        assert decoded["params"]["level"] == "info"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.set_log_level(client, "info") end)
+
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      [{request_id, {_from, "logging/setLevel"}}] = Map.to_list(state.pending_requests)
+
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{}
+      }
+
+      encoded_response = JSON.encode!(response)
+      send(client, {:response, encoded_response})
+
+      assert {:ok, %{}} = Task.await(task)
+    end
+
+    test "register_log_callback sets the callback", %{client: client} do
+      callback = fn _, _, _ -> nil end
+      :ok = Hermes.Client.register_log_callback(client, callback)
+
+      state = :sys.get_state(client)
+      assert state.log_callback == callback
+    end
+
+    test "unregister_log_callback removes the callback", %{client: client} do
+      callback = fn _, _, _ -> nil end
+
+      :ok = Hermes.Client.register_log_callback(client, callback)
+      :ok = Hermes.Client.unregister_log_callback(client, callback)
+
+      state = :sys.get_state(client)
+      assert is_nil(state.log_callback)
+    end
+
+    test "handles log notifications and triggers callbacks", %{client: client} do
+      test_pid = self()
+
+      # Register a callback
+      :ok =
+        Hermes.Client.register_log_callback(client, fn level, data, logger ->
+          send(test_pid, {:log_callback, level, data, logger})
+        end)
+
+      # Create a log notification
+      log_notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "notifications/message",
+        "params" => %{
+          "level" => "error",
+          "data" => "Test error message",
+          "logger" => "test-logger"
+        }
+      }
+
+      encoded_notification = JSON.encode!(log_notification) <> "\n"
+      send(client, {:response, encoded_notification})
+
+      # Verify the callback was triggered
+      assert_receive {:log_callback, "error", "Test error message", "test-logger"}, 1000
+    end
+  end
+
   describe "notification handling" do
     test "sends initialized notification after init" do
       Hermes.MockTransport

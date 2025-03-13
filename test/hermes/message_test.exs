@@ -295,4 +295,67 @@ defmodule Hermes.MessageTest do
       refute Message.is_error(not_error)
     end
   end
+
+  describe "encode_progress_notification/3" do
+    test "encodes a progress notification with a total" do
+      {:ok, encoded} = Message.encode_progress_notification("abc123", 50, 100)
+      decoded = Jason.decode!(encoded)
+
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "notifications/progress"
+      assert decoded["params"]["progressToken"] == "abc123"
+      assert decoded["params"]["progress"] == 50
+      assert decoded["params"]["total"] == 100
+    end
+
+    test "encodes a progress notification without a total" do
+      {:ok, encoded} = Message.encode_progress_notification("abc123", 50)
+      decoded = Jason.decode!(encoded)
+
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "notifications/progress"
+      assert decoded["params"]["progressToken"] == "abc123"
+      assert decoded["params"]["progress"] == 50
+      refute Map.has_key?(decoded["params"], "total")
+    end
+  end
+
+  describe "encode_log_message/3" do
+    test "encodes a log message with a logger name" do
+      {:ok, encoded} = Message.encode_log_message("info", "Test log message", "test-logger")
+      decoded = Jason.decode!(encoded)
+
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "notifications/message"
+      assert decoded["params"]["level"] == "info"
+      assert decoded["params"]["data"] == "Test log message"
+      assert decoded["params"]["logger"] == "test-logger"
+    end
+
+    test "encodes a log message without a logger name" do
+      {:ok, encoded} = Message.encode_log_message("error", %{error: "Something went wrong"})
+      decoded = Jason.decode!(encoded)
+
+      assert decoded["jsonrpc"] == "2.0"
+      assert decoded["method"] == "notifications/message"
+      assert decoded["params"]["level"] == "error"
+      assert decoded["params"]["data"]["error"] == "Something went wrong"
+      refute Map.has_key?(decoded["params"], "logger")
+    end
+
+    test "validates log level" do
+      assert {:ok, _} = Message.encode_log_message("debug", "Debug message")
+      assert {:ok, _} = Message.encode_log_message("info", "Info message")
+      assert {:ok, _} = Message.encode_log_message("notice", "Notice message")
+      assert {:ok, _} = Message.encode_log_message("warning", "Warning message")
+      assert {:ok, _} = Message.encode_log_message("error", "Error message")
+      assert {:ok, _} = Message.encode_log_message("critical", "Critical message")
+      assert {:ok, _} = Message.encode_log_message("alert", "Alert message")
+      assert {:ok, _} = Message.encode_log_message("emergency", "Emergency message")
+
+      assert_raise FunctionClauseError, fn ->
+        Message.encode_log_message("invalid", "Invalid message")
+      end
+    end
+  end
 end

@@ -37,6 +37,7 @@ defmodule Hermes.Client do
   @default_timeout to_timeout(second: 30)
 
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
+  @type log_callback :: (String.t(), term(), String.t() | nil -> any())
   @type option ::
           {:name, atom}
           | {:transport, module}
@@ -56,7 +57,7 @@ defmodule Hermes.Client do
        name: :atom
      ]},
     {:client_info, {:required, :map}},
-    {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}}}}},
+    {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}, "logging" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
     {:request_timeout, {:integer, {:default, @default_timeout}}}
   ])
@@ -265,6 +266,49 @@ defmodule Hermes.Client do
   end
 
   @doc """
+  Sets the minimum log level for the server to send log messages.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `level` - The minimum log level (debug, info, notice, warning, error, critical, alert, emergency)
+
+  Returns {:ok, result} if successful, {:error, reason} otherwise.
+  """
+  @spec set_log_level(GenServer.server(), String.t()) :: {:ok, map()} | {:error, term()}
+  def set_log_level(client, level) when level in ~w(debug info notice warning error critical alert emergency) do
+    GenServer.call(client, {:request, "logging/setLevel", %{"level" => level}})
+  end
+
+  @doc """
+  Registers a callback function to be called when log messages are received.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `callback` - A function that takes three arguments: level, data, and logger name
+
+  The callback function will be called whenever a log message notification is received.
+  """
+  @spec register_log_callback(GenServer.server(), log_callback()) :: :ok
+  def register_log_callback(client, callback) when is_function(callback, 3) do
+    GenServer.call(client, {:register_log_callback, callback})
+  end
+
+  @doc """
+  Unregisters a previously registered log callback.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `callback` - The callback function to unregister
+  """
+  @spec unregister_log_callback(GenServer.server(), log_callback()) :: :ok
+  def unregister_log_callback(client, callback) when is_function(callback, 3) do
+    GenServer.call(client, {:unregister_log_callback, callback})
+  end
+
+  @doc """
   Registers a callback function to be called when progress notifications are received
   for the specified progress token.
 
@@ -341,7 +385,9 @@ defmodule Hermes.Client do
       protocol_version: opts.protocol_version,
       request_timeout: opts.request_timeout,
       pending_requests: Map.new(),
-      progress_callbacks: Map.new()
+      progress_callbacks: Map.new(),
+      log_level: nil,
+      log_callback: nil
     }
 
     Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
@@ -392,6 +438,14 @@ defmodule Hermes.Client do
 
   def handle_call(:get_server_info, _from, state) do
     {:reply, state.server_info, state}
+  end
+
+  def handle_call({:register_log_callback, callback}, _from, state) do
+    {:reply, :ok, %{state | log_callback: callback}}
+  end
+
+  def handle_call({:unregister_log_callback, _callback}, _from, state) do
+    {:reply, :ok, %{state | log_callback: nil}}
   end
 
   def handle_call({:register_progress_callback, token, callback}, _from, state) do
@@ -472,14 +526,7 @@ defmodule Hermes.Client do
       {:ok, [notification]} when Message.is_notification(notification) ->
         method = notification["method"]
         Logger.debug("Received server notification: #{method}")
-
-        state =
-          case method do
-            "notifications/progress" -> handle_progress_notification(notification, state)
-            _ -> state
-          end
-
-        {:noreply, state}
+        {:noreply, handle_notification(notification, state)}
 
       {:error, reason} ->
         Logger.error("Failed to decode response: #{inspect(reason)}")
@@ -544,6 +591,18 @@ defmodule Hermes.Client do
     state
   end
 
+  # Notification handling
+
+  defp handle_notification(%{"method" => "notifications/progress"} = notification, state) do
+    handle_progress_notification(notification, state)
+  end
+
+  defp handle_notification(%{"method" => "notifications/message"} = notification, state) do
+    handle_log_notification(notification, state)
+  end
+
+  defp handle_notification(_, state), do: state
+
   defp handle_progress_notification(%{"params" => params}, state) do
     progress_token = params["progressToken"]
     progress = params["progress"]
@@ -555,6 +614,45 @@ defmodule Hermes.Client do
     end
 
     state
+  end
+
+  defp handle_log_notification(%{"params" => params}, state) do
+    level = params["level"]
+    data = params["data"]
+    logger = Map.get(params, "logger")
+
+    # Execute callback if registered
+    if callback = state.log_callback do
+      Task.start(fn -> callback.(level, data, logger) end)
+    end
+
+    # Log to Elixir's Logger for convenience
+    log_to_logger(level, data, logger)
+
+    state
+  end
+
+  defp log_to_logger(level, data, logger) do
+    prefix = if logger, do: "[#{logger}] ", else: ""
+    message = "#{prefix}#{inspect(data)}"
+
+    # Map MCP log levels to Elixir Logger levels
+    case level do
+      level when level in ["debug"] ->
+        Logger.debug(message)
+
+      level when level in ["info", "notice"] ->
+        Logger.info(message)
+
+      level when level in ["warning"] ->
+        Logger.warning(message)
+
+      level when level in ["error", "critical", "alert", "emergency"] ->
+        Logger.error(message)
+
+      _ ->
+        Logger.info(message)
+    end
   end
 
   defp maybe_register_progress_callback(state, progress_opts) do
