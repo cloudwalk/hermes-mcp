@@ -43,7 +43,7 @@ defmodule Hermes.Client do
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type log_callback :: (String.t(), term(), String.t() | nil -> any())
   @type option ::
-          {:name, atom}
+          {:name, atom | {:via, atom, any}}
           | {:transport, module}
           | {:client_info, map}
           | {:capabilities, map}
@@ -52,8 +52,12 @@ defmodule Hermes.Client do
           | Supervisor.init_option()
 
   defschema(:parse_options, [
-    {:name, {:atom, {:default, __MODULE__}}},
-    {:transport, [layer: {:required, :atom}, name: :atom]},
+    {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
+    {:transport,
+     [
+       layer: {:required, :atom},
+       name: {:custom, &Hermes.genserver_name/1}
+     ]},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}, "logging" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
@@ -366,7 +370,7 @@ defmodule Hermes.Client do
     * `client` - The client process
     * `request_id` - The ID of the request to cancel
     * `reason` - Optional reason for cancellation
-    
+
   ## Returns
 
     * `:ok` if the cancellation was successful
@@ -386,7 +390,7 @@ defmodule Hermes.Client do
 
     * `client` - The client process
     * `reason` - Optional reason for cancellation (defaults to "client_cancelled")
-    
+
   ## Returns
 
     * `{:ok, requests}` - A list of the Request structs that were cancelled
@@ -572,6 +576,10 @@ defmodule Hermes.Client do
     {:stop, :normal, state}
   end
 
+  def handle_cast(:initialize, state), do: handle_info(:initialize, state)
+
+  def handle_cast({:response, response_data}, state), do: handle_info({:response, response_data}, state)
+
   @impl true
   def handle_info(:initialize, state) do
     Logger.debug("Making initial client <> server handshake")
@@ -657,11 +665,6 @@ defmodule Hermes.Client do
 
         updated_state
     end
-  end
-
-  defp handle_error_response(%{"id" => id}, _id, state) do
-    Logger.warning("Received malformed error response for request ID: #{id}")
-    state
   end
 
   defp handle_success_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do

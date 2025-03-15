@@ -56,9 +56,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
           "version" => "1.0.0"
         },
         capabilities: %{
-          "roots" => %{
-            "listChanged" => true
-          },
+          "tools" => %{},
           "sampling" => %{}
         }
       )

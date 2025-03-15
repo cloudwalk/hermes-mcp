@@ -11,6 +11,7 @@ defmodule Hermes.HTTP do
 
   def build(method, url, headers \\ %{}, body \\ nil, opts \\ []) do
     with {:ok, uri} <- parse_uri(url) do
+      headers = Map.merge(@default_headers, headers)
       Finch.build(method, uri, Map.to_list(headers), body, opts)
     end
   end

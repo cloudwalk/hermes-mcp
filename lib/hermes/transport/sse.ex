@@ -38,15 +38,15 @@ defmodule Hermes.Transport.SSE do
 
   @type params_t :: Enumerable.t(option)
   @type option ::
-          {:name, atom}
-          | {:client, pid | atom}
+          {:name, atom | {:via, atom, any}}
+          | {:client, pid | atom | {:via, atom, any}}
           | {:server_url, String.t()}
           | {:headers, map()}
           | Supervisor.init_option()
 
   defschema :options_schema, %{
-    name: {:atom, {:default, __MODULE__}},
-    client: {:required, {:either, {:pid, :atom}}},
+    name: {:any, {:default, __MODULE__}},
+    client: {:required, {:custom, &Hermes.genserver_name/1}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
       base_path: {:string, {:default, "/"}},
@@ -158,13 +158,13 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
-    Process.send(client, :initialize, [:noconnect])
+    GenServer.cast(client, :initialize)
     message_url = HermesURI.join_path(server_url, endpoint)
     {:noreply, %{state | message_url: message_url}}
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
-    Process.send(client, {:response, message}, [:noconnect])
+    GenServer.cast(client, {:response, message})
     {:noreply, state}
   end
 

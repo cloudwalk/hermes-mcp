@@ -44,6 +44,8 @@ defmodule StubClient do
     {:reply, :ok, []}
   end
 
+  def handle_cast(msg, messages), do: handle_info(msg, messages)
+
   def handle_info(:initialize, messages), do: {:noreply, messages}
 
   def handle_info({:response, data}, messages) do
