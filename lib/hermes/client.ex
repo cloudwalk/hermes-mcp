@@ -42,7 +42,7 @@ defmodule Hermes.Client do
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type log_callback :: (String.t(), term(), String.t() | nil -> any())
   @type option ::
-          {:name, atom}
+          {:name, atom | {:via, atom, any}}
           | {:transport, module}
           | {:client_info, map}
           | {:capabilities, map}
@@ -53,11 +53,11 @@ defmodule Hermes.Client do
   @transports [Hermes.Transport.STDIO, Hermes.Transport.SSE]
 
   defschema(:parse_options, [
-    {:name, {:atom, {:default, __MODULE__}}},
+    {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
     {:transport,
      [
        layer: {:required, {:enum, if(Hermes.dev_env?(), do: [Hermes.MockTransport | @transports], else: @transports)}},
-       name: :atom
+       name: {:custom, &Hermes.genserver_name/1}
      ]},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}, "logging" => %{}}}}},
@@ -487,6 +487,10 @@ defmodule Hermes.Client do
 
     {:stop, :normal, state}
   end
+
+  def handle_cast(:initialize, state), do: handle_info(:initialize, state)
+
+  def handle_cast({:response, response_data}, state), do: handle_info({:response, response_data}, state)
 
   @impl true
   def handle_info(:initialize, state) do
