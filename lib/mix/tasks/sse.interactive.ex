@@ -39,15 +39,13 @@ defmodule Mix.Tasks.Sse.Interactive do
     {:ok, client} =
       Client.start_link(
         name: :sse_test,
-        transport: SSE,
+        transport: [layer: SSE],
         client_info: %{
           "name" => "Mix.Tasks.SSE",
           "version" => "1.0.0"
         },
         capabilities: %{
-          "roots" => %{
-            "listChanged" => true
-          },
+          "tools" => %{},
           "sampling" => %{}
         }
       )
