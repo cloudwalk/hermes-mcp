@@ -28,8 +28,8 @@ defmodule Hermes.Client do
 
   import Peri
 
+  alias Hermes.Client.State
   alias Hermes.MCP.Error
-  alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
 
@@ -307,8 +307,8 @@ defmodule Hermes.Client do
     * `callback` - The callback function to unregister
   """
   @spec unregister_log_callback(GenServer.server(), log_callback()) :: :ok
-  def unregister_log_callback(client, callback) when is_function(callback, 3) do
-    GenServer.call(client, {:unregister_log_callback, callback})
+  def unregister_log_callback(client, _callback) do
+    GenServer.call(client, :unregister_log_callback)
   end
 
   @doc """
@@ -379,19 +379,14 @@ defmodule Hermes.Client do
 
     transport = %{layer: layer, name: name}
 
-    state = %{
-      transport: transport,
-      client_info: opts.client_info,
-      capabilities: opts.capabilities,
-      server_capabilities: nil,
-      server_info: nil,
-      protocol_version: opts.protocol_version,
-      request_timeout: opts.request_timeout,
-      pending_requests: Map.new(),
-      progress_callbacks: Map.new(),
-      log_level: nil,
-      log_callback: nil
-    }
+    state =
+      State.new(%{
+        client_info: opts.client_info,
+        capabilities: opts.capabilities,
+        protocol_version: opts.protocol_version,
+        request_timeout: opts.request_timeout,
+        transport: transport
+      })
 
     Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
 
@@ -400,65 +395,61 @@ defmodule Hermes.Client do
 
   @impl true
   def handle_call({:request, method, params}, from, state) do
-    request_id = generate_request_id()
-
-    with :ok <- validate_capability(state, method),
+    with :ok <- State.validate_capability(state, method),
+         {request_id, updated_state} = State.add_request(state, method, params, from),
          {:ok, request_data} <- encode_request(method, params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      pending = Map.put(state.pending_requests, request_id, {from, method})
-
-      {:noreply, %{state | pending_requests: pending}}
+      {:noreply, updated_state}
     else
-      err -> {:reply, err, state}
+      {:error, _reason} = err -> {:reply, err, state}
     end
   end
 
   def handle_call({:request, method, params, progress_opts}, from, state) do
-    request_id = generate_request_id()
     state = maybe_register_progress_callback(state, progress_opts)
     params = maybe_add_progress_token(params, progress_opts)
 
-    with :ok <- validate_capability(state, method),
+    with :ok <- State.validate_capability(state, method),
+         {request_id, updated_state} = State.add_request(state, method, params, from),
          {:ok, request_data} <- encode_request(method, params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      pending = Map.put(state.pending_requests, request_id, {from, method})
-
-      {:noreply, %{state | pending_requests: pending}}
+      {:noreply, updated_state}
     else
-      err -> {:reply, err, state}
+      {:error, _reason} = err -> {:reply, err, state}
     end
   end
 
   def handle_call({:merge_capabilities, additional_capabilities}, _from, state) do
-    updated_capabilities = deep_merge(state.capabilities, additional_capabilities)
-
-    {:reply, updated_capabilities, %{state | capabilities: updated_capabilities}}
+    updated_state = State.merge_capabilities(state, additional_capabilities)
+    {:reply, updated_state.capabilities, updated_state}
   end
 
   def handle_call(:get_server_capabilities, _from, state) do
-    {:reply, state.server_capabilities, state}
+    {:reply, State.get_server_capabilities(state), state}
   end
 
   def handle_call(:get_server_info, _from, state) do
-    {:reply, state.server_info, state}
+    {:reply, State.get_server_info(state), state}
   end
 
   def handle_call({:register_log_callback, callback}, _from, state) do
-    {:reply, :ok, %{state | log_callback: callback}}
+    updated_state = State.set_log_callback(state, callback)
+    {:reply, :ok, updated_state}
   end
 
-  def handle_call({:unregister_log_callback, _callback}, _from, state) do
-    {:reply, :ok, %{state | log_callback: nil}}
+  def handle_call(:unregister_log_callback, _from, state) do
+    updated_state = State.clear_log_callback(state)
+    {:reply, :ok, updated_state}
   end
 
   def handle_call({:register_progress_callback, token, callback}, _from, state) do
-    progress_callbacks = Map.put(state.progress_callbacks, token, callback)
-    {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
+    updated_state = State.register_progress_callback(state, token, callback)
+    {:reply, :ok, updated_state}
   end
 
   def handle_call({:unregister_progress_callback, token}, _from, state) do
-    progress_callbacks = Map.delete(state.progress_callbacks, token)
-    {:reply, :ok, %{state | progress_callbacks: progress_callbacks}}
+    updated_state = State.unregister_progress_callback(state, token)
+    {:reply, :ok, updated_state}
   end
 
   def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
@@ -471,19 +462,21 @@ defmodule Hermes.Client do
   end
 
   @impl true
-  def handle_cast(:close, %{transport: transport, pending_requests: pending} = state) do
-    if map_size(pending) > 0 do
-      Logger.warning("Closing client with #{map_size(pending)} pending requests")
+  def handle_cast(:close, state) do
+    pending_requests = State.list_pending_requests(state)
+
+    if length(pending_requests) > 0 do
+      Logger.warning("Closing client with #{length(pending_requests)} pending requests")
     end
 
-    for {request_id, _} <- pending do
+    for request <- pending_requests do
       send_notification(state, "notifications/cancelled", %{
-        "requestId" => request_id,
+        "requestId" => request.id,
         "reason" => "client closed"
       })
     end
 
-    transport.layer.shutdown(transport.name)
+    state.transport.layer.shutdown(state.transport.name)
 
     {:stop, :normal, state}
   end
@@ -498,14 +491,11 @@ defmodule Hermes.Client do
       "clientInfo" => state.client_info
     }
 
-    request_id = generate_request_id()
+    {request_id, updated_state} = State.add_request(state, "initialize", params, {self(), make_ref()})
 
     with {:ok, request_data} <- encode_request("initialize", params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
-      from = {self(), generate_request_id()}
-      pending = Map.put(state.pending_requests, request_id, {from, "initialize"})
-
-      {:noreply, %{state | pending_requests: pending}}
+      {:noreply, updated_state}
     else
       err -> {:stop, err, state}
     end
@@ -516,15 +506,28 @@ defmodule Hermes.Client do
       {:stop, :unexpected, state}
   end
 
+  def handle_info({:request_timeout, request_id}, state) do
+    case State.handle_request_timeout(state, request_id) do
+      {nil, state} ->
+        {:noreply, state}
+
+      {request_info, updated_state} ->
+        error = Error.client_error(:request_timeout, %{message: "Request timed out after #{request_info.elapsed_ms}ms"})
+        GenServer.reply(request_info.from, {:error, error})
+
+        {:noreply, updated_state}
+    end
+  end
+
   def handle_info({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
         Logger.debug("Received server error response: #{inspect(error)}")
-        {:noreply, handle_error(error, error["id"], state)}
+        {:noreply, handle_error_response(error, error["id"], state)}
 
       {:ok, [response]} when Message.is_response(response) ->
         Logger.debug("Received server response: #{response["id"]}")
-        {:noreply, handle_response(response, response["id"], state)}
+        {:noreply, handle_success_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
         method = notification["method"]
@@ -544,59 +547,74 @@ defmodule Hermes.Client do
 
   # Response handling
 
-  defp handle_error(%{"error" => json_error, "id" => id}, id, state) do
-    {{from, _method}, pending} = Map.pop(state.pending_requests, id)
+  defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
+    case State.remove_request(state, id) do
+      {nil, state} ->
+        Logger.warning("Received error response for unknown request ID: #{id}")
+        state
 
-    # Convert JSON-RPC error to our domain error
-    error = Error.from_json_rpc(json_error)
+      {request_info, updated_state} ->
+        # Convert JSON-RPC error to our domain error
+        error = Error.from_json_rpc(json_error)
 
-    # unblocks original caller
-    GenServer.reply(from, {:error, error})
+        # Unblock original caller with error
+        GenServer.reply(request_info.from, {:error, error})
 
-    %{state | pending_requests: pending}
-  end
-
-  defp handle_error(response, _, state) do
-    Logger.warning("Received error response for unknown request ID: #{response["id"]}")
-    state
-  end
-
-  defp handle_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
-    %{pending_requests: pending} = state
-
-    state = %{
-      state
-      | server_capabilities: result["capabilities"],
-        server_info: result["serverInfo"],
-        pending_requests: Map.delete(pending, id)
-    }
-
-    Logger.info("Initialized successfully, notifing server")
-
-    # we need to confirm to the server the handshake
-    :ok = send_notification(state, "notifications/initialized")
-
-    state
-  end
-
-  defp handle_response(%{"id" => id, "result" => result}, id, state) do
-    {{from, method}, pending} = Map.pop(state.pending_requests, id)
-
-    # Convert to our domain response
-    response = Response.from_json_rpc(%{"result" => result, "id" => id})
-
-    # unblocks original caller
-    cond do
-      method == "ping" -> GenServer.reply(from, :pong)
-      Response.error?(response) -> GenServer.reply(from, {:error, response.result})
-      true -> GenServer.reply(from, {:ok, response.result})
+        updated_state
     end
-
-    %{state | pending_requests: pending}
   end
 
-  defp handle_response(%{"id" => _} = response, _, state) do
-    Logger.warning("Received response for unknown request ID: #{response["id"]}")
+  defp handle_error_response(%{"id" => id}, _id, state) do
+    Logger.warning("Received malformed error response for request ID: #{id}")
+    state
+  end
+
+  defp handle_success_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
+    case State.remove_request(state, id) do
+      {nil, state} ->
+        state
+
+      {_request_info, updated_state} ->
+        # Update server info in state
+        updated_state =
+          State.update_server_info(
+            updated_state,
+            result["capabilities"],
+            result["serverInfo"]
+          )
+
+        Logger.info("Initialized successfully, notifying server")
+
+        # Confirm to the server the handshake is complete
+        :ok = send_notification(updated_state, "notifications/initialized")
+
+        updated_state
+    end
+  end
+
+  defp handle_success_response(%{"id" => id, "result" => result}, id, state) do
+    case State.remove_request(state, id) do
+      {nil, state} ->
+        Logger.warning("Received response for unknown request ID: #{id}")
+        state
+
+      {request_info, updated_state} ->
+        # Convert to our domain response
+        response = Response.from_json_rpc(%{"result" => result, "id" => id})
+
+        # Unblock original caller with result
+        cond do
+          request_info.method == "ping" -> GenServer.reply(request_info.from, :pong)
+          Response.error?(response) -> GenServer.reply(request_info.from, {:error, response.result})
+          true -> GenServer.reply(request_info.from, {:ok, response.result})
+        end
+
+        updated_state
+    end
+  end
+
+  defp handle_success_response(%{"id" => id}, _id, state) do
+    Logger.warning("Received malformed response for request ID: #{id}")
     state
   end
 
@@ -617,7 +635,7 @@ defmodule Hermes.Client do
     progress = params["progress"]
     total = Map.get(params, "total")
 
-    if callback = Map.get(state.progress_callbacks, progress_token) do
+    if callback = State.get_progress_callback(state, progress_token) do
       # Execute the callback in a separate process to avoid blocking
       Task.start(fn -> callback.(progress_token, progress, total) end)
     end
@@ -631,7 +649,7 @@ defmodule Hermes.Client do
     logger = Map.get(params, "logger")
 
     # Execute callback if registered
-    if callback = state.log_callback do
+    if callback = State.get_log_callback(state) do
       Task.start(fn -> callback.(level, data, logger) end)
     end
 
@@ -668,8 +686,7 @@ defmodule Hermes.Client do
     with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
          {:ok, callback} when is_function(callback, 3) <- {:ok, Keyword.get(opts, :callback)},
          {:ok, token} when not is_nil(token) <- {:ok, Keyword.get(opts, :token)} do
-      progress_callbacks = Map.put(state.progress_callbacks, token, callback)
-      %{state | progress_callbacks: progress_callbacks}
+      State.register_progress_callback(state, token, callback)
     else
       _ -> state
     end
@@ -687,38 +704,6 @@ defmodule Hermes.Client do
   end
 
   # Helper functions
-
-  defp validate_capability(%{server_capabilities: nil}, _method) do
-    {:error, :server_capabilities_not_set}
-  end
-
-  defp validate_capability(%{server_capabilities: server_capabilities}, method) do
-    capability = String.split(method, "/", parts: 2)
-
-    if valid_capability?(server_capabilities, capability) do
-      :ok
-    else
-      {:error, {:capability_not_supported, method}}
-    end
-  end
-
-  defp valid_capability?(_capabilities, ["initialize"]), do: true
-  defp valid_capability?(_capabilities, ["ping"]), do: true
-
-  defp valid_capability?(capabilities, ["resources", sub]) when sub in ~w(subscribe unsubscribe) do
-    if resources = Map.get(capabilities, "resources") do
-      valid_capability?(resources, [sub, nil])
-    end
-  end
-
-  defp valid_capability?(%{} = capabilities, [capability, _]) do
-    Map.has_key?(capabilities, capability)
-  end
-
-  defp generate_request_id do
-    ID.generate_request_id()
-  end
-
   defp encode_request(method, params, request_id) do
     Message.encode_request(%{"method" => method, "params" => params}, request_id)
   end
@@ -737,12 +722,5 @@ defmodule Hermes.Client do
     with {:ok, notification_data} <- encode_notification(method, params) do
       send_to_transport(state.transport, notification_data)
     end
-  end
-
-  defp deep_merge(map1, map2) do
-    Map.merge(map1, map2, fn
-      _, v1, v2 when is_map(v1) and is_map(v2) -> deep_merge(v1, v2)
-      _, _, v2 -> v2
-    end)
   end
 end

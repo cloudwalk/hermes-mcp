@@ -3,6 +3,7 @@ defmodule Hermes.ClientTest do
 
   import Mox
 
+  alias Hermes.Client.State
   alias Hermes.Message
 
   @moduletag capture_log: true
@@ -14,6 +15,17 @@ defmodule Hermes.ClientTest do
     Mox.stub_with(Hermes.MockTransport, Hermes.MockTransportImpl)
 
     :ok
+  end
+
+  # Helper function to get request_id from state
+  defp get_request_id(client, expected_method) do
+    state = :sys.get_state(client)
+    pending_requests = State.list_pending_requests(state)
+
+    Enum.find_value(pending_requests, nil, fn
+      %{method: ^expected_method, id: id} -> id
+      _ -> nil
+    end)
   end
 
   describe "start_link/1" do
@@ -61,8 +73,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -96,8 +107,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "ping")
 
       response = %{
         "id" => request_id,
@@ -123,8 +133,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "resources/list")
 
       response = %{
         "id" => request_id,
@@ -158,8 +167,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "resources/list")
 
       response = %{
         "id" => request_id,
@@ -193,8 +201,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "resources/read"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "resources/read")
 
       response = %{
         "id" => request_id,
@@ -226,8 +233,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "prompts/list"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "prompts/list")
 
       response = %{
         "id" => request_id,
@@ -269,8 +275,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "prompts/get"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "prompts/get")
 
       response = %{
         "id" => request_id,
@@ -302,8 +307,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "tools/list"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "tools/list")
 
       response = %{
         "id" => request_id,
@@ -338,8 +342,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "tools/call"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "tools/call")
 
       response = %{
         "id" => request_id,
@@ -379,8 +382,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -414,8 +416,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "ping")
 
       response = %{
         "id" => request_id,
@@ -453,8 +454,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -483,8 +483,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "ping"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "ping")
 
       error_response = %{
         "id" => request_id,
@@ -565,8 +564,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -622,8 +620,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -725,8 +722,7 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
 
       # Simulate a response to complete the request
-      state = :sys.get_state(client)
-      [{request_id, {_from, "resources/list"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "resources/list")
 
       response = %{
         "id" => request_id,
@@ -774,8 +770,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
@@ -807,8 +802,7 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_from, "logging/setLevel"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "logging/setLevel")
 
       response = %{
         "id" => request_id,
@@ -898,8 +892,7 @@ defmodule Hermes.ClientTest do
       Process.send(client, :initialize, [:noconnect])
       Process.sleep(50)
 
-      state = :sys.get_state(client)
-      [{request_id, {_pid, "initialize"}}] = Map.to_list(state.pending_requests)
+      assert request_id = get_request_id(client, "initialize")
 
       init_response = %{
         "id" => request_id,
