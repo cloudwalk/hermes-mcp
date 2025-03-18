@@ -5,6 +5,7 @@ defmodule Hermes.ClientTest do
 
   alias Hermes.Client.State
   alias Hermes.MCP.Error
+  alias Hermes.MCP.Response
   alias Hermes.Message
 
   @moduletag capture_log: true
@@ -153,7 +154,10 @@ defmodule Hermes.ClientTest do
         "nextCursor" => nil
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "list_resources with cursor", %{client: client} do
@@ -187,7 +191,10 @@ defmodule Hermes.ClientTest do
         "nextCursor" => nil
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "read_resource sends correct request", %{client: client} do
@@ -219,7 +226,10 @@ defmodule Hermes.ClientTest do
         "contents" => [%{"text" => "resource content", "uri" => "test://uri"}]
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "list_prompts sends correct request", %{client: client} do
@@ -253,7 +263,10 @@ defmodule Hermes.ClientTest do
         "nextCursor" => nil
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "get_prompt sends correct request", %{client: client} do
@@ -293,7 +306,10 @@ defmodule Hermes.ClientTest do
         "messages" => [%{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}]
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "list_tools sends correct request", %{client: client} do
@@ -327,7 +343,10 @@ defmodule Hermes.ClientTest do
         "nextCursor" => nil
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
     end
 
     test "call_tool sends correct request", %{client: client} do
@@ -362,7 +381,50 @@ defmodule Hermes.ClientTest do
         "isError" => false
       }
 
-      assert {:ok, ^expected_result} = Task.await(task)
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
+    end
+
+    test "handles domain error responses as {:ok, response}", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "tools/call"
+        assert decoded["params"] == %{"name" => "test_tool", "arguments" => %{"arg1" => "value1"}}
+        :ok
+      end)
+
+      task =
+        Task.async(fn -> Hermes.Client.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
+
+      Process.sleep(50)
+
+      assert request_id = get_request_id(client, "tools/call")
+
+      # Response with isError: true but still a valid domain response
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "content" => [%{"type" => "text", "text" => "Tool execution failed: invalid argument"}],
+          "isError" => true
+        }
+      }
+
+      encoded_response = JSON.encode!(response)
+      send(client, {:response, encoded_response})
+
+      expected_result = %{
+        "content" => [%{"type" => "text", "text" => "Tool execution failed: invalid argument"}],
+        "isError" => true
+      }
+
+      # Should return {:ok, response} even though isError is true
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == true
     end
   end
 

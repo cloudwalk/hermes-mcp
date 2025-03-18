@@ -80,25 +80,23 @@ defmodule Hermes.MCP.Response do
   end
 
   @doc """
-  Unwraps the response, handling domain-level errors.
+  Unwraps the response, returning the raw result.
 
-  Returns either:
-  - `{:ok, result}` for successful responses
-  - `{:error, result}` for responses with isError: true
+  Returns the raw result data regardless of whether it represents
+  a success or domain error.
 
   ## Examples
 
       iex> response = Hermes.MCP.Response.from_json_rpc(%{"result" => %{"data" => "value"}, "id" => "req_123"})
       iex> Hermes.MCP.Response.unwrap(response)
-      {:ok, %{"data" => "value"}}
+      %{"data" => "value"}
       
       iex> error_response = Hermes.MCP.Response.from_json_rpc(%{"result" => %{"isError" => true, "reason" => "not_found"}, "id" => "req_123"})
       iex> Hermes.MCP.Response.unwrap(error_response)
-      {:error, %{"isError" => true, "reason" => "not_found"}}
+      %{"isError" => true, "reason" => "not_found"}
   """
-  @spec unwrap(t()) :: {:ok, map()} | {:error, map()}
-  def unwrap(%__MODULE__{result: result, is_error: false}), do: {:ok, result}
-  def unwrap(%__MODULE__{result: result, is_error: true}), do: {:error, result}
+  @spec unwrap(t()) :: map()
+  def unwrap(%__MODULE__{result: result}), do: result
 
   @doc """
   Checks if the response is successful (no domain error).

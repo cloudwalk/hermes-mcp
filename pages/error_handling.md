@@ -12,11 +12,17 @@ Hermes MCP distinguishes between three types of errors:
 
 ## Error Representation
 
-All errors in Hermes MCP are represented as `{:error, %Hermes.MCP.Error{}}` tuples, where `Error` is a struct with:
+Protocol and client-side errors in Hermes MCP are represented as `{:error, %Hermes.MCP.Error{}}` tuples, where `Error` is a struct with:
 
 - `code`: The numeric error code
-- `reason`: The atom reason (e.g., `:parse_error`, `:method_not_found`, `:domain_error`)
+- `reason`: The atom reason (e.g., `:parse_error`, `:method_not_found`)
 - `data`: Additional error context
+
+Domain errors (with `isError: true`) are returned as `{:ok, %Hermes.MCP.Response{}}` tuples, where the response includes:
+
+- `result`: The original result from the server (including the `isError` field)
+- `id`: The request ID
+- `is_error`: A boolean flag indicating if this is a domain error
 
 ### Protocol Errors
 
@@ -40,18 +46,18 @@ Standard JSON-RPC error codes:
 
 ### Domain Errors
 
-Domain errors (application-level errors) use the `:domain_error` reason, with the original response data preserved:
+Domain errors (application-level errors) are valid JSON-RPC responses with `isError: true` and are represented as:
 
 ```elixir
-{:error, %Hermes.MCP.Error{
-  code: -32000,
-  reason: :domain_error,
-  data: %{
+{:ok, %Hermes.MCP.Response{
+  result: %{
     "isError" => true,
     "reason" => "tool_not_found",
     "message" => "Tool 'unknown' not found",
     "details" => %{"toolName" => "unknown"}
-  }
+  },
+  id: "req_123",
+  is_error: true
 }}
 ```
 
@@ -84,27 +90,27 @@ Client-specific errors follow the same error struct pattern with appropriate rea
 
 ## Handling Errors
 
-The client automatically detects and categorizes errors, returning them in consistent formats.
+The client automatically categorizes errors, returning them in consistent formats.
 
-You can pattern match on the error structure to handle different error types:
+You can pattern match on the response structure to handle different error types:
 
 ```elixir
 case Hermes.Client.call_tool("search", %{query: "example"}) do
-  {:ok, result} ->
+  {:ok, %Hermes.MCP.Response{is_error: false, result: result}} ->
     # Handle success
     handle_success(result)
     
-  {:error, %Hermes.MCP.Error{reason: :domain_error, data: data}} ->
+  {:ok, %Hermes.MCP.Response{is_error: true, result: result}} ->
     # Handle domain/application error
-    case data do
+    case result do
       %{"reason" => "not_found"} -> 
-        Logger.warning("Resource not found: #{data["message"]}")
+        Logger.warning("Resource not found: #{result["message"]}")
       
       %{"reason" => "permission_denied"} ->
-        Logger.error("Permission denied: #{data["message"]}")
+        Logger.error("Permission denied: #{result["message"]}")
         
       _ ->
-        Logger.error("Other domain error: #{inspect(data)}")
+        Logger.error("Other domain error: #{inspect(result)}")
     end
     
   {:error, %Hermes.MCP.Error{reason: :method_not_found}} ->
@@ -127,7 +133,6 @@ For better debugging, errors implement a custom Inspect protocol:
 
 ```
 #MCP.Error<method_not_found %{method: "unknown_method"}>
-#MCP.Error<domain_error %{"isError" => true, "reason" => "not_found", "message" => "Resource not found"}>
 ```
 
 ## Creating Custom Errors
@@ -144,7 +149,4 @@ Hermes.MCP.Error.transport_error(:connection_refused)
 
 # Client errors
 Hermes.MCP.Error.client_error(:request_timeout, %{elapsed_ms: 30000})
-
-# Domain errors
-Hermes.MCP.Error.domain_error(%{"reason" => "not_found", "message" => "Resource not found"})
 ```

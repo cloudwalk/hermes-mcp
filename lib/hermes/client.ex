@@ -602,17 +602,10 @@ defmodule Hermes.Client do
         # Convert to our domain response
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
 
-        # Unblock original caller with result
-        cond do
-          request_info.method == "ping" ->
-            GenServer.reply(request_info.from, :pong)
-
-          Response.error?(response) ->
-            error = Error.domain_error(response.result)
-            GenServer.reply(request_info.from, {:error, error})
-
-          true ->
-            GenServer.reply(request_info.from, {:ok, response.result})
+        if request_info.method == "ping" do
+          GenServer.reply(request_info.from, :pong)
+        else
+          GenServer.reply(request_info.from, {:ok, response})
         end
 
         updated_state

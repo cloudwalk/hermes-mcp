@@ -53,24 +53,21 @@ defmodule Hermes.MCP.ResponseTest do
   end
 
   describe "unwrap/1" do
-    test "returns {:ok, result} for successful responses" do
-      response = %Response{
+    test "returns the raw result for any response" do
+      success_response = %Response{
         result: %{"data" => "value"},
         id: "req_123",
         is_error: false
       }
 
-      assert Response.unwrap(response) == {:ok, %{"data" => "value"}}
-    end
-
-    test "returns {:error, result} for domain errors" do
-      response = %Response{
+      error_response = %Response{
         result: %{"isError" => true, "reason" => "not_found"},
         id: "req_123",
         is_error: true
       }
 
-      assert Response.unwrap(response) == {:error, %{"isError" => true, "reason" => "not_found"}}
+      assert Response.unwrap(success_response) == %{"data" => "value"}
+      assert Response.unwrap(error_response) == %{"isError" => true, "reason" => "not_found"}
     end
   end
 
