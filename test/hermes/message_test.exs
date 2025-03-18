@@ -1,6 +1,8 @@
 defmodule Hermes.MessageTest do
   use ExUnit.Case, async: true
-
+  
+  @moduletag capture_log: true
+  
   alias Hermes.Message
 
   require Hermes.Message
