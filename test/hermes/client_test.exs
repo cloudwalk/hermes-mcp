@@ -827,8 +827,8 @@ defmodule Hermes.ClientTest do
     test "unregister_log_callback removes the callback", %{client: client} do
       callback = fn _, _, _ -> nil end
 
-      :ok = Hermes.Client.register_log_callback(client, callback)
-      :ok = Hermes.Client.unregister_log_callback(client, callback)
+      assert :ok = Hermes.Client.register_log_callback(client, callback)
+      assert :ok = Hermes.Client.unregister_log_callback(client)
 
       state = :sys.get_state(client)
       assert is_nil(state.log_callback)

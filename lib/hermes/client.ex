@@ -306,8 +306,8 @@ defmodule Hermes.Client do
     * `client` - The client process
     * `callback` - The callback function to unregister
   """
-  @spec unregister_log_callback(GenServer.server(), log_callback()) :: :ok
-  def unregister_log_callback(client, _callback) do
+  @spec unregister_log_callback(GenServer.server()) :: :ok
+  def unregister_log_callback(client) do
     GenServer.call(client, :unregister_log_callback)
   end
 
