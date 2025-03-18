@@ -44,16 +44,16 @@ defmodule Hermes.Transport.SSETest do
         conn
       end)
 
-      # We're not actually testing POST here, just making sure the URL is set correctly
-      transport =
-        start_supervised!(
-          {SSE,
-           client: stub_client,
-           server: %{
-             base_url: server_url,
-             sse_path: "/sse"
-           },
-           transport_opts: @test_http_opts}
+      # Start the transport manually instead of using start_supervised!
+      # This prevents the test framework from killing it abruptly
+      {:ok, transport} =
+        SSE.start_link(
+          client: stub_client,
+          server: %{
+            base_url: server_url,
+            sse_path: "/sse"
+          },
+          transport_opts: @test_http_opts
         )
 
       # Give time for the SSE connection to establish and process the event
@@ -66,7 +66,10 @@ defmodule Hermes.Transport.SSETest do
 
       # Clean up
       StubClient.clear_messages()
+      # Shut down gracefully
       SSE.shutdown(transport)
+      # Allow time for shutdown
+      Process.sleep(50)
     end
   end
 

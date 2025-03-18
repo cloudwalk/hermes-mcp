@@ -11,6 +11,9 @@ mix compile
 # Run all tests
 mix test
 
+# Run tests without stderr output (suppresses "broken pipe" messages)
+mix test 2>/dev/null
+
 # Run a single test
 mix test test/path/to/test_file.exs:line_number
 
