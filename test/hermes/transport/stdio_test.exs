@@ -167,7 +167,14 @@ defmodule Hermes.Transport.STDIOTest do
   defp safe_stop(pid) do
     if is_pid(pid) && Process.alive?(pid) do
       try do
-        GenServer.stop(pid, :normal, 100)
+        # First send shutdown command which will gracefully close the port
+        STDIO.shutdown(pid)
+        # Then wait for process to terminate
+        Process.sleep(50)
+        # Finally stop the process if it's still alive
+        if Process.alive?(pid) do
+          GenServer.stop(pid, :normal, 100)
+        end
       catch
         :exit, _ -> :ok
       end
