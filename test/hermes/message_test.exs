@@ -1,11 +1,11 @@
 defmodule Hermes.MessageTest do
   use ExUnit.Case, async: true
-  
-  @moduletag capture_log: true
-  
+
   alias Hermes.Message
 
   require Hermes.Message
+
+  @moduletag capture_log: true
 
   describe "decode/1" do
     test "decodes a single valid message" do

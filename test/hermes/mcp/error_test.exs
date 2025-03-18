@@ -1,9 +1,9 @@
 defmodule Hermes.MCP.ErrorTest do
   use ExUnit.Case, async: true
-  
-  @moduletag capture_log: true
 
   alias Hermes.MCP.Error
+
+  @moduletag capture_log: true
 
   doctest Hermes.MCP.Error
 

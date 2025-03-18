@@ -1,8 +1,8 @@
 defmodule Hermes.Transport.SSETest do
   use ExUnit.Case, async: false
 
-  alias Hermes.Transport.SSE
   alias Hermes.Message
+  alias Hermes.Transport.SSE
 
   @moduletag capture_log: true
   @test_http_opts [max_reconnections: 0]
@@ -58,7 +58,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Give time for the SSE connection to establish and process the event
       Process.sleep(200)
-      
+
       # Verify we can get the message URL from the transport's state
       state = :sys.get_state(transport)
       assert state.message_url != nil
@@ -101,13 +101,13 @@ defmodule Hermes.Transport.SSETest do
       # Set up POST endpoint that will receive messages
       Bypass.expect(bypass, "POST", "/messages/123", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        
+
         # Verify we got a message
         assert body =~ "ping"
-        
+
         # Return a proper response
         conn = Plug.Conn.put_resp_header(conn, "content-type", "application/json")
-        
+
         # For a ping request, just send back a simple response
         Plug.Conn.resp(conn, 200, ~s|{"jsonrpc":"2.0","id":"1","result":"pong"}|)
       end)
@@ -122,10 +122,10 @@ defmodule Hermes.Transport.SSETest do
           },
           transport_opts: @test_http_opts
         )
-      
+
       # Give time for the SSE connection to establish
       Process.sleep(200)
-      
+
       # Verify the transport has received the endpoint
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
@@ -134,10 +134,10 @@ defmodule Hermes.Transport.SSETest do
       # Send a ping message through the transport
       {:ok, ping_message} = Message.encode_request(%{"method" => "ping", "params" => %{}}, "1")
       assert :ok = SSE.send_message(transport, ping_message)
-      
+
       # Give time for the response to come back
       Process.sleep(100)
-      
+
       # Clean up
       StubClient.clear_messages()
       SSE.shutdown(transport)
@@ -165,7 +165,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Wait for transport to start
       Process.sleep(100)
-      
+
       # Try to send a message without having an endpoint
       assert {:error, :not_connected} = SSE.send_message(transport, "test message")
 
@@ -210,7 +210,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Give the SSE connection time to establish
       Process.sleep(200)
-      
+
       # Verify the transport has received the endpoint
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
@@ -230,10 +230,10 @@ defmodule Hermes.Transport.SSETest do
 
       # Create a test message
       test_message = "test message data"
-      
+
       # Start the StubClient from test_helpers.exs
       {:ok, stub_client} = StubClient.start_link()
-      
+
       # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
@@ -250,7 +250,7 @@ defmodule Hermes.Transport.SSETest do
         # Send a message event after a slight delay to ensure
         # the endpoint message is processed first
         Process.sleep(50)
-        
+
         {:ok, conn} =
           Plug.Conn.chunk(conn, """
           event: message
@@ -260,7 +260,7 @@ defmodule Hermes.Transport.SSETest do
 
         conn
       end)
-      
+
       # Start the SSE transport with the stub client
       {:ok, transport} =
         SSE.start_link(
@@ -274,15 +274,15 @@ defmodule Hermes.Transport.SSETest do
 
       # Give time for the connection to be established and messages to be processed
       Process.sleep(300)
-      
+
       # Verify the transport has set up the message URL
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
-      
+
       # Check that the StubClient received our message
       messages = StubClient.get_messages()
       assert test_message in messages
-      
+
       # Clean up
       StubClient.clear_messages()
       SSE.shutdown(transport)
@@ -290,13 +290,13 @@ defmodule Hermes.Transport.SSETest do
 
     test "handles server disconnection", %{client: _client, bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
-      
+
       # Start a stub client
       {:ok, stub_client} = StubClient.start_link()
-      
+
       # Set up the SSE connection - bypass is needed but we don't assert
       # any specific behavior since we're testing disconnection
-      Bypass.expect(bypass, fn conn -> 
+      Bypass.expect(bypass, fn conn ->
         Plug.Conn.resp(conn, 200, "")
       end)
 
@@ -310,19 +310,19 @@ defmodule Hermes.Transport.SSETest do
           },
           transport_opts: [max_reconnections: 0]
         )
-        
+
       # Allow time for the initial connection attempt
       Process.sleep(100)
-      
+
       # Directly call shutdown on the transport to trigger clean termination
       SSE.shutdown(transport)
-      
+
       # Give it a moment to shut down
       Process.sleep(100)
-      
+
       # Verify the process is no longer alive
       refute Process.alive?(transport)
-      
+
       # Clean up
       StubClient.clear_messages()
     end
@@ -335,7 +335,7 @@ defmodule Hermes.Transport.SSETest do
       # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
         # Headers specific to SSE are expected by default, so custom headers must be used in addition to them
-        assert "auth-token" == Plug.Conn.get_req_header(conn, "authorization") |> List.first()
+        assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
         # "accept" header will be overridden by SSE module's default "text/event-stream"
 
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
@@ -355,8 +355,8 @@ defmodule Hermes.Transport.SSETest do
       # Set up the POST endpoint
       Bypass.expect(bypass, "POST", "/messages/123", fn conn ->
         # POST requests should preserve custom headers
-        assert "application/json" == Plug.Conn.get_req_header(conn, "accept") |> List.first()
-        assert "auth-token" == Plug.Conn.get_req_header(conn, "authorization") |> List.first()
+        assert "application/json" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
+        assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
 
         Plug.Conn.resp(conn, 200, "")
       end)
@@ -378,7 +378,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Wait for the transport to connect and process the endpoint event
       Process.sleep(200)
-      
+
       # Verify the transport has set the message URL
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
