@@ -198,6 +198,25 @@ defmodule Hermes.MCP.Error do
   end
 
   @doc """
+  Creates a domain-level error from an MCP server response.
+
+  Used for application-level errors returned as valid JSON-RPC responses with `isError: true`.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.domain_error(%{"message" => "Resource not found"})
+      %Hermes.MCP.Error{code: -32000, reason: :domain_error, data: %{"message" => "Resource not found"}}
+  """
+  @spec domain_error(map()) :: t()
+  def domain_error(data) when is_map(data) do
+    %__MODULE__{
+      code: -32_000,
+      reason: :domain_error,
+      data: data
+    }
+  end
+
+  @doc """
   Converts from a JSON-RPC error object to a Hermes.MCP.Error struct.
 
   ## Parameters
@@ -249,4 +268,11 @@ defmodule Hermes.MCP.Error do
   defp reason_for_code(@invalid_params), do: :invalid_params
   defp reason_for_code(@internal_error), do: :internal_error
   defp reason_for_code(_), do: :server_error
+end
+
+defimpl Inspect, for: Hermes.MCP.Error do
+  def inspect(%{reason: reason, data: data}, _opts) do
+    details = if Enum.empty?(data), do: "", else: " #{Kernel.inspect(data, pretty: true)}"
+    "#MCP.Error<#{reason}#{details}>"
+  end
 end

@@ -73,6 +73,7 @@ defmodule Hermes.MixProject do
         "pages/rfc.md",
         "pages/progress_tracking.md",
         "pages/logging.md",
+        "pages/error_handling.md",
         "README.md",
         "CHANGELOG.md",
         "LICENSE"
@@ -84,6 +85,7 @@ defmodule Hermes.MixProject do
           "pages/client_usage.md",
           "pages/transport_options.md",
           "pages/message_handling.md",
+          "pages/error_handling.md",
           "pages/progress_tracking.md",
           "pages/logging.md"
         ],

@@ -39,6 +39,7 @@ defmodule Hermes.Client.State do
   ```
   """
 
+  alias Hermes.MCP.Error
   alias Hermes.MCP.ID
 
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
@@ -449,19 +450,20 @@ defmodule Hermes.Client.State do
   ## Returns
 
     * `:ok` if the method is supported
-    * `{:error, reason}` if the method is not supported
+    * `{:error, %Hermes.MCP.Error{}}` if the method is not supported
 
   ## Examples
 
       iex> Hermes.Client.State.validate_capability(state_with_resources, "resources/list")
       :ok
       
-      iex> Hermes.Client.State.validate_capability(state_without_tools, "tools/list")
-      {:error, {:capability_not_supported, "tools/list"}}
+      iex> {:error, error} = Hermes.Client.State.validate_capability(state_without_tools, "tools/list")
+      iex> error.reason
+      :method_not_found
   """
-  @spec validate_capability(t(), String.t()) :: :ok | {:error, term()}
+  @spec validate_capability(t(), String.t()) :: :ok | {:error, Error.t()}
   def validate_capability(%{server_capabilities: nil}, _method) do
-    {:error, :server_capabilities_not_set}
+    {:error, Error.client_error(:server_capabilities_not_set)}
   end
 
   def validate_capability(%{server_capabilities: _}, "ping"), do: :ok
@@ -473,7 +475,7 @@ defmodule Hermes.Client.State do
     if valid_capability?(server_capabilities, capability) do
       :ok
     else
-      {:error, {:capability_not_supported, method}}
+      {:error, Error.method_not_found(%{method: method})}
     end
   end
 

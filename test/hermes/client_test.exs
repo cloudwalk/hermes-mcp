@@ -4,6 +4,7 @@ defmodule Hermes.ClientTest do
   import Mox
 
   alias Hermes.Client.State
+  alias Hermes.MCP.Error
   alias Hermes.Message
 
   @moduletag capture_log: true
@@ -433,7 +434,8 @@ defmodule Hermes.ClientTest do
     test "tools/list fails since this capability isn't supported", %{client: client} do
       task = Task.async(fn -> Hermes.Client.list_tools(client) end)
 
-      assert {:error, {:capability_not_supported, "tools/list"}} = Task.await(task)
+      assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
+               Task.await(task)
     end
   end
 
@@ -508,7 +510,11 @@ defmodule Hermes.ClientTest do
         {:error, :connection_closed}
       end)
 
-      assert {:error, {:transport_error, :connection_closed}} = Hermes.Client.ping(client)
+      assert {:error,
+              %Error{
+                reason: :send_failure,
+                data: %{type: :transport, original_reason: :connection_closed}
+              }} = Hermes.Client.ping(client)
     end
   end
 

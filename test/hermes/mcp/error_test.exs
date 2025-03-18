@@ -126,4 +126,36 @@ defmodule Hermes.MCP.ErrorTest do
       assert Error.to_tuple(error) == {:error, error}
     end
   end
+
+  describe "domain errors" do
+    test "domain_error/1 creates a domain error structure" do
+      # Create domain error with server response data
+      domain_data = %{"isError" => true, "message" => "Resource not found", "code" => 404}
+      error = Error.domain_error(domain_data)
+
+      # Assert structure is correct
+      assert %Error{} = error
+      assert error.reason == :domain_error
+      assert error.code == -32_000
+      assert error.data == domain_data
+    end
+  end
+
+  describe "inspect protocol" do
+    test "formats error nicely" do
+      error = Error.domain_error(%{"message" => "Not found"})
+      inspected = inspect(error)
+
+      assert String.contains?(inspected, "#MCP.Error<domain_error")
+      assert String.contains?(inspected, "message")
+      assert String.contains?(inspected, "Not found")
+    end
+
+    test "handles empty data" do
+      error = %Error{reason: :empty_test, data: %{}}
+      inspected = inspect(error)
+
+      assert inspected == "#MCP.Error<empty_test>"
+    end
+  end
 end

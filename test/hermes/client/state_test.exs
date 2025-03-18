@@ -2,6 +2,7 @@ defmodule Hermes.Client.StateTest do
   use ExUnit.Case, async: true
 
   alias Hermes.Client.State
+  alias Hermes.MCP.Error
 
   describe "new/1" do
     test "creates a new state with the given options" do
@@ -35,7 +36,9 @@ defmodule Hermes.Client.StateTest do
 
       assert is_binary(request_id)
       assert Map.has_key?(updated_state.pending_requests, request_id)
-      {stored_from, stored_method, timer_ref, start_time} = updated_state.pending_requests[request_id]
+
+      {stored_from, stored_method, timer_ref, start_time} =
+        updated_state.pending_requests[request_id]
 
       assert stored_from == from
       assert stored_method == "test_method"
@@ -288,13 +291,15 @@ defmodule Hermes.Client.StateTest do
       state = new_test_state()
       state = %{state | server_capabilities: %{"resources" => %{}}}
 
-      assert State.validate_capability(state, "tools/list") == {:error, {:capability_not_supported, "tools/list"}}
+      assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
+               State.validate_capability(state, "tools/list")
     end
 
     test "returns error when server capabilities are not set" do
       state = new_test_state()
 
-      assert State.validate_capability(state, "resources/list") == {:error, :server_capabilities_not_set}
+      assert {:error, %Error{reason: :server_capabilities_not_set}} =
+               State.validate_capability(state, "resources/list")
     end
   end
 

@@ -604,9 +604,15 @@ defmodule Hermes.Client do
 
         # Unblock original caller with result
         cond do
-          request_info.method == "ping" -> GenServer.reply(request_info.from, :pong)
-          Response.error?(response) -> GenServer.reply(request_info.from, {:error, response.result})
-          true -> GenServer.reply(request_info.from, {:ok, response.result})
+          request_info.method == "ping" ->
+            GenServer.reply(request_info.from, :pong)
+
+          Response.error?(response) ->
+            error = Error.domain_error(response.result)
+            GenServer.reply(request_info.from, {:error, error})
+
+          true ->
+            GenServer.reply(request_info.from, {:ok, response.result})
         end
 
         updated_state
@@ -714,7 +720,7 @@ defmodule Hermes.Client do
 
   defp send_to_transport(transport, data) do
     with {:error, reason} <- transport.layer.send_message(transport.name, data) do
-      {:error, {:transport_error, reason}}
+      {:error, Error.transport_error(:send_failure, %{original_reason: reason})}
     end
   end
 
