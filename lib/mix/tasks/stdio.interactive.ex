@@ -3,14 +3,19 @@ defmodule Mix.Tasks.Stdio.Interactive do
 
   @moduledoc """
   Mix task to test the STDIO transport implementation, interactively sending commands.
+
+  ## Options
+
+  * `--command` - Command to execute for the STDIO transport (default: "mcp")
+  * `--args` - Comma-separated arguments for the command (default: "run,priv/dev/echo/index.py")
   """
 
   use Mix.Task
 
   alias Hermes.Client
   alias Hermes.Transport.STDIO
-
-  require Logger
+  alias Mix.Interactive.UI
+  alias Mix.Interactive.Shell
 
   @switches [
     command: :string,
@@ -18,30 +23,37 @@ defmodule Mix.Tasks.Stdio.Interactive do
   ]
 
   def run(args) do
+    # Disable logger output to keep the UI clean
+    Application.put_env(:logger, :level, :error)
+    
+    Mix.Task.run("app.start")
+
     {parsed, _} = OptionParser.parse!(args, strict: @switches, aliases: [c: :command])
     cmd = parsed[:command] || "mcp"
     args = String.split(parsed[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
-    Logger.info("Starting STDIO interaction MCP server")
+    header = UI.header("HERMES MCP STDIO INTERACTIVE")
+    IO.puts(header)
+    IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
-      Logger.error("mcp executable not found in PATH, maybe you need to activate venv")
+      IO.puts("#{UI.colors().error}Error: mcp executable not found in PATH, maybe you need to activate venv#{UI.colors().reset}")
       System.halt(1)
     end
 
-    {:ok, stdio} =
+    {:ok, _} =
       STDIO.start_link(
         command: cmd,
         args: args,
         client: :stdio_test
       )
 
-    Logger.info("STDIO transport started on PID #{inspect(stdio)}")
+    IO.puts("#{UI.colors().success}✓ STDIO transport started#{UI.colors().reset}")
 
     {:ok, client} =
       Client.start_link(
         name: :stdio_test,
-        transport: STDIO,
+        transport: [layer: STDIO],
         client_info: %{
           "name" => "Mix.Tasks.STDIO",
           "version" => "1.0.0"
@@ -54,108 +66,9 @@ defmodule Mix.Tasks.Stdio.Interactive do
         }
       )
 
-    Logger.info("Client started on PID #{inspect(client)}")
+    IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
-    Process.sleep(1_000)
-
-    Logger.info("Type 'help' for a list of commands")
-
-    loop(client)
-  end
-
-  def loop(client) do
-    exec(client, ">>> " |> IO.gets() |> String.trim_trailing())
-  end
-
-  defp exec(client, "help"), do: print_help(client)
-  defp exec(client, "list_tools"), do: list_tools(client)
-  defp exec(client, "call_tool"), do: call_tool(client)
-  defp exec(client, "list_prompts"), do: list_prompts(client)
-  defp exec(client, "get_prompt"), do: get_prompt(client)
-  defp exec(client, "list_resources"), do: list_resources(client)
-  defp exec(client, "read_resource"), do: read_resource(client)
-
-  defp exec(client, "exit") do
-    Logger.info("Exiting interactive session")
-    Client.close(client)
-  end
-
-  defp exec(client, _), do: loop(client)
-
-  defp print_help(client) do
-    IO.puts("Available commands:")
-    IO.puts("  help - show this help message")
-    IO.puts("  list_tools - list server tools")
-    IO.puts("  call_tool - call a server tool with arguments")
-    IO.puts("  list_prompts - list server prompts")
-    IO.puts("  get_prompt - get a server prompt")
-    IO.puts("  list_resources - list server resources")
-    IO.puts("  read_resource - read a server resource")
-    IO.puts("  exit - exit the interactive session")
-
-    loop(client)
-  end
-
-  defp list_tools(client) do
-    with {:ok, %{"tools" => tools}} <- Client.list_tools(client) do
-      Logger.info("Found #{length(tools)} tools")
-    end
-
-    loop(client)
-  end
-
-  defp call_tool(client) do
-    tool_name = "Enter tool name:" |> IO.gets() |> String.trim_trailing()
-
-    tool_args =
-      "Enter tool arguments (as JSON):" |> IO.gets() |> String.trim_trailing() |> Jason.decode!()
-
-    with {:ok, result} <- Client.call_tool(client, tool_name, tool_args) do
-      Logger.info("Tool result: #{inspect(result)}")
-    end
-
-    loop(client)
-  end
-
-  defp list_prompts(client) do
-    with {:ok, %{"prompts" => prompts}} <- Client.list_prompts(client) do
-      Logger.info("Found #{length(prompts)} prompts")
-    end
-
-    loop(client)
-  end
-
-  defp get_prompt(client) do
-    prompt_name = "Enter prompt name:" |> IO.gets() |> String.trim_trailing()
-
-    prompt_args =
-      "Enter prompt arguments (as JSON):"
-      |> IO.gets()
-      |> String.trim_trailing()
-      |> Jason.decode!()
-
-    with {:ok, result} <- Client.get_prompt(client, prompt_name, prompt_args) do
-      Logger.info("Prompt result: #{inspect(result)}")
-    end
-
-    loop(client)
-  end
-
-  defp list_resources(client) do
-    with {:ok, %{"resources" => resources}} <- Client.list_resources(client) do
-      Logger.info("Found #{length(resources)} resources")
-    end
-
-    loop(client)
-  end
-
-  defp read_resource(client) do
-    resource_name = "Enter resource name:" |> IO.gets() |> String.trim_trailing()
-
-    with {:ok, resource} <- Client.read_resource(client, resource_name) do
-      Logger.info("Resource: #{inspect(resource)}")
-    end
-
-    loop(client)
+    Shell.loop(client)
   end
 end

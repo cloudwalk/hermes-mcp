@@ -3,15 +3,20 @@ defmodule Mix.Tasks.Sse.Interactive do
 
   @moduledoc """
   Mix task to test the SSE transport implementation, interactively sending commands.
+
+  ## Options
+
+  * `--base-url` - Base URL for the SSE server (default: http://localhost:8000)
+  * `--base-path` - Base path to append to the base URL
+  * `--sse-path` - Specific SSE endpoint path
   """
 
   use Mix.Task
 
   alias Hermes.Client
   alias Hermes.Transport.SSE
-  alias Mix.Tasks.Stdio
-
-  require Logger
+  alias Mix.Interactive.UI
+  alias Mix.Interactive.Shell
 
   @switches [
     base_url: :string,
@@ -20,21 +25,26 @@ defmodule Mix.Tasks.Sse.Interactive do
   ]
 
   def run(args) do
+    # Disable logger output to keep the UI clean
+    Application.put_env(:logger, :level, :error)
+
     Mix.Task.run("app.start")
 
     {parsed, _} = OptionParser.parse!(args, strict: @switches)
     server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
     server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
 
-    Logger.info("Starting SSE interaction MCP server on #{server_url}")
+    header = UI.header("HERMES MCP SSE INTERACTIVE")
+    IO.puts(header)
+    IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
 
-    {:ok, sse} =
+    {:ok, _} =
       SSE.start_link(
         client: :sse_test,
         server: server_options
       )
 
-    Logger.info("SSE transport started on PID #{inspect(sse)}")
+    IO.puts("#{UI.colors().success}✓ SSE transport started#{UI.colors().reset}")
 
     {:ok, client} =
       Client.start_link(
@@ -52,9 +62,9 @@ defmodule Mix.Tasks.Sse.Interactive do
         }
       )
 
-    Logger.info("Client started on PID #{inspect(client)}")
+    IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
-    # yeah, i know...
-    Stdio.Interactive.loop(client)
+    Shell.loop(client)
   end
 end
