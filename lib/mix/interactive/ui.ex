@@ -1,6 +1,12 @@
 defmodule Mix.Interactive.UI do
   @moduledoc """
   Common UI elements and formatting functions for interactive MCP shells.
+
+  This module provides consistent UI components and formatting helpers for
+  the interactive CLI interfaces used by the Hermes MCP mix tasks.
+
+  It includes functions for displaying colored text, formatted headers,
+  pretty-printing of data structures, and consistent output formatting.
   """
 
   alias IO.ANSI
@@ -55,18 +61,22 @@ defmodule Mix.Interactive.UI do
   @doc """
   Formats lists of tools/prompts/resources with helpful styling.
   """
-  def print_items(title, items, key_field) do
+  def print_items(title, [_ | _] = items, key_field) do
     IO.puts("#{@colors.success}Found #{length(items)} #{title}#{@colors.reset}")
-    
-    if is_list(items) and length(items) > 0 do
-      IO.puts("\n#{@colors.info}Available #{title}:#{@colors.reset}")
-      
-      Enum.each(items, fn item ->
-        IO.puts("  #{@colors.command}#{item[key_field]}#{@colors.reset}")
-        if Map.has_key?(item, "description"), do: IO.puts("    #{item["description"]}")
-      end)
-    end
-    
+
+    IO.puts("\n#{@colors.info}Available #{title}:#{@colors.reset}")
+
+    Enum.each(items, fn item ->
+      IO.puts("  #{@colors.command}#{item[key_field]}#{@colors.reset}")
+      if Map.has_key?(item, "description"), do: IO.puts("    #{item["description"]}")
+    end)
+
+    IO.puts("")
+  end
+
+  def print_items(title, items, _key_field) do
+    IO.puts("#{@colors.success}Found #{length(items)} #{title}#{@colors.reset}")
+
     IO.puts("")
   end
 end

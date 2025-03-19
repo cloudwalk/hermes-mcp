@@ -15,8 +15,8 @@ defmodule Mix.Tasks.Sse.Interactive do
 
   alias Hermes.Client
   alias Hermes.Transport.SSE
-  alias Mix.Interactive.UI
   alias Mix.Interactive.Shell
+  alias Mix.Interactive.UI
 
   @switches [
     base_url: :string,

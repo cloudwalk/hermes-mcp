@@ -14,8 +14,8 @@ defmodule Mix.Tasks.Stdio.Interactive do
 
   alias Hermes.Client
   alias Hermes.Transport.STDIO
-  alias Mix.Interactive.UI
   alias Mix.Interactive.Shell
+  alias Mix.Interactive.UI
 
   @switches [
     command: :string,
@@ -25,7 +25,7 @@ defmodule Mix.Tasks.Stdio.Interactive do
   def run(args) do
     # Disable logger output to keep the UI clean
     Application.put_env(:logger, :level, :error)
-    
+
     Mix.Task.run("app.start")
 
     {parsed, _} = OptionParser.parse!(args, strict: @switches, aliases: [c: :command])
@@ -37,7 +37,10 @@ defmodule Mix.Tasks.Stdio.Interactive do
     IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
-      IO.puts("#{UI.colors().error}Error: mcp executable not found in PATH, maybe you need to activate venv#{UI.colors().reset}")
+      IO.puts(
+        "#{UI.colors().error}Error: mcp executable not found in PATH, maybe you need to activate venv#{UI.colors().reset}"
+      )
+
       System.halt(1)
     end
 

@@ -1,7 +1,7 @@
 defmodule Hermes.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @source_url "https://github.com/cloudwalk/hermes-mcp"
 
   def project do
@@ -50,7 +50,7 @@ defmodule Hermes.MixProject do
         "GitHub" => @source_url,
         "Docs" => "https://hexdocs.pm/hermes_mcp"
       },
-      files: ~w[lib/hermes.ex lib/hermes mix.exs README.md LICENSE]
+      files: ~w[lib mix.exs README.md LICENSE]
     }
   end
 

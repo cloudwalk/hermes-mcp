@@ -37,6 +37,20 @@ end
 
 ## Quick Start
 
+### Interactive Testing
+
+Hermes MCP provides interactive mix tasks for testing MCP servers with a user-friendly CLI:
+
+```bash
+# Test an SSE server
+mix sse.interactive --base-url="http://localhost:8000" --base-path="/mcp"
+
+# Test a local process via STDIO
+mix stdio.interactive --command="mcp" --args="run,path/to/server.py"
+```
+
+These interactive shells provide commands for listing and calling tools, exploring prompts, and accessing resources.
+
 ### Setting up a Client
 
 ```elixir
