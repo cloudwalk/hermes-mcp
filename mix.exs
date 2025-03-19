@@ -55,10 +55,10 @@ defmodule Hermes.MixProject do
         include_executables_for: [:unix, :windows],
         burrito: [
           targets: [
-            # macos_intel: [os: :darwin, cpu: :x86_64],
-            macos_arm: [os: :darwin, cpu: :aarch64]
-            # linux: [os: :linux, cpu: :x86_64],
-            # windows: [os: :windows, cpu: :x86_64]
+            macos_intel: [os: :darwin, cpu: :x86_64],
+            macos_arm: [os: :darwin, cpu: :aarch64],
+            linux: [os: :linux, cpu: :x86_64],
+            windows: [os: :windows, cpu: :x86_64]
           ]
         ],
         # Set the CLI module as the main entry point

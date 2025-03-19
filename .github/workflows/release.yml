@@ -19,8 +19,8 @@ jobs:
       - name: Set up Elixir
         uses: erlef/setup-beam@v1
         with:
-          elixir-version: '1.18.0'
-          otp-version: '26.0'
+          elixir-version: '1.18.3'
+          otp-version: '27.3'
       
       - name: Install dependencies
         run: |
@@ -38,65 +38,15 @@ jobs:
       
       - name: Install 7z
         run: sudo apt-get install -y p7zip-full
-      
-      - name: Get version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-      
+            
       - name: Build release
         run: |
-          MIX_ENV=prod mix release hermes_cli
+          MIX_ENV=prod mix release
       
-      - name: List built binaries
-        run: find _build/prod/rel/hermes_cli/burrito_out/ -type f -name "hermes_cli*" | sort
-      
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create new GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Hermes MCP CLI v${{ env.VERSION }}
-          draft: false
-          prerelease: false
-          
-      - name: Upload Linux Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: _build/prod/rel/hermes_cli/burrito_out/hermes_cli-linux
-          asset_name: hermes_cli-linux
-          asset_content_type: application/octet-stream
-          
-      - name: Upload macOS Intel Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: _build/prod/rel/hermes_cli/burrito_out/hermes_cli-macos-intel
-          asset_name: hermes_cli-macos-intel
-          asset_content_type: application/octet-stream
-          
-      - name: Upload macOS ARM Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: _build/prod/rel/hermes_cli/burrito_out/hermes_cli-macos-arm
-          asset_name: hermes_cli-macos-arm
-          asset_content_type: application/octet-stream
-          
-      - name: Upload Windows Binary
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: _build/prod/rel/hermes_cli/burrito_out/hermes_cli-windows.exe
-          asset_name: hermes_cli-windows.exe
-          asset_content_type: application/octet-stream
+          make_latest: true
+          generate_release_notes: true
+          files: ./burrito_out/*
