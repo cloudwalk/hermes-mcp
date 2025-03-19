@@ -47,10 +47,11 @@ Download the appropriate binary for your platform from the [GitHub releases page
 
 ```bash
 # Make it executable (Linux/macOS)
-chmod +x hermes_cli-linux  # or hermes_cli-macos-intel, hermes_cli-macos-arm
+# or hermes_cli-macos-intel, hermes_cli-macos-arm
+mv hermes_mcp_linux hermes-mcp && chmod +x hermes-mcp
 
 # Run it
-./hermes_cli-linux --transport sse --base-url="http://localhost:8000"
+./hermes-mcp --transport sse --base-url="http://localhost:8000"
 ```
 
 #### Option 2: Mix Archive (For Elixir Developers)
