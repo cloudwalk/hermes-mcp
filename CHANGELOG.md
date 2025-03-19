@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2](https://github.com/cloudwalk/hermes-mcp) - 2025-03-19
+
+### Added
+- Ship static binaries to use hermes-mcp as standlone application
+
 ## [0.3.1](https://github.com/cloudwalk/hermes-mcp) - 2025-03-19
 
 ### Added
