@@ -1,11 +1,9 @@
 defmodule Hermes do
   @moduledoc false
 
-  def dev_env? do
-    if env = Application.get_env(:hermes_mcp, :env) do
-      env == :dev
-    else
-      false
-    end
+  def env do
+    Application.get_env(:hermes_mcp, :env, :dev)
   end
+
+  def dev_env?, do: env() == :dev
 end

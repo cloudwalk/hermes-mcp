@@ -14,6 +14,13 @@ defmodule Hermes.Application do
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Hermes.Supervisor]
-    Supervisor.start_link(children, opts)
+    {:ok, pid} = Supervisor.start_link(children, opts)
+
+    if Hermes.env() == :prod do
+      Hermes.CLI.main()
+      {:ok, pid}
+    else
+      {:ok, pid}
+    end
   end
 end

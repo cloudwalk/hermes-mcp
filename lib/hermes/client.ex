@@ -50,15 +50,9 @@ defmodule Hermes.Client do
           | {:request_timeout, integer}
           | Supervisor.init_option()
 
-  @transports [Hermes.Transport.STDIO, Hermes.Transport.SSE]
-
   defschema(:parse_options, [
     {:name, {:atom, {:default, __MODULE__}}},
-    {:transport,
-     [
-       layer: {:required, {:enum, if(Hermes.dev_env?(), do: [Hermes.MockTransport | @transports], else: @transports)}},
-       name: :atom
-     ]},
+    {:transport, [layer: {:required, :atom}, name: :atom]},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}, "logging" => %{}}}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},

@@ -34,3 +34,6 @@ hermes_mcp-*.tar
 /priv/dev/calculator/calculator
 
 /.context/
+
+# Burrito specific
+/burrito_out/

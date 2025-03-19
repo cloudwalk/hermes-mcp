@@ -25,10 +25,11 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
   ]
 
   def run(args) do
-    # Disable logger output to keep the UI clean
-    Application.put_env(:logger, :level, :error)
+    # Start required applications without requiring a project
+    Application.ensure_all_started([:hermes_mcp, :peri])
 
-    Mix.Task.run("app.start")
+    # Disable logger output to keep the UI clean
+    Logger.configure(level: :error)
 
     {parsed, _} = OptionParser.parse!(args, strict: @switches)
     server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
