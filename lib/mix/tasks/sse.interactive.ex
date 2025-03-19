@@ -45,9 +45,7 @@ defmodule Mix.Tasks.Sse.Interactive do
           "version" => "1.0.0"
         },
         capabilities: %{
-          "roots" => %{
-            "listChanged" => true
-          },
+          "tools" => %{},
           "sampling" => %{}
         }
       )
