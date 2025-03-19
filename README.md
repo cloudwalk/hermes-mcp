@@ -43,13 +43,21 @@ Hermes MCP provides interactive mix tasks for testing MCP servers with a user-fr
 
 ```bash
 # Test an SSE server
-mix sse.interactive --base-url="http://localhost:8000" --base-path="/mcp"
+mix hermes.sse.interactive --base-url="http://localhost:8000" --base-path="/mcp"
 
 # Test a local process via STDIO
-mix stdio.interactive --command="mcp" --args="run,path/to/server.py"
+mix hermes.stdio.interactive --command="mcp" --args="run,path/to/server.py"
 ```
 
 These interactive shells provide commands for listing and calling tools, exploring prompts, and accessing resources.
+
+You can install hermes as standalone with mix with:
+
+```bash
+mix archive.install hex hermes_mcp
+```
+
+And these tasks will be available to your whole system!
 
 ### Setting up a Client
 

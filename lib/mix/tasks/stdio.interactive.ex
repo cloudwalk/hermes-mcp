@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Stdio.Interactive do
+defmodule Mix.Tasks.Hermes.Stdio.Interactive do
   @shortdoc "Test the STDIO transport implementation interactively."
 
   @moduledoc """

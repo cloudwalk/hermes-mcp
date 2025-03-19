@@ -1,4 +1,4 @@
-defmodule Mix.Tasks.Sse.Interactive do
+defmodule Mix.Tasks.Hermes.Sse.Interactive do
   @shortdoc "Test the SSE transport implementation interactively."
 
   @moduledoc """
