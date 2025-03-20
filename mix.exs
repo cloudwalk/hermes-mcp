@@ -34,7 +34,7 @@ defmodule Hermes.MixProject do
     [
       {:finch, "~> 0.19"},
       {:peri, "~> 0.3.2"},
-      {:burrito, "~> 1.0"},
+      {:burrito, "~> 1.0", optional: true},
       {:mox, "~> 1.2", only: :test},
       {:bypass, "~> 2.1", only: :test},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},

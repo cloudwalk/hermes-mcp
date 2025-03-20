@@ -9,6 +9,7 @@ defmodule Mix.Interactive.UI do
   pretty-printing of data structures, and consistent output formatting.
   """
 
+  alias Hermes.MCP.Error
   alias IO.ANSI
 
   # Color definitions for better UI
@@ -18,6 +19,7 @@ defmodule Mix.Interactive.UI do
     error: ANSI.red(),
     success: ANSI.bright() <> ANSI.green(),
     info: ANSI.yellow(),
+    warning: ANSI.bright() <> ANSI.yellow(),
     reset: ANSI.reset()
   }
 
@@ -55,7 +57,30 @@ defmodule Mix.Interactive.UI do
   Formats error messages with appropriate styling.
   """
   def print_error(reason) do
-    IO.puts("#{@colors.error}Error: #{inspect(reason)}#{@colors.reset}")
+    message = format_error_message(reason)
+    IO.puts("#{@colors.error}Error: #{message}#{@colors.reset}")
+  end
+
+  defp format_error_message(%Error{reason: :server_capabilities_not_set}) do
+    "Server capabilities not available. Connection may not be established."
+  end
+
+  defp format_error_message(%Error{reason: :connection_refused}) do
+    "Connection refused. Server may be unavailable."
+  end
+
+  defp format_error_message(%Error{reason: :request_timeout}) do
+    "Request timed out. Server may be busy or unreachable."
+  end
+
+  defp format_error_message(%Error{reason: reason, data: data}) do
+    # For any other MCP error, format in a user-friendly way
+    "#{reason} #{inspect(data, pretty: true)}"
+  end
+
+  defp format_error_message(other) do
+    # For anything else, just use inspect
+    inspect(other, pretty: true)
   end
 
   @doc """

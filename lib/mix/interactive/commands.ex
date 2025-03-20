@@ -18,6 +18,7 @@ defmodule Mix.Interactive.Commands do
 
   alias Hermes.Client
   alias Hermes.MCP.Response
+  alias Mix.Interactive
   alias Mix.Interactive.UI
 
   @commands %{
@@ -28,6 +29,7 @@ defmodule Mix.Interactive.Commands do
     "get_prompt" => "Get a server prompt",
     "list_resources" => "List server resources",
     "read_resource" => "Read a server resource",
+    "initialize" => "Retry server connection initialization",
     "clear" => "Clear the screen",
     "exit" => "Exit the interactive session"
   }
@@ -45,6 +47,7 @@ defmodule Mix.Interactive.Commands do
   def process_command("call_tool", client, loop_fn), do: call_tool(client, loop_fn)
   def process_command("list_prompts", client, loop_fn), do: list_prompts(client, loop_fn)
   def process_command("get_prompt", client, loop_fn), do: get_prompt(client, loop_fn)
+  def process_command("initialize", client, loop_fn), do: initialize_client(client, loop_fn)
 
   def process_command("list_resources", client, loop_fn) do
     list_resources(client, loop_fn)
@@ -209,6 +212,31 @@ defmodule Mix.Interactive.Commands do
     IO.puts("\n#{UI.colors().info}Closing connection and exiting...#{UI.colors().reset}")
     Client.close(client)
     :ok
+  end
+
+  defp initialize_client(client, loop_fn) do
+    IO.puts("\n#{UI.colors().info}Reinitializing client connection...#{UI.colors().reset}")
+
+    send(client, :initialize)
+    Process.flag(:trap_exit, true)
+    :timer.sleep(500)
+
+    receive do
+      {:EXIT, _, {:error, err}} ->
+        UI.print_error(err)
+        loop_fn.()
+    after
+      500 -> :ok
+    end
+
+    if Process.alive?(client) do
+      Interactive.CLI.check_client_connection(client)
+      loop_fn.()
+    else
+      IO.puts("#{UI.colors().error}Client #{inspect(client)} is not alive#{UI.colors().reset}")
+
+      loop_fn.()
+    end
   end
 
   defp unknown_command(command, loop_fn) do

@@ -65,36 +65,33 @@ defmodule Mix.Interactive.CLI do
 
     header = UI.header("HERMES MCP SSE INTERACTIVE")
     IO.puts(header)
+
+    children = [
+      {SSE, client: :sse_test, server: server_options},
+      {Client,
+       name: :sse_test,
+       transport: [layer: SSE],
+       client_info: %{
+         "name" => "Hermes.CLI.SSE",
+         "version" => "1.0.0"
+       }}
+    ]
+
+    {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all)
+
+    sse = Process.whereis(SSE)
     IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
+    check_sse_connection(sse)
 
-    {:ok, _} =
-      SSE.start_link(
-        client: :sse_test,
-        server: server_options
-      )
+    client = Process.whereis(:sse_test)
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    check_client_connection(client)
 
-    IO.puts("#{UI.colors().success}✓ SSE transport started#{UI.colors().reset}")
-
-    {:ok, client} =
-      Client.start_link(
-        name: :sse_test,
-        transport: [layer: SSE],
-        client_info: %{
-          "name" => "Hermes.CLI.SSE",
-          "version" => "1.0.0"
-        },
-        capabilities: %{
-          "roots" => %{
-            "listChanged" => true
-          },
-          "sampling" => %{}
-        }
-      )
-
-    IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
+
+    {:ok, sup}
   end
 
   defp run_stdio_interactive(opts) do
@@ -141,10 +138,58 @@ defmodule Mix.Interactive.CLI do
         }
       )
 
-    IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    check_client_connection(client)
+
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
+  end
+
+  def check_client_connection(client, attempt \\ 3)
+
+  def check_client_connection(_client, attempt) when attempt <= 0 do
+    IO.puts("#{UI.colors().error}✗ Server connection not established#{UI.colors().reset}")
+
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
+  end
+
+  def check_client_connection(client, attempt) do
+    :timer.sleep(500)
+
+    if cap = Client.get_server_capabilities(client) do
+      IO.puts("#{UI.colors().info}Server capabilities: #{inspect(cap, pretty: true)}#{UI.colors().reset}")
+
+      IO.puts("#{UI.colors().success}✓ Successfully connected to server#{UI.colors().reset}")
+    else
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
+      check_client_connection(client, attempt - 1)
+    end
+  end
+
+  def check_sse_connection(sse, attempt \\ 3)
+
+  def check_sse_connection(_sse, attempt) when attempt <= 0 do
+    IO.puts("#{UI.colors().error}✗ SSE connection not established#{UI.colors().reset}")
+
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
+  end
+
+  def check_sse_connection(sse, attempt) do
+    :timer.sleep(500)
+
+    state = :sys.get_state(sse)
+
+    if state[:message_url] == nil do
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
+      check_sse_connection(sse, attempt - 1)
+    else
+      IO.puts(
+        "#{UI.colors().info}SSE connection:\n\s\s- sse stream url: #{state[:sse_url]}\n\s\s- message url: #{state[:message_url]}#{UI.colors().reset}"
+      )
+
+      IO.puts("#{UI.colors().success}✓ Successfully connected via SSE#{UI.colors().reset}")
+    end
   end
 
   @doc false
