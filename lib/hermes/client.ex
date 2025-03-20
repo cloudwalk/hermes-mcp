@@ -28,6 +28,7 @@ defmodule Hermes.Client do
 
   import Peri
 
+  alias Hermes.Client.Request
   alias Hermes.Client.State
   alias Hermes.MCP.Error
   alias Hermes.MCP.Message
@@ -358,6 +359,46 @@ defmodule Hermes.Client do
   end
 
   @doc """
+  Cancels an in-progress request.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `request_id` - The ID of the request to cancel
+    * `reason` - Optional reason for cancellation
+    
+  ## Returns
+
+    * `:ok` if the cancellation was successful
+    * `{:error, reason}` if an error occurred
+    * `{:not_found, request_id}` if the request ID was not found
+  """
+  @spec cancel_request(GenServer.server(), String.t(), String.t()) ::
+          :ok | {:error, Error.t()} | {:not_found, String.t()}
+  def cancel_request(client, request_id, reason \\ "client_cancelled") do
+    GenServer.call(client, {:cancel_request, request_id, reason})
+  end
+
+  @doc """
+  Cancels all pending requests.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `reason` - Optional reason for cancellation (defaults to "client_cancelled")
+    
+  ## Returns
+
+    * `{:ok, requests}` - A list of the Request structs that were cancelled
+    * `{:error, reason}` - If an error occurred
+  """
+  @spec cancel_all_requests(GenServer.server(), String.t()) ::
+          {:ok, list(Request.t())} | {:error, Error.t()}
+  def cancel_all_requests(client, reason \\ "client_cancelled") do
+    GenServer.call(client, {:cancel_all_requests, reason})
+  end
+
+  @doc """
   Closes the client connection and terminates the process.
   """
   def close(client) do
@@ -455,6 +496,62 @@ defmodule Hermes.Client do
     {:reply, result, state}
   end
 
+  def handle_call({:cancel_request, request_id, reason}, _from, state) do
+    # Check if request exists
+    if Map.has_key?(state.pending_requests, request_id) do
+      # Send cancellation notification
+      case send_cancellation(state, request_id, reason) do
+        :ok ->
+          # Remove the request and notify the caller
+          {request, updated_state} = State.remove_request(state, request_id)
+
+          error =
+            Error.client_error(:request_cancelled, %{
+              message: "Request cancelled by client",
+              reason: reason
+            })
+
+          GenServer.reply(request.from, {:error, error})
+          {:reply, :ok, updated_state}
+
+        error ->
+          {:reply, error, state}
+      end
+    else
+      {:reply, {:not_found, request_id}, state}
+    end
+  end
+
+  def handle_call({:cancel_all_requests, reason}, _from, state) do
+    pending_requests = State.list_pending_requests(state)
+
+    if Enum.empty?(pending_requests) do
+      {:reply, {:ok, []}, state}
+    else
+      # Process all pending requests
+      cancelled_requests =
+        for request <- pending_requests do
+          # Send cancellation notification and ignore errors
+          _ = send_cancellation(state, request.id, reason)
+
+          # Notify the original caller with error
+          error =
+            Error.client_error(:request_cancelled, %{
+              message: "Request cancelled by client",
+              reason: reason
+            })
+
+          GenServer.reply(request.from, {:error, error})
+
+          # Return the request for the response
+          request
+        end
+
+      # Return with empty pending requests map and list of cancelled requests
+      {:reply, {:ok, cancelled_requests}, %{state | pending_requests: %{}}}
+    end
+  end
+
   @impl true
   def handle_cast(:close, state) do
     pending_requests = State.list_pending_requests(state)
@@ -505,9 +602,13 @@ defmodule Hermes.Client do
       {nil, state} ->
         {:noreply, state}
 
-      {request_info, updated_state} ->
-        error = Error.client_error(:request_timeout, %{message: "Request timed out after #{request_info.elapsed_ms}ms"})
-        GenServer.reply(request_info.from, {:error, error})
+      {request, updated_state} ->
+        elapsed_ms = Request.elapsed_time(request)
+        error = Error.client_error(:request_timeout, %{message: "Request timed out after #{elapsed_ms}ms"})
+        GenServer.reply(request.from, {:error, error})
+
+        # Send cancellation notification when a request times out
+        _ = send_cancellation(updated_state, request_id, "timeout")
 
         {:noreply, updated_state}
     end
@@ -547,12 +648,12 @@ defmodule Hermes.Client do
         Logger.warning("Received error response for unknown request ID: #{id}")
         state
 
-      {request_info, updated_state} ->
+      {request, updated_state} ->
         # Convert JSON-RPC error to our domain error
         error = Error.from_json_rpc(json_error)
 
         # Unblock original caller with error
-        GenServer.reply(request_info.from, {:error, error})
+        GenServer.reply(request.from, {:error, error})
 
         updated_state
     end
@@ -568,7 +669,7 @@ defmodule Hermes.Client do
       {nil, state} ->
         state
 
-      {_request_info, updated_state} ->
+      {_request, updated_state} ->
         # Update server info in state
         updated_state =
           State.update_server_info(
@@ -592,14 +693,14 @@ defmodule Hermes.Client do
         Logger.warning("Received response for unknown request ID: #{id}")
         state
 
-      {request_info, updated_state} ->
+      {request, updated_state} ->
         # Convert to our domain response
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
 
-        if request_info.method == "ping" do
-          GenServer.reply(request_info.from, :pong)
+        if request.method == "ping" do
+          GenServer.reply(request.from, :pong)
         else
-          GenServer.reply(request_info.from, {:ok, response})
+          GenServer.reply(request.from, {:ok, response})
         end
 
         updated_state
@@ -621,7 +722,32 @@ defmodule Hermes.Client do
     handle_log_notification(notification, state)
   end
 
+  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, state) do
+    handle_cancelled_notification(notification, state)
+  end
+
   defp handle_notification(_, state), do: state
+
+  defp handle_cancelled_notification(%{"params" => params}, state) do
+    request_id = params["requestId"]
+    reason = Map.get(params, "reason", "unknown")
+
+    {request, updated_state} = State.remove_request(state, request_id)
+
+    if request do
+      Logger.info("Request #{request_id} cancelled by server: #{reason}")
+
+      error =
+        Error.client_error(:request_cancelled, %{
+          message: "Request cancelled by server",
+          reason: reason
+        })
+
+      GenServer.reply(request.from, {:error, error})
+    end
+
+    updated_state
+  end
 
   defp handle_progress_notification(%{"params" => params}, state) do
     progress_token = params["progressToken"]
@@ -703,6 +829,15 @@ defmodule Hermes.Client do
 
   defp encode_notification(method, params) do
     Message.encode_notification(%{"method" => method, "params" => params})
+  end
+
+  defp send_cancellation(state, request_id, reason) do
+    params = %{
+      "requestId" => request_id,
+      "reason" => reason
+    }
+
+    send_notification(state, "notifications/cancelled", params)
   end
 
   defp send_to_transport(transport, data) do

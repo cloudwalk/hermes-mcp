@@ -1,6 +1,7 @@
 defmodule Hermes.Client.StateTest do
   use ExUnit.Case, async: true
 
+  alias Hermes.Client.Request
   alias Hermes.Client.State
   alias Hermes.MCP.Error
 
@@ -37,13 +38,13 @@ defmodule Hermes.Client.StateTest do
       assert is_binary(request_id)
       assert Map.has_key?(updated_state.pending_requests, request_id)
 
-      {stored_from, stored_method, timer_ref, start_time} =
-        updated_state.pending_requests[request_id]
+      request = updated_state.pending_requests[request_id]
 
-      assert stored_from == from
-      assert stored_method == "test_method"
-      assert is_reference(timer_ref)
-      assert is_integer(start_time)
+      assert %Request{} = request
+      assert request.from == from
+      assert request.method == "test_method"
+      assert is_reference(request.timer_ref)
+      assert is_integer(request.start_time)
     end
   end
 
@@ -55,9 +56,9 @@ defmodule Hermes.Client.StateTest do
 
       result = State.get_request(state, request_id)
 
-      assert is_tuple(result)
-      assert elem(result, 0) == from
-      assert elem(result, 1) == "test_method"
+      assert %Request{} = result
+      assert result.from == from
+      assert result.method == "test_method"
     end
 
     test "returns nil if the request doesn't exist" do
@@ -73,11 +74,11 @@ defmodule Hermes.Client.StateTest do
       from = {self(), make_ref()}
       {request_id, state} = State.add_request(state, "test_method", %{}, from)
 
-      {request_info, updated_state} = State.remove_request(state, request_id)
+      {request, updated_state} = State.remove_request(state, request_id)
 
-      assert request_info.from == from
-      assert request_info.method == "test_method"
-      assert is_integer(request_info.elapsed_ms)
+      assert %Request{} = request
+      assert request.from == from
+      assert request.method == "test_method"
       assert updated_state.pending_requests == %{}
     end
 
@@ -97,11 +98,11 @@ defmodule Hermes.Client.StateTest do
       from = {self(), make_ref()}
       {request_id, state} = State.add_request(state, "test_method", %{}, from)
 
-      {request_info, updated_state} = State.handle_request_timeout(state, request_id)
+      {request, updated_state} = State.handle_request_timeout(state, request_id)
 
-      assert request_info.from == from
-      assert request_info.method == "test_method"
-      assert is_integer(request_info.elapsed_ms)
+      assert %Request{} = request
+      assert request.from == from
+      assert request.method == "test_method"
       assert updated_state.pending_requests == %{}
     end
 
@@ -210,9 +211,9 @@ defmodule Hermes.Client.StateTest do
 
       assert length(requests) == 1
       request = hd(requests)
+      assert %Request{} = request
       assert request.id == request_id
       assert request.method == "test_method"
-      assert is_integer(request.elapsed_ms)
     end
 
     test "returns an empty list if there are no pending requests" do

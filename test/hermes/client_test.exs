@@ -978,4 +978,212 @@ defmodule Hermes.ClientTest do
       :sys.get_state(client)
     end
   end
+
+  describe "cancellation" do
+    setup do
+      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
+
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.MockTransport, self(), client)
+
+      Process.send(client, :initialize, [:noconnect])
+      Process.sleep(50)
+
+      assert request_id = get_request_id(client, "initialize")
+
+      init_response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "capabilities" => %{"resources" => %{}, "tools" => %{}},
+          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
+          "protocolVersion" => "2024-11-05"
+        }
+      }
+
+      encoded_response = JSON.encode!(init_response)
+      send(client, {:response, encoded_response})
+
+      Process.sleep(50)
+
+      %{client: client}
+    end
+
+    test "handles cancelled notification from server", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "tools/call"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.call_tool(client, "long_running_tool") end)
+
+      Process.sleep(50)
+
+      request_id = get_request_id(client, "tools/call")
+      assert request_id != nil
+
+      cancelled_notification = %{
+        "jsonrpc" => "2.0",
+        "method" => "notifications/cancelled",
+        "params" => %{
+          "requestId" => request_id,
+          "reason" => "server timeout"
+        }
+      }
+
+      encoded_notification = JSON.encode!(cancelled_notification) <> "\n"
+      send(client, {:response, encoded_notification})
+
+      assert {:error, error} = Task.await(task)
+      assert error.reason == :request_cancelled
+      assert error.data[:reason] == "server timeout"
+
+      state = :sys.get_state(client)
+      assert state.pending_requests[request_id] == nil
+    end
+
+    test "client can cancel a request", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/list"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.list_resources(client) end)
+
+      Process.sleep(50)
+
+      request_id = get_request_id(client, "resources/list")
+      assert request_id != nil
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "notifications/cancelled"
+        assert decoded["params"]["requestId"] == request_id
+        assert decoded["params"]["reason"] == "test cancellation"
+        :ok
+      end)
+
+      assert :ok = Hermes.Client.cancel_request(client, request_id, "test cancellation")
+
+      assert {:error, error} = Task.await(task)
+      assert error.reason == :request_cancelled
+      assert error.data[:reason] == "test cancellation"
+
+      state = :sys.get_state(client)
+      assert state.pending_requests[request_id] == nil
+    end
+
+    test "client returns not_found when cancelling non-existent request", %{client: client} do
+      result = Hermes.Client.cancel_request(client, "non_existent_id")
+      assert result == {:not_found, "non_existent_id"}
+    end
+
+    test "cancel_all_requests cancels all pending requests", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, 2, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] in ["resources/list", "tools/list"]
+        :ok
+      end)
+
+      # Start both requests
+      task1 = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      task2 = Task.async(fn -> Hermes.Client.list_tools(client) end)
+
+      Process.sleep(50)
+
+      state = :sys.get_state(client)
+      pending_count = map_size(state.pending_requests)
+      assert pending_count == 2
+
+      expect(Hermes.MockTransport, :send_message, 2, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "notifications/cancelled"
+        assert decoded["params"]["reason"] == "batch cancellation"
+        :ok
+      end)
+
+      {:ok, cancelled_requests} = Hermes.Client.cancel_all_requests(client, "batch cancellation")
+      assert length(cancelled_requests) == 2
+
+      assert {:error, error1} = Task.await(task1)
+      assert {:error, error2} = Task.await(task2)
+
+      assert error1.reason == :request_cancelled
+      assert error2.reason == :request_cancelled
+
+      state = :sys.get_state(client)
+      assert map_size(state.pending_requests) == 0
+    end
+
+    test "request timeout sends cancellation notification", %{client: client} do
+      client_state = :sys.get_state(client)
+      # 50ms timeout for faster test
+      test_timeout = 50
+
+      client_with_short_timeout = %{client_state | request_timeout: test_timeout}
+      :sys.replace_state(client, fn _ -> client_with_short_timeout end)
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/list"
+        :ok
+      end)
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "notifications/cancelled"
+        assert decoded["params"]["reason"] == "timeout"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.list_resources(client) end)
+
+      Process.sleep(test_timeout * 2)
+
+      assert {:error, error} = Task.await(task)
+      assert error.reason == :request_timeout
+
+      state = :sys.get_state(client)
+      assert map_size(state.pending_requests) == 0
+    end
+
+    test "client.close sends cancellation for pending requests", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/list"
+        :ok
+      end)
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "notifications/cancelled"
+        assert decoded["params"]["reason"] == "client closed"
+        :ok
+      end)
+
+      expect(Hermes.MockTransport, :shutdown, fn _ -> :ok end)
+
+      Process.flag(:trap_exit, true)
+      %{pid: pid} = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      Process.sleep(50)
+
+      assert get_request_id(client, "resources/list")
+
+      Hermes.Client.close(client)
+
+      Process.sleep(50)
+      refute Process.alive?(client)
+
+      assert_receive {:EXIT, ^pid, {:normal, {GenServer, :call, [_, {:request, "resources/list", %{}}, _]}}}
+    end
+  end
 end

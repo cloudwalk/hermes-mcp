@@ -39,13 +39,12 @@ defmodule Hermes.Client.State do
   ```
   """
 
+  alias Hermes.Client.Request
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
 
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type log_callback :: (String.t(), term(), String.t() | nil -> any())
-
-  @type pending_request :: {GenServer.from(), String.t(), reference(), integer()}
 
   @type t :: %__MODULE__{
           client_info: map(),
@@ -55,7 +54,7 @@ defmodule Hermes.Client.State do
           protocol_version: String.t(),
           request_timeout: integer(),
           transport: map(),
-          pending_requests: %{String.t() => pending_request()},
+          pending_requests: %{String.t() => Request.t()},
           progress_callbacks: %{String.t() => progress_callback()},
           log_callback: log_callback() | nil
         }
@@ -138,9 +137,15 @@ defmodule Hermes.Client.State do
   def add_request(state, method, _params, from) do
     request_id = ID.generate_request_id()
     timer_ref = Process.send_after(self(), {:request_timeout, request_id}, state.request_timeout)
-    start_time = System.monotonic_time(:millisecond)
 
-    request = {from, method, timer_ref, start_time}
+    request =
+      Request.new(%{
+        id: request_id,
+        method: method,
+        from: from,
+        timer_ref: timer_ref
+      })
+
     pending_requests = Map.put(state.pending_requests, request_id, request)
 
     {request_id, %{state | pending_requests: pending_requests}}
@@ -159,7 +164,7 @@ defmodule Hermes.Client.State do
       iex> Hermes.Client.State.get_request(state, "req_123")
       {{pid, ref}, "ping", timer_ref, start_time} # or nil if not found
   """
-  @spec get_request(t(), String.t()) :: pending_request() | nil
+  @spec get_request(t(), String.t()) :: Request.t() | nil
   def get_request(state, id) do
     Map.get(state.pending_requests, id)
   end
@@ -180,19 +185,17 @@ defmodule Hermes.Client.State do
       iex> request_info.elapsed_ms > 0
       true
   """
-  @spec remove_request(t(), String.t()) :: {map() | nil, t()}
+  @spec remove_request(t(), String.t()) :: {Request.t() | nil, t()}
   def remove_request(state, id) do
     case Map.pop(state.pending_requests, id) do
       {nil, _} ->
         {nil, state}
 
-      {{from, method, timer_ref, start_time}, requests} ->
+      {request, updated_requests} ->
         # Cancel the timeout timer
-        Process.cancel_timer(timer_ref)
-        elapsed = System.monotonic_time(:millisecond) - start_time
+        Process.cancel_timer(request.timer_ref)
 
-        request_info = %{from: from, method: method, elapsed_ms: elapsed}
-        {request_info, %{state | pending_requests: requests}}
+        {request, %{state | pending_requests: updated_requests}}
     end
   end
 
@@ -209,17 +212,14 @@ defmodule Hermes.Client.State do
       iex> Hermes.Client.State.handle_request_timeout(state, "req_123")
       {%{from: from, method: "ping", elapsed_ms: 30000}, updated_state}
   """
-  @spec handle_request_timeout(t(), String.t()) :: {map() | nil, t()}
+  @spec handle_request_timeout(t(), String.t()) :: {Request.t() | nil, t()}
   def handle_request_timeout(state, id) do
     case Map.pop(state.pending_requests, id) do
       {nil, _} ->
         {nil, state}
 
-      {{from, method, _timer, start_time}, requests} ->
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        request_info = %{from: from, method: method, elapsed_ms: elapsed}
-
-        {request_info, %{state | pending_requests: requests}}
+      {request, updated_requests} ->
+        {request, %{state | pending_requests: updated_requests}}
     end
   end
 
@@ -375,14 +375,9 @@ defmodule Hermes.Client.State do
       iex> hd(requests).method
       "ping"
   """
-  @spec list_pending_requests(t()) :: list(map())
+  @spec list_pending_requests(t()) :: list(Request.t())
   def list_pending_requests(state) do
-    current_time = System.monotonic_time(:millisecond)
-
-    Enum.map(state.pending_requests, fn {id, {_from, method, _timer, start_time}} ->
-      elapsed = current_time - start_time
-      %{id: id, method: method, elapsed_ms: elapsed}
-    end)
+    Map.values(state.pending_requests)
   end
 
   @doc """
