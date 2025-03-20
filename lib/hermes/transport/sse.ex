@@ -32,6 +32,7 @@ defmodule Hermes.Transport.SSE do
   alias Hermes.SSE
   alias Hermes.SSE.Event
   alias Hermes.Transport.Behaviour, as: Transport
+  alias Hermes.URI, as: HermesURI
 
   require Logger
 
@@ -76,7 +77,7 @@ defmodule Hermes.Transport.SSE do
   @impl GenServer
   def init(%{} = opts) do
     server_url = make_server_url(opts.server)
-    sse_url = URI.append_path(server_url, opts.server[:sse_path])
+    sse_url = HermesURI.join_path(server_url, opts.server[:sse_path])
 
     state =
       opts
@@ -156,9 +157,9 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_info({:endpoint, endpoint}, %{client: client, server: server} = state) do
+  def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
     Process.send(client, :initialize, [:noconnect])
-    message_url = URI.append_path(server[:base_url], endpoint)
+    message_url = HermesURI.join_path(server_url, endpoint)
     {:noreply, %{state | message_url: message_url}}
   end
 
@@ -202,9 +203,6 @@ defmodule Hermes.Transport.SSE do
   end
 
   defp make_server_url(server_opts) do
-    url = server_opts[:base_url]
-    path = server_opts[:base_path]
-
-    URI.append_path(url, path)
+    HermesURI.join_path(server_opts[:base_url], server_opts[:base_path])
   end
 end
