@@ -12,6 +12,8 @@ defmodule Mix.Interactive.CLI do
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
+  @version Mix.Project.config()[:version]
+
   @doc """
   Main entry point for the standalone CLI application.
   """
@@ -143,5 +145,45 @@ defmodule Mix.Interactive.CLI do
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
+  end
+
+  @doc false
+  def show_help do
+    colors = UI.colors()
+
+    IO.puts("""
+    #{colors.info}Hermes MCP Client v#{@version}#{colors.reset}
+    #{colors.success}A command-line MCP client for interacting with MCP servers#{colors.reset}
+
+    #{colors.info}USAGE:#{colors.reset}
+      hermes-mcp [OPTIONS]
+
+    #{colors.info}OPTIONS:#{colors.reset}
+      #{colors.command}-h, --help#{colors.reset}             Show this help message and exit
+      #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|stdio) [default: sse]
+      
+    #{colors.info}SSE TRANSPORT OPTIONS:#{colors.reset}
+      #{colors.command}--base-url URL#{colors.reset}         Base URL for SSE server [default: http://localhost:8000]
+      #{colors.command}--base-path PATH#{colors.reset}       Base path for the SSE server
+      #{colors.command}--sse-path PATH#{colors.reset}        Path for SSE endpoint
+
+    #{colors.info}STDIO TRANSPORT OPTIONS:#{colors.reset}
+      #{colors.command}-c, --command CMD#{colors.reset}      Command to execute [default: mcp]
+      #{colors.command}--args ARGS#{colors.reset}            Comma-separated arguments for the command
+                               [default: run,priv/dev/echo/index.py]
+
+    #{colors.info}EXAMPLES:#{colors.reset}
+      # Connect to a local SSE server
+      hermes-mcp 
+
+      # Connect to a remote SSE server
+      hermes-mcp --transport sse --base-url https://remote-server.example.com
+
+      # Run a local MCP server with stdio
+      hermes-mcp --transport stdio --command ./my-mcp-server --args arg1,arg2
+
+    #{colors.info}INTERACTIVE COMMANDS:#{colors.reset}
+      Once connected, type 'help' to see available interactive commands.
+    """)
   end
 end
