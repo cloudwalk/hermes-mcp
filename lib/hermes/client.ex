@@ -51,6 +51,8 @@ defmodule Hermes.Client do
           | {:request_timeout, integer}
           | Supervisor.init_option()
 
+  @default_client_capabilities %{"roots" => %{"listChanged" => true}, "sampling" => %{}}
+
   defschema(:parse_options, [
     {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
     {:transport,
@@ -59,7 +61,7 @@ defmodule Hermes.Client do
        name: {:custom, &Hermes.genserver_name/1}
      ]},
     {:client_info, {:required, :map}},
-    {:capabilities, {:map, {:default, %{"resources" => %{}, "tools" => %{}, "logging" => %{}}}}},
+    {:capabilities, {:map, {:default, @default_client_capabilities}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}},
     {:request_timeout, {:integer, {:default, @default_timeout}}}
   ])
