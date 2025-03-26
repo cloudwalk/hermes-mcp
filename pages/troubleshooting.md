@@ -119,7 +119,7 @@ IO.inspect(server_capabilities, label: "Server capabilities")
 - Enable verbose logging to inspect raw messages
 
 ```elixir
-# Set debug logging for Hermes.Message
+# Set debug logging for Hermes.MCP.Message
 Logger.configure(level: :debug)
 ```
 

@@ -91,7 +91,7 @@ The client sends the `notifications/initialized` notification after successful i
 
 Hermes uses a structured approach to encode and validate protocol messages.
 
-The `Hermes.Message` module provides robust validation of all messages against the MCP schema
+The `Hermes.MCP.Message` module provides robust validation of all messages against the MCP schema
 
 ## Error Handling Patterns
 

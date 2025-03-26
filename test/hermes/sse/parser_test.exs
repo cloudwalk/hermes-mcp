@@ -1,7 +1,7 @@
 defmodule Hermes.SSE.ParserTest do
   use ExUnit.Case, async: true
 
-  alias Hermes.Message
+  alias Hermes.MCP.Message
   alias Hermes.SSE.Parser
 
   @moduletag capture_log: true

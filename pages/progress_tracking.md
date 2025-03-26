@@ -16,7 +16,7 @@ Progress is tracked using tokens that uniquely identify a specific operation. He
 
 ```elixir
 # Generate a unique progress token
-progress_token = Hermes.Message.generate_progress_token()
+progress_token = Hermes.MCP.Message.generate_progress_token()
 ```
 
 ## Making Requests with Progress Tracking
@@ -87,7 +87,7 @@ Hermes.Client.unregister_progress_callback(client, progress_token)
 defmodule MyApp.LongRunningOperation do
   def execute_with_progress(client) do
     # Generate a unique token
-    progress_token = Hermes.Message.generate_progress_token()
+    progress_token = Hermes.MCP.Message.generate_progress_token()
     
     # Register a callback to handle progress updates
     Hermes.Client.register_progress_callback(client, progress_token, fn _token, progress, total ->
@@ -126,7 +126,7 @@ defmodule MyAppWeb.ProcessLive do
   end
   
   def handle_event("start_process", _params, socket) do
-    token = Hermes.Message.generate_progress_token()
+    token = Hermes.MCP.Message.generate_progress_token()
     
     # Register progress callback
     Hermes.Client.register_progress_callback(MyApp.Client, token, fn _token, progress, total ->

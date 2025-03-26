@@ -163,7 +163,7 @@ defmodule MyApp.Transport.TCP do
   @impl true
   def handle_info({:tcp, _socket, data}, %{client: client} = state) do
     # Forward data to client
-    Process.send(client, {:response, data}, [:noconnect])
+    GenServer.cast(client, {:response, data})
     {:noreply, state}
   end
   

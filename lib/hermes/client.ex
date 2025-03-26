@@ -607,12 +607,7 @@ defmodule Hermes.Client do
     {:stop, :normal, state}
   end
 
-  def handle_cast(:initialize, state), do: handle_info(:initialize, state)
-
-  def handle_cast({:response, response_data}, state), do: handle_info({:response, response_data}, state)
-
-  @impl true
-  def handle_info(:initialize, state) do
+  def handle_cast(:initialize, state) do
     Logger.debug("Making initial client <> server handshake")
 
     params = %{
@@ -637,29 +632,8 @@ defmodule Hermes.Client do
       {:stop, :unexpected, state}
   end
 
-  def handle_info({:request_timeout, request_id}, state) do
-    case State.handle_request_timeout(state, request_id) do
-      {nil, state} ->
-        {:noreply, state}
-
-      {request, updated_state} ->
-        elapsed_ms = Request.elapsed_time(request)
-
-        error =
-          Error.client_error(:request_timeout, %{
-            message: "Request timed out after #{elapsed_ms}ms"
-          })
-
-        GenServer.reply(request.from, {:error, error})
-
-        # Send cancellation notification when a request times out
-        _ = send_cancellation(updated_state, request_id, "timeout")
-
-        {:noreply, updated_state}
-    end
-  end
-
-  def handle_info({:response, response_data}, state) do
+  @impl true
+  def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
         Logger.debug("Received server error response: #{inspect(error)}")
@@ -683,6 +657,29 @@ defmodule Hermes.Client do
       err = Exception.format(:error, e, __STACKTRACE__)
       Logger.error("Failed to handle response: #{err}")
       {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:request_timeout, request_id}, state) do
+    case State.handle_request_timeout(state, request_id) do
+      {nil, state} ->
+        {:noreply, state}
+
+      {request, updated_state} ->
+        elapsed_ms = Request.elapsed_time(request)
+
+        error =
+          Error.client_error(:request_timeout, %{
+            message: "Request timed out after #{elapsed_ms}ms"
+          })
+
+        GenServer.reply(request.from, {:error, error})
+
+        # Send cancellation notification when a request times out
+        _ = send_cancellation(updated_state, request_id, "timeout")
+
+        {:noreply, updated_state}
+    end
   end
 
   # Response handling

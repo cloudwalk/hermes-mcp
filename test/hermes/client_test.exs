@@ -5,8 +5,8 @@ defmodule Hermes.ClientTest do
 
   alias Hermes.Client.State
   alias Hermes.MCP.Error
+  alias Hermes.MCP.Message
   alias Hermes.MCP.Response
-  alias Hermes.Message
 
   @moduletag capture_log: true
 
@@ -51,8 +51,7 @@ defmodule Hermes.ClientTest do
       allow(Hermes.MockTransport, self(), client)
 
       # trigger init handshake
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert Process.alive?(client)
     end
@@ -72,8 +71,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -87,9 +85,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
-
+      send_response(client, init_response)
       Process.sleep(50)
 
       %{client: client}
@@ -117,8 +113,7 @@ defmodule Hermes.ClientTest do
         "result" => %{}
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       assert :pong = Task.await(task)
     end
@@ -146,8 +141,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "resources" => [%{"name" => "test", "uri" => "test://uri"}],
@@ -183,8 +177,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "resources" => [%{"name" => "test2", "uri" => "test://uri2"}],
@@ -219,8 +212,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "contents" => [%{"text" => "resource content", "uri" => "test://uri"}]
@@ -255,8 +247,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "prompts" => [%{"name" => "test_prompt"}],
@@ -299,8 +290,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "messages" => [%{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}]
@@ -335,8 +325,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "tools" => [%{"name" => "test_tool"}],
@@ -373,8 +362,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "content" => [%{"type" => "text", "text" => "Tool result"}],
@@ -412,8 +400,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       expected_result = %{
         "content" => [%{"type" => "text", "text" => "Tool execution failed: invalid argument"}],
@@ -442,8 +429,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -457,8 +443,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       Process.sleep(50)
 
@@ -487,8 +472,7 @@ defmodule Hermes.ClientTest do
         "result" => %{}
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       assert :pong = Task.await(task)
     end
@@ -515,8 +499,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -530,8 +513,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       %{client: client}
     end
@@ -558,8 +540,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(error_response)
-      send(client, {:response, encoded_response})
+      send_error(client, error_response)
 
       {:error, error} = Task.await(task)
       assert error.code == -32_601
@@ -595,8 +576,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       new_capabilities = %{"tools" => %{"listChanged" => true}}
 
@@ -629,8 +609,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -644,8 +623,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       Process.sleep(500)
 
@@ -685,8 +663,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -700,8 +677,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       Process.sleep(50)
 
@@ -731,8 +707,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      assert {:ok, encoded_notification} = Message.encode_notification(progress_notification)
-      send(client, {:response, encoded_notification})
+      send_notification(client, progress_notification)
 
       # Verify callback was triggered with correct parameters
       assert_receive {:progress_callback, ^progress_token, ^progress_value, ^total_value}, 1000
@@ -763,8 +738,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_notification = JSON.encode!(progress_notification) <> "\n"
-      send(client, {:response, encoded_notification})
+      send_notification(client, progress_notification)
 
       # Verify callback was NOT triggered
       refute_receive :should_not_be_called, 500
@@ -801,16 +775,15 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       # Ensure the task completes
       assert {:ok, _} = Task.await(task)
     end
 
     test "generates unique progress tokens" do
-      token1 = Hermes.Message.generate_progress_token()
-      token2 = Hermes.Message.generate_progress_token()
+      token1 = Message.generate_progress_token()
+      token2 = Message.generate_progress_token()
 
       assert is_binary(token1)
       assert is_binary(token2)
@@ -835,8 +808,7 @@ defmodule Hermes.ClientTest do
       allow(Hermes.MockTransport, self(), client)
 
       # Initialize the client
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -850,8 +822,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       Process.sleep(50)
 
@@ -878,8 +849,7 @@ defmodule Hermes.ClientTest do
         "result" => %{}
       }
 
-      encoded_response = JSON.encode!(response)
-      send(client, {:response, encoded_response})
+      send_response(client, response)
 
       assert {:ok, %{}} = Task.await(task)
     end
@@ -922,8 +892,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_notification = JSON.encode!(log_notification) <> "\n"
-      send(client, {:response, encoded_notification})
+      send_notification(client, log_notification)
 
       # Verify the callback was triggered
       assert_receive {:log_callback, "error", "Test error message", "test-logger"}, 1000
@@ -957,8 +926,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -972,8 +940,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       :sys.get_state(client)
     end
@@ -993,8 +960,7 @@ defmodule Hermes.ClientTest do
 
       allow(Hermes.MockTransport, self(), client)
 
-      Process.send(client, :initialize, [:noconnect])
-      Process.sleep(50)
+      initialize_client(client)
 
       assert request_id = get_request_id(client, "initialize")
 
@@ -1008,8 +974,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_response = JSON.encode!(init_response)
-      send(client, {:response, encoded_response})
+      send_response(client, init_response)
 
       Process.sleep(50)
 
@@ -1039,8 +1004,7 @@ defmodule Hermes.ClientTest do
         }
       }
 
-      encoded_notification = JSON.encode!(cancelled_notification) <> "\n"
-      send(client, {:response, encoded_notification})
+      send_notification(client, cancelled_notification)
 
       assert {:error, error} = Task.await(task)
       assert error.reason == :request_cancelled
@@ -1185,5 +1149,26 @@ defmodule Hermes.ClientTest do
 
       assert_receive {:EXIT, ^pid, {:normal, {GenServer, :call, [_, {:request, "resources/list", %{}}, _]}}}
     end
+  end
+
+  defp initialize_client(client) do
+    GenServer.cast(client, :initialize)
+    # we need to force the initialization finish to proceed on tests
+    # _ = :sys.get_state(client)
+  end
+
+  defp send_response(client, response) do
+    assert {:ok, encoded} = Message.encode_response(response, response["id"])
+    GenServer.cast(client, {:response, encoded})
+  end
+
+  defp send_notification(client, notification) do
+    assert {:ok, encoded} = Message.encode_notification(notification)
+    GenServer.cast(client, {:response, encoded})
+  end
+
+  defp send_error(client, error) do
+    assert {:ok, encoded} = Message.encode_error(error, error["id"])
+    GenServer.cast(client, {:response, encoded})
   end
 end

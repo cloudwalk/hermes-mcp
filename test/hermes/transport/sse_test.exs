@@ -1,7 +1,7 @@
 defmodule Hermes.Transport.SSETest do
   use ExUnit.Case, async: false
 
-  alias Hermes.Message
+  alias Hermes.MCP.Message
   alias Hermes.Transport.SSE
 
   @moduletag capture_log: true
