@@ -16,7 +16,7 @@ defmodule Hermes.Application do
     opts = [strategy: :one_for_one, name: Hermes.Supervisor]
     {:ok, pid} = Supervisor.start_link(children, opts)
 
-    if Hermes.env() == :prod do
+    if Hermes.should_compile_cli?() do
       Hermes.CLI.main()
       {:ok, pid}
     else

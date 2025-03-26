@@ -81,7 +81,10 @@ defmodule Hermes.MixProject do
   end
 
   defp aliases do
-    [setup: ["deps.get", "compile --force"]]
+    [
+      setup: ["deps.get", "compile --force"],
+      lint: ["format --check-formatted", "credo --strict", "dialyzer"]
+    ]
   end
 
   defp docs do

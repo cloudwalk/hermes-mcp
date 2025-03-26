@@ -39,10 +39,6 @@ end
 
 ### Standalone CLI Installation
 
-You can use Hermes MCP CLI in one of the following ways:
-
-#### Option 1: Using Pre-built Binaries
-
 Download the appropriate binary for your platform from the [GitHub releases page](https://github.com/cloudwalk/hermes-mcp/releases).
 
 ```bash
@@ -53,14 +49,6 @@ mv hermes_mcp_linux hermes-mcp && chmod +x hermes-mcp
 # Run it
 ./hermes-mcp --transport sse --base-url="http://localhost:8000"
 ```
-
-#### Option 2: Mix Archive (For Elixir Developers)
-
-```bash
-mix archive.install hex hermes_mcp
-```
-
-This makes the mix tasks available globally.
 
 ## Quick Start
 
@@ -153,6 +141,31 @@ For detailed guides and examples, visit the [official documentation](https://hex
 The library is named after Hermes, the Greek god of boundaries, communication, and commerce. This namesake reflects the core purpose of the Model Context Protocol: to establish standardized communication between AI applications and external tools.
 
 Like Hermes who served as a messenger between gods and mortals, this library facilitates seamless interaction between Large Language Models and various data sources or tools.
+
+## Local Development
+
+```bash
+# Setup the project
+mix setup
+
+# Run tests
+mix test
+
+# Code quality
+mix lint
+
+# Start development MCP servers
+# Echo server (Python)
+just echo-server
+# Calculator server (Go)
+just calculator-server
+```
+
+The MCP servers in `priv/dev` require:
+- Python 3.11+ with uv (for echo server)
+- Go 1.21+ (for calculator server)
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines.
 
 ## License
 
