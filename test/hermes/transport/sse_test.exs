@@ -59,7 +59,8 @@ defmodule Hermes.Transport.SSETest do
       # Give time for the SSE connection to establish and process the event
       Process.sleep(200)
 
-      # Verify we can get the message URL from the transport's state
+      # force client to initialize
+      _ = :sys.get_state(stub_client)
       state = :sys.get_state(transport)
       assert state.message_url != nil
       assert String.ends_with?(to_string(state.message_url), "/messages/123")

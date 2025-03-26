@@ -19,16 +19,24 @@ defmodule Hermes.Transport.STDIO do
           | {:args, list(String.t()) | nil}
           | {:env, map() | nil}
           | {:cwd, Path.t() | nil}
+          | {:client, GenServer.server()}
           | Supervisor.init_option()
 
-  defschema :options_schema, %{
-    name: {:atom, {:default, __MODULE__}},
-    client: {:required, {:either, {:pid, :atom}}},
+  defschema(:options_schema, %{
+    name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
+    client:
+      {:required,
+       {:oneof,
+        [
+          {:custom, &Hermes.genserver_name/1},
+          :pid,
+          {:tuple, [:atom, :any]}
+        ]}},
     command: {:required, :string},
     args: {{:list, :string}, {:default, nil}},
     env: {:map, {:default, nil}},
     cwd: {:string, {:default, nil}}
-  }
+  })
 
   @win32_default_env [
     "APPDATA",
@@ -75,7 +83,7 @@ defmodule Hermes.Transport.STDIO do
       port = spawn_port(cmd, state)
       ref = Port.monitor(port)
 
-      Process.send(state.client, :initialize, [:noconnect])
+      GenServer.cast(state.client, :initialize)
       {:noreply, %{state | port: port, ref: ref}}
     else
       {:stop, {:error, "Command not found: #{state.command}"}, state}
@@ -95,7 +103,7 @@ defmodule Hermes.Transport.STDIO do
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
     Logger.info("Received data from stdio server")
-    Process.send(state.client, {:response, data}, [:noconnect])
+    GenServer.cast(state.client, {:response, data})
     {:noreply, state}
   end
 

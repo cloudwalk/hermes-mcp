@@ -38,15 +38,22 @@ defmodule Hermes.Transport.SSE do
 
   @type params_t :: Enumerable.t(option)
   @type option ::
-          {:name, atom | {:via, atom, any}}
-          | {:client, pid | atom | {:via, atom, any}}
+          {:name, GenServer.name()}
+          | {:client, GenServer.server()}
           | {:server_url, String.t()}
           | {:headers, map()}
           | Supervisor.init_option()
 
-  defschema :options_schema, %{
-    name: {:any, {:default, __MODULE__}},
-    client: {:required, {:custom, &Hermes.genserver_name/1}},
+  defschema(:options_schema, %{
+    name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
+    client:
+      {:required,
+       {:oneof,
+        [
+          {:custom, &Hermes.genserver_name/1},
+          :pid,
+          {:tuple, [:atom, :any]}
+        ]}},
     server: [
       base_url: {:required, {:string, {:transform, &URI.new!/1}}},
       base_path: {:string, {:default, "/"}},
@@ -55,7 +62,7 @@ defmodule Hermes.Transport.SSE do
     headers: {:map, {:default, %{}}},
     transport_opts: {:any, {:default, []}},
     http_options: {:any, {:default, []}}
-  }
+  })
 
   @impl Transport
   @spec start_link(params_t) :: Supervisor.on_start()
