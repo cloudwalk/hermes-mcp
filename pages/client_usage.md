@@ -115,7 +115,7 @@ case Hermes.Client.list_resources(MyApp.MCPClient) do
   {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Error listing resources")
 
-  {:ok, %Hermes.MCP.Response{data: %{"resources" => resources}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"resources" => resources}}} ->
     IO.puts("Available resources:")
     Enum.each(resources, fn resource ->
       IO.puts("  - #{resource["name"]} (#{resource["uri"]})")
@@ -133,12 +133,12 @@ For large resource collections, you can use pagination with cursors:
 
 ```elixir
 # First page
-{:ok, %Hermes.MCP.Response{data: %{"resources" => resources, "nextCursor" => cursor}}} =
+{:ok, %Hermes.MCP.Response{result: %{"resources" => resources, "nextCursor" => cursor}}} =
   Hermes.Client.list_resources(MyApp.MCPClient)
 
 # Get next page if a cursor is available
 if cursor do
-  {:ok, %Hermes.MCP.Response{data: %{"resources" => more_resources}}} =
+  {:ok, %Hermes.MCP.Response{result: %{"resources" => more_resources}}} =
     Hermes.Client.list_resources(MyApp.MCPClient, cursor: cursor)
 end
 ```
@@ -153,7 +153,7 @@ case Hermes.Client.read_resource(MyApp.MCPClient, "file:///example.txt") do
   {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Error reading resources")
 
-  {:ok, %Hermes.MCP.Response{data: %{"contents" => contents}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"contents" => contents}}} ->
     Enum.each(contents, fn content ->
       case content do
         %{"text" => text} -> IO.puts("Text content: #{text}")
@@ -179,7 +179,7 @@ case Hermes.Client.list_tools(MyApp.MCPClient) do
   {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Error listing tools")
 
-  {:ok, %Hermes.MCP.Response{data: %{"tools" => tools}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"tools" => tools}}} ->
     IO.puts("Available tools:")
     Enum.each(tools, fn tool ->
       IO.puts("  - #{tool["name"]}: #{tool["description"] || "No description"}")
@@ -210,7 +210,7 @@ case Hermes.Client.call_tool(MyApp.MCPClient, tool_name, tool_args) do
       end
     end)
 
-  {:ok, %Hermes.MCP.Response{data: %{"content" => content}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"content" => content}}} ->
     IO.puts("Tool result:")
     Enum.each(content, fn item ->
       case item do
@@ -237,7 +237,7 @@ case Hermes.Client.list_prompts(MyApp.MCPClient) do
   {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Error listing prompts")
 
-  {:ok, %Hermes.MCP.Response{data: %{"prompts" => prompts}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"prompts" => prompts}}} ->
     IO.puts("Available prompts:")
     Enum.each(prompts, fn prompt ->
       required_args = prompt["arguments"]
@@ -268,7 +268,7 @@ case Hermes.Client.get_prompt(MyApp.MCPClient, prompt_name, prompt_args) do
   {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Error getting prompt")
 
-  {:ok, %Hermes.MCP.Response{data: %{"messages" => messages}}} ->
+  {:ok, %Hermes.MCP.Response{result: %{"messages" => messages}}} ->
     IO.puts("Prompt messages:")
     Enum.each(messages, fn message ->
       role = message["role"]

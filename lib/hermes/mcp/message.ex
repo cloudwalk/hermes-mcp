@@ -287,23 +287,6 @@ defmodule Hermes.MCP.Message do
   end
 
   @doc """
-  Generates a unique progress token that can be used for tracking progress.
-
-  This is a convenience function to create tokens for the progress notification system.
-  Returns a string token with "progress_" prefix followed by a Base64-encoded unique identifier.
-  """
-  @spec generate_progress_token() :: String.t()
-  def generate_progress_token do
-    binary = <<
-      System.system_time(:nanosecond)::64,
-      :erlang.phash2({node(), self()}, 16_777_216)::24,
-      :erlang.unique_integer()::32
-    >>
-
-    "progress_" <> Base.url_encode64(binary)
-  end
-
-  @doc """
   Encodes a log message notification to be sent to the client.
 
   ## Parameters

@@ -15,7 +15,11 @@ defmodule Hermes.MixProject do
       package: package(),
       description: description(),
       aliases: aliases(),
-      dialyzer: [plt_local_path: "priv/plts", ignore_warnings: ".dialyzerignore.exs"],
+      dialyzer: [
+        plt_local_path: "priv/plts",
+        ignore_warnings: ".dialyzerignore.exs",
+        plt_add_apps: [:mix]
+      ],
       extra_applications: [:observer, :wx],
       releases: releases()
     ]

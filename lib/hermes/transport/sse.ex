@@ -3,23 +3,10 @@ defmodule Hermes.Transport.SSE do
   A transport implementation that uses Server-Sent Events (SSE) for receiving messages
   and HTTP POST requests for sending messages back to the server.
 
-  ## Examples
-
-      iex> Hermes.Transport.SSE.start_link(server_url: "http://localhost:4000")
-      {:ok, #PID<0.123.0>}
-
-      iex> Hermes.Transport.SSE.send_message(pid, "Hello, world!")
-
-  ## Options
-
-  The options schema for the SSE transport.
-
-  - `name`: The name of the transport.
-  - `client`: The client process to send messages to.
-  - `server_url`: The URL of the server to connect to.
-  - `headers`: Additional headers to send with the HTTP requests.
-  - `transport_opts`: Additional options as keyword to pass to the HTTP client, you can reference the available options at https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options
-  - `http_options`: Additional HTTP request options as keyword to pass to the HTTP client, you can check the available options on https://hexdocs.pm/finch/Finch.html#t:request_opt/0
+  > ## Notes {: .info}
+  >
+  > For initialization and setup, check our [Installation & Setup](./installation.html) and
+  > the [Transport options](./transport_options.html) guides for reference.
   """
 
   @behaviour Hermes.Transport.Behaviour
@@ -36,13 +23,41 @@ defmodule Hermes.Transport.SSE do
 
   require Logger
 
+  @type t :: GenServer.server()
+
+  @typedoc """
+  The options for the MCP server.
+
+  - `:base_url` - The base URL of the MCP server (e.g. http://localhost:8000) (required).
+  - `:base_path` - The base path of the MCP server (e.g. /mcp).
+  - `:sse_path` - The path to the SSE endpoint (e.g. /mcp/sse) (default `:base_path` + `/sse`).
+  """
+  @type server ::
+          Enumerable.t(
+            {:base_url, String.t()}
+            | {:base_path, String.t()}
+            | {:sse_path, String.t()}
+          )
+
   @type params_t :: Enumerable.t(option)
+  @typedoc """
+  The options for the SSE transport.
+
+  - `:name` - The name of the transport process, respecting the `GenServer` "Name Registration" section.
+  - `:client` - The client to send the messages to, respecting the `GenServer` "Name Registration" section.
+  - `:server` - The server configuration.
+  - `:headers` - The headers to send with the HTTP requests.
+  - `:transport_opts` - The underlying HTTP transport options to pass to the HTTP client. You can check on the [Mint docs](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options)
+  - `:http_options` - The underlying HTTP client options to pass to the HTTP client. You can check on the [Finch docs](https://hexdocs.pm/finch/Finch.html#t:request_opt/0)
+  """
   @type option ::
           {:name, GenServer.name()}
           | {:client, GenServer.server()}
-          | {:server_url, String.t()}
+          | {:server, server}
           | {:headers, map()}
-          | Supervisor.init_option()
+          | {:transport_opts, keyword}
+          | {:http_options, Finch.request_opts()}
+          | GenServer.option()
 
   defschema(:options_schema, %{
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
@@ -65,7 +80,7 @@ defmodule Hermes.Transport.SSE do
   })
 
   @impl Transport
-  @spec start_link(params_t) :: Supervisor.on_start()
+  @spec start_link(params_t) :: GenServer.on_start()
   def start_link(opts \\ []) do
     opts = options_schema!(opts)
     GenServer.start_link(__MODULE__, Map.new(opts), name: opts[:name])

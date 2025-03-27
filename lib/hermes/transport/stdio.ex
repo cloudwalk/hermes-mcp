@@ -1,6 +1,11 @@
 defmodule Hermes.Transport.STDIO do
   @moduledoc """
   A transport implementation that uses standard input/output.
+
+  > ## Notes {: .info}
+  >
+  > For initialization and setup, check our [Installation & Setup](./installation.html) and
+  > the [Transport options](./transport_options.html) guides for reference.
   """
 
   @behaviour Hermes.Transport.Behaviour
@@ -13,14 +18,28 @@ defmodule Hermes.Transport.STDIO do
 
   require Logger
 
+  @type t :: GenServer.server()
+
   @type params_t :: Enumerable.t(option)
+
+  @typedoc """
+  The options for the STDIO transport.
+
+  - `:command` - The command to run, it will be searched in the system's PATH.
+  - `:args` - The arguments to pass to the command, as a list of strings.
+  - `:env` - The extra environment variables to set for the command, as a map.
+  - `:cwd` - The working directory for the command.
+  - `:client` - The client to send the messages to, respecting the `GenServer` "Name Registration" section
+
+  And any other `GenServer` init option.
+  """
   @type option ::
           {:command, Path.t()}
           | {:args, list(String.t()) | nil}
           | {:env, map() | nil}
           | {:cwd, Path.t() | nil}
           | {:client, GenServer.server()}
-          | Supervisor.init_option()
+          | GenServer.option()
 
   defschema(:options_schema, %{
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
@@ -54,7 +73,7 @@ defmodule Hermes.Transport.STDIO do
   @unix_default_env ["HOME", "LOGNAME", "PATH", "SHELL", "TERM", "USER"]
 
   @impl Transport
-  @spec start_link(params_t) :: Supervisor.on_start()
+  @spec start_link(params_t) :: GenServer.on_start()
   def start_link(opts \\ []) do
     opts = options_schema!(opts)
     GenServer.start_link(__MODULE__, Map.new(opts), name: opts[:name])
@@ -92,8 +111,8 @@ defmodule Hermes.Transport.STDIO do
 
   @impl GenServer
   def handle_call({:send, message}, _, %{port: port} = state) when is_port(port) do
-    result = if Port.command(port, message), do: :ok, else: {:error, :port_not_connected}
-    {:reply, result, state}
+    Port.command(port, message)
+    {:reply, :ok, state}
   end
 
   def handle_call({:send, _message}, _, state) do

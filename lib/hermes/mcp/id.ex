@@ -41,10 +41,13 @@ defmodule Hermes.MCP.ID do
   """
   @spec generate() :: String.t()
   def generate do
-    Base.url_encode64(
-      <<System.system_time(:nanosecond)::64, :erlang.phash2({node(), self()}, 16_777_216)::24,
-        :rand.uniform(16_777_216)::24>>
-    )
+    binary = <<
+      System.system_time(:nanosecond)::64,
+      :erlang.phash2({node(), self()}, 16_777_216)::24,
+      :rand.uniform(16_777_216)::24
+    >>
+
+    Base.url_encode64(binary)
   end
 
   @doc """
@@ -108,11 +111,8 @@ defmodule Hermes.MCP.ID do
   @spec timestamp_from_id(String.t()) :: integer() | nil
   def timestamp_from_id(id) when is_binary(id) do
     case Base.url_decode64(id) do
-      {:ok, <<timestamp::64, _::48>>} ->
-        timestamp
-
-      _ ->
-        nil
+      {:ok, <<timestamp::64, _::48>>} -> timestamp
+      _ -> nil
     end
   end
 

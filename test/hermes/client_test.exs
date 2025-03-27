@@ -5,6 +5,7 @@ defmodule Hermes.ClientTest do
 
   alias Hermes.Client.State
   alias Hermes.MCP.Error
+  alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
 
@@ -570,7 +571,7 @@ defmodule Hermes.ClientTest do
           {Hermes.Client,
            transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
            client_info: %{"name" => "TestClient", "version" => "1.0.0"},
-           capabilities: %{"resources" => %{}}},
+           capabilities: %{"roots" => %{}}},
           restart: :temporary
         )
 
@@ -578,20 +579,17 @@ defmodule Hermes.ClientTest do
 
       initialize_client(client)
 
-      new_capabilities = %{"tools" => %{"listChanged" => true}}
+      new_capabilities = %{"sampling" => %{}}
 
       updated = Hermes.Client.merge_capabilities(client, new_capabilities)
 
-      assert updated == %{"resources" => %{}, "tools" => %{"listChanged" => true}}
+      assert updated == %{"roots" => %{}, "sampling" => %{}}
 
-      nested_capabilities = %{"resources" => %{"subscribe" => true}}
+      nested_capabilities = %{"roots" => %{"listChanged" => true}}
 
       final = Hermes.Client.merge_capabilities(client, nested_capabilities)
 
-      assert final == %{
-               "resources" => %{"subscribe" => true},
-               "tools" => %{"listChanged" => true}
-             }
+      assert final == %{"sampling" => %{}, "roots" => %{"listChanged" => true}}
     end
   end
 
@@ -782,8 +780,8 @@ defmodule Hermes.ClientTest do
     end
 
     test "generates unique progress tokens" do
-      token1 = Message.generate_progress_token()
-      token2 = Message.generate_progress_token()
+      token1 = ID.generate_progress_token()
+      token2 = ID.generate_progress_token()
 
       assert is_binary(token1)
       assert is_binary(token2)
