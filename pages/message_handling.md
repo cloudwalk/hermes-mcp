@@ -4,7 +4,7 @@ This guide explains how Hermes MCP handles the flow of messages between clients 
 
 ## Message Types
 
-Hermes implements all the standard JSON-RPC 2.0 message types as defined in the MCP specification:
+Hermes implements all the standard JSON-RPC 2.0 message types as defined in the [MCP specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/messages/):
 
 1. **Requests**: Messages with a method, parameters, and ID that expect a response
 2. **Responses**: Successful results or errors matching a specific request ID
@@ -28,22 +28,13 @@ Hermes implements all the standard JSON-RPC 2.0 message types as defined in the 
 
 ## Request/Response Correlation
 
-Hermes automatically handles correlation between requests and responses using unique message IDs:
+Hermes automatically handles correlation between requests and responses using unique message IDs that look like this:
 
-```elixir
-# Inside Hermes.Client implementation
-defp generate_request_id do
-  binary = <<
-    System.system_time(:nanosecond)::64,
-    :erlang.phash2({node(), self()}, 16_777_216)::24,
-    :erlang.unique_integer()::32
-  >>
-
-  Base.url_encode64(binary)
-end
+```
+req_gdc_yngatmpd1namcqk
 ```
 
-Each request is assigned a unique ID, and the client maintains a map of pending requests:
+Each request is assigned a unique ID, and the client maintains a `MapSet` of pending requests:
 
 ```elixir
 # Simplified example of internal state
@@ -55,16 +46,11 @@ Each request is assigned a unique ID, and the client maintains a map of pending 
 }
 ```
 
-When a response arrives, it's matched to the original request and forwarded to the waiting process.
+When a response arrives, it's matched to the original request and forwarded to the waiting caller process.
 
 ## Timeouts and Recovery
 
 Hermes implements automatic timeout handling for requests:
-
-```elixir
-# Default timeout in milliseconds
-@default_timeout :timer.seconds(30)
-```
 
 If a response isn't received within the timeout period, the client will:
 
@@ -74,74 +60,12 @@ If a response isn't received within the timeout period, the client will:
 
 ## Notification Handling
 
-Notifications are one-way messages that don't expect a response. Hermes provides a simple API for sending notifications:
+Notifications are one-way messages that don't expect a response. Generally, client and server should exchange notifications internally, without involving an explicit call from the caller process.
 
-```elixir
-# Internal implementation
-defp send_notification(state, method, params \\ %{}) do
-  with {:ok, notification_data} <- encode_notification(method, params) do
-    send_to_transport(state.transport, notification_data)
-  end
-end
-```
-
-The client sends the `notifications/initialized` notification after successful initialization.
+However, there's one exception: request cancellation. When a client cancels a request with either `Hermes.Client.cancel_request/3` or `Hermes.Client.cancel_all_requests/2`, it sends a `notifications/cancelled` notification to the server to stop processing the request.
 
 ## Protocol Message Encoding/Decoding
 
 Hermes uses a structured approach to encode and validate protocol messages.
 
-The `Hermes.MCP.Message` module provides robust validation of all messages against the MCP schema
-
-## Error Handling Patterns
-
-Hermes implements standardized error handling for all message types:
-
-### Protocol Errors
-
-JSON-RPC protocol errors follow the standard error codes:
-
-```elixir
-# Example of handling an error response
-defp handle_error(%{"error" => error, "id" => id}, id, state) do
-  {{from, _method}, pending} = Map.pop(state.pending_requests, id)
-
-  # Unblocks original caller
-  GenServer.reply(from, {:error, error})
-
-  %{state | pending_requests: pending}
-end
-```
-
-### Transport Errors
-
-Transport-level errors are wrapped in a standardized format:
-
-```elixir
-# Example of handling a transport error
-defp send_to_transport(transport, data) do
-  with {:error, reason} <- transport.send_message(data) do
-    {:error, {:transport_error, reason}}
-  end
-end
-```
-
-### Application Errors
-
-Application-level errors (e.g., in tool execution) are handled within the result structure:
-
-```elixir
-# Example result for a tool execution error
-{:error, %{
-  "content" => [%{"type" => "text", "text" => "Error message"}],
-  "isError" => true
-}}
-```
-
-## Rate Limiting Considerations
-
-While Hermes does not impose rate limits directly, implementers should consider:
-
-1. Batching requests when appropriate
-2. Implementing backoff mechanisms for retries
-3. Monitoring request volumes in production
+The `Hermes.MCP.Message` module provides robust validation of all messages against the [MCP JSON schema](https://github.com/modelcontextprotocol/specification/blob/main/schema/2024-11-05/schema.json)

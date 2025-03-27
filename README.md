@@ -103,7 +103,7 @@ defmodule MyApp.Application do
           "version" => "1.0.0"
         },
         capabilities: %{
-          "roots" => %{},
+          "roots" => %{"listChanged" => true},
           "sampling" => %{}
         }
       ]}

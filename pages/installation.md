@@ -9,7 +9,7 @@ Add Hermes MCP to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.2.0"}
+    {:hermes_mcp, "~> 0.3"}
   ]
 end
 ```
@@ -24,7 +24,7 @@ mix deps.get
 
 Hermes MCP is designed to be integrated into your application's supervision tree. This provides robust lifecycle management and automatic recovery in case of failures.
 
-### Basic Integration Example
+### Basic Integration Example (stdio)
 
 ```elixir
 defmodule MyApp.Application do
@@ -35,31 +35,36 @@ defmodule MyApp.Application do
       # Start the MCP transport
       {Hermes.Transport.STDIO, [
         name: MyApp.MCPTransport,
-        client: MyApp.MCPClient, 
+        client: MyApp.MCPClient,
         command: "mcp",
-        args: ["run", "path/to/server.py"]
+        args: ["run", "path/to/server.py"],
+        env: %{"HOME" => "/Users/my-user"}
       ]},
-      
+
       # Start the MCP client using the transport
       {Hermes.Client, [
         name: MyApp.MCPClient,
-        transport: MyApp.MCPTransport,
+        transport: [
+          # layer is required
+          layer: Hermes.Transport.STDIO,
+          # you can give a custom name
+          name: MyApp.MCPTransport
+        ],
         client_info: %{
           "name" => "MyApp",
           "version" => "1.0.0"
         },
         capabilities: %{
-          "resources" => %{},
-          "tools" => %{},
-          "prompts" => %{}
+          "roots" => %{"listChanged" => true},
+          "sampling" => %{}
         }
       ]}
-      
+
       # Your other application services
       # ...
     ]
-    
-    opts = [strategy: :one_for_one, name: MyApp.Supervisor]
+
+    opts = [strategy: :one_for_all, name: MyApp.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end
@@ -74,26 +79,10 @@ The `Hermes.Client` accepts the following options:
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
 | `:name` | atom | Registration name for the client process | `__MODULE__` |
-| `:transport` | module or pid | The transport module or process | Required |
+| `:transport` | enumerable | The transport options | Required |
+| `:transport.layer` | module | The transport layer, currently only `Hermes.Transport.STDIO` or `Hermes.Transport.SSE` | Required |
+| `:transport.name` | [GenServer.server](https://hexdocs.pm/elixir/GenServer.html#t:server/0) | An optional custom transport process name | The transport module |
 | `:client_info` | map | Information about the client | Required |
-| `:capabilities` | map | Client capabilities to advertise | `%{"resources" => %{}, "tools" => %{}}` |
+| `:capabilities` | map | Client capabilities to advertise | `%{"roots" => %{"listChanged" => true}, "sampling" => %{}}` |
 | `:protocol_version` | string | Protocol version to use | `"2024-11-05"` |
-| `:request_timeout` | integer | Default timeout for requests in milliseconds | 30000 |
-
-### Transport Configuration
-
-The `Hermes.Transport.STDIO` accepts the following options:
-
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `:name` | atom | Registration name for the transport process | `__MODULE__` |
-| `:client` | atom or pid | The client process that will receive messages | Required |
-| `:command` | string | The command to execute | Required |
-| `:args` | list | Command line arguments | `nil` |
-| `:env` | map | Environment variables | System defaults |
-| `:cwd` | string | Working directory | Current directory |
-
-## Environment Requirements
-
-- Elixir 1.18 or later
-- Erlang/OTP 26 or later
+| `:request_timeout` | integer | Default timeout for requests in milliseconds | 30s |

@@ -1,6 +1,6 @@
 # Error Handling
 
-This guide explains how errors are handled in the Hermes MCP client.
+This guide explains how errors are handled in the Hermes MCP library.
 
 ## Error Types
 
@@ -14,15 +14,15 @@ Hermes MCP distinguishes between three types of errors:
 
 Protocol and client-side errors in Hermes MCP are represented as `{:error, %Hermes.MCP.Error{}}` tuples, where `Error` is a struct with:
 
-- `code`: The numeric error code
+- `code`: The numeric error code, as an integer
 - `reason`: The atom reason (e.g., `:parse_error`, `:method_not_found`)
-- `data`: Additional error context
+- `data`: Additional error context, as a map
 
 Domain errors (with `isError: true`) are returned as `{:ok, %Hermes.MCP.Response{}}` tuples, where the response includes:
 
-- `result`: The original result from the server (including the `isError` field)
-- `id`: The request ID
-- `is_error`: A boolean flag indicating if this is a domain error
+- `result`: The original result from the server (including the `isError` field), as a map
+- `id`: The request ID, generated from `Hermes.MCP.ID.generate_request_id/0`
+- `is_error`: A boolean flag indicating if this is a domain error or "success"
 
 ### Protocol Errors
 
@@ -69,7 +69,7 @@ Client-specific errors follow the same error struct pattern with appropriate rea
 # Transport error
 {:error, %Hermes.MCP.Error{
   code: -32000,
-  reason: :connection_refused,  
+  reason: :connection_refused,
   data: %{type: :transport}
 }}
 
@@ -82,15 +82,13 @@ Client-specific errors follow the same error struct pattern with appropriate rea
 
 # Timeout error
 {:error, %Hermes.MCP.Error{
-  code: -32000, 
-  reason: :request_timeout, 
+  code: -32000,
+  reason: :request_timeout,
   data: %{type: :client, message: "Request timed out after 30000ms"}
 }}
 ```
 
 ## Handling Errors
-
-The client automatically categorizes errors, returning them in consistent formats.
 
 You can pattern match on the response structure to handle different error types:
 
@@ -99,28 +97,28 @@ case Hermes.Client.call_tool("search", %{query: "example"}) do
   {:ok, %Hermes.MCP.Response{is_error: false, result: result}} ->
     # Handle success
     handle_success(result)
-    
+
   {:ok, %Hermes.MCP.Response{is_error: true, result: result}} ->
     # Handle domain/application error
     case result do
-      %{"reason" => "not_found"} -> 
+      %{"reason" => "not_found"} ->
         Logger.warning("Resource not found: #{result["message"]}")
-      
+
       %{"reason" => "permission_denied"} ->
         Logger.error("Permission denied: #{result["message"]}")
-        
+
       _ ->
         Logger.error("Other domain error: #{inspect(result)}")
     end
-    
+
   {:error, %Hermes.MCP.Error{reason: :method_not_found}} ->
     # Handle unsupported method
     Logger.warning("Method not supported by this server")
-    
+
   {:error, %Hermes.MCP.Error{reason: reason}} when reason in [:connection_refused, :timeout] ->
     # Handle transport errors
     Logger.error("Transport error: #{reason}")
-    
+
   {:error, %Hermes.MCP.Error{} = error} ->
     # Handle any other error
     Logger.error("Unexpected error: #{inspect(error)}")
@@ -133,20 +131,4 @@ For better debugging, errors implement a custom Inspect protocol:
 
 ```
 #MCP.Error<method_not_found %{method: "unknown_method"}>
-```
-
-## Creating Custom Errors
-
-If you need to create your own errors in your application:
-
-```elixir
-# Protocol errors
-Hermes.MCP.Error.parse_error()
-Hermes.MCP.Error.method_not_found(%{method: "unknown_method"})
-
-# Transport errors
-Hermes.MCP.Error.transport_error(:connection_refused)
-
-# Client errors
-Hermes.MCP.Error.client_error(:request_timeout, %{elapsed_ms: 30000})
 ```

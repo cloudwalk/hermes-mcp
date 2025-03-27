@@ -93,37 +93,30 @@ defmodule Hermes.MixProject do
       extras: [
         "pages/home.md",
         "pages/installation.md",
+        "pages/transport.md",
         "pages/client_usage.md",
-        "pages/transport_options.md",
         "pages/message_handling.md",
-        "pages/security.md",
-        "pages/troubleshooting.md",
-        "pages/examples.md",
         "pages/rfc.md",
         "pages/progress_tracking.md",
         "pages/logging.md",
         "pages/error_handling.md",
         "README.md",
         "CHANGELOG.md",
+        "CONTRIBUTING.md",
         "LICENSE"
       ],
       groups_for_extras: [
         Guides: [
           "pages/home.md",
           "pages/installation.md",
+          "pages/transport.md",
           "pages/client_usage.md",
-          "pages/transport_options.md",
           "pages/message_handling.md",
           "pages/error_handling.md",
           "pages/progress_tracking.md",
           "pages/logging.md"
         ],
-        Integration: [
-          "pages/security.md"
-        ],
         References: [
-          "pages/troubleshooting.md",
-          "pages/examples.md",
           "pages/rfc.md"
         ]
       ]

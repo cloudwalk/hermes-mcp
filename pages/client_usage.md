@@ -11,6 +11,71 @@ Once properly configured in your application's supervision tree, the Hermes clie
 3. Capability exchange
 4. Handshake completion
 
+For example, if you're using the `Hermes.Transport.STDIO` layer for your client, this flow would lloks like to:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server Process
+
+    Client->>+Server Process: Launch subprocess
+    loop Message Exchange
+        Client->>Server Process: Write to stdin
+        Server Process->>Client: Write to stdout
+        Server Process--)Client: Optional logs on stderr
+    end
+    Client->>Server Process: Close stdin, terminate subprocess
+    deactivate Server Process
+```
+
+Otherwise, if you're using the `Hermes.Transport.SSE` layer, the flow would look like this:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: Open SSE connection
+    Server->>Client: endpoint event
+    loop Message Exchange
+        Client->>Server: HTTP POST messages
+        Server->>Client: SSE message events
+    end
+    Client->>Server: Close SSE connection
+```
+
+> ### Note {: .info}
+>
+> These sequence diagrams can be found on the official [MCP specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/)
+
+Generally speaking, the client <> server lifecycle on MCP can be summarized as:
+
+1. **Initialization**: Capability negotiation and protocol version agreement
+2. **Operation**: Normal protocol communication
+3. **Shutdown**: Graceful termination of the connection
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Note over Client,Server: Initialization Phase
+    activate Client
+    Client->>+Server: initialize request
+    Server-->>Client: initialize response
+    Client--)Server: initialized notification
+
+    Note over Client,Server: Operation Phase
+    rect rgb(200, 220, 250)
+        note over Client,Server: Normal protocol operations
+    end
+
+    Note over Client,Server: Shutdown
+    Client--)-Server: Disconnect
+    deactivate Server
+    Note over Client,Server: Connection closed
+```
+
 ## Basic Operations
 
 ### Checking Connection Status
@@ -46,13 +111,18 @@ To retrieve the list of available resources from the server:
 
 ```elixir
 case Hermes.Client.list_resources(MyApp.MCPClient) do
-  {:ok, %{"resources" => resources}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
+    IO.puts("Error listing resources")
+
+  {:ok, %Hermes.MCP.Response{data: %{"resources" => resources}}} ->
     IO.puts("Available resources:")
     Enum.each(resources, fn resource ->
       IO.puts("  - #{resource["name"]} (#{resource["uri"]})")
     end)
-    
-  {:error, error} ->
+
+  # this is a transport/protocol error
+  {:error, %Hermes.MCP.Error{} = error} ->
     IO.puts("Error listing resources: #{inspect(error)}")
 end
 ```
@@ -63,12 +133,12 @@ For large resource collections, you can use pagination with cursors:
 
 ```elixir
 # First page
-{:ok, %{"resources" => resources, "nextCursor" => cursor}} = 
+{:ok, %Hermes.MCP.Response{data: %{"resources" => resources, "nextCursor" => cursor}}} =
   Hermes.Client.list_resources(MyApp.MCPClient)
 
 # Get next page if a cursor is available
 if cursor do
-  {:ok, %{"resources" => more_resources}} = 
+  {:ok, %Hermes.MCP.Response{data: %{"resources" => more_resources}}} =
     Hermes.Client.list_resources(MyApp.MCPClient, cursor: cursor)
 end
 ```
@@ -79,14 +149,19 @@ To read the contents of a specific resource:
 
 ```elixir
 case Hermes.Client.read_resource(MyApp.MCPClient, "file:///example.txt") do
-  {:ok, %{"contents" => contents}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
+    IO.puts("Error reading resources")
+
+  {:ok, %Hermes.MCP.Response{data: %{"contents" => contents}}} ->
     Enum.each(contents, fn content ->
       case content do
         %{"text" => text} -> IO.puts("Text content: #{text}")
         %{"blob" => blob} -> IO.puts("Binary content: #{byte_size(blob)} bytes")
       end
     end)
-    
+
+  # this is a transport/protocol error
   {:error, error} ->
     IO.puts("Error reading resource: #{inspect(error)}")
 end
@@ -100,12 +175,17 @@ To discover available tools:
 
 ```elixir
 case Hermes.Client.list_tools(MyApp.MCPClient) do
-  {:ok, %{"tools" => tools}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
+    IO.puts("Error listing tools")
+
+  {:ok, %Hermes.MCP.Response{data: %{"tools" => tools}}} ->
     IO.puts("Available tools:")
     Enum.each(tools, fn tool ->
       IO.puts("  - #{tool["name"]}: #{tool["description"] || "No description"}")
     end)
-    
+
+  # this is a transport/protocol error
   {:error, error} ->
     IO.puts("Error listing tools: #{inspect(error)}")
 end
@@ -120,16 +200,8 @@ tool_name = "calculate"
 tool_args = %{"expression" => "2 + 2"}
 
 case Hermes.Client.call_tool(MyApp.MCPClient, tool_name, tool_args) do
-  {:ok, %{"content" => content, "isError" => false}} ->
-    IO.puts("Tool result:")
-    Enum.each(content, fn item ->
-      case item do
-        %{"type" => "text", "text" => text} -> IO.puts("  #{text}")
-        _ -> IO.puts("  #{inspect(item)}")
-      end
-    end)
-    
-  {:ok, %{"content" => content, "isError" => true}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
     IO.puts("Tool execution error:")
     Enum.each(content, fn item ->
       case item do
@@ -137,7 +209,17 @@ case Hermes.Client.call_tool(MyApp.MCPClient, tool_name, tool_args) do
         _ -> IO.puts("  #{inspect(item)}")
       end
     end)
-    
+
+  {:ok, %Hermes.MCP.Response{data: %{"content" => content}}} ->
+    IO.puts("Tool result:")
+    Enum.each(content, fn item ->
+      case item do
+        %{"type" => "text", "text" => text} -> IO.puts("  #{text}")
+        _ -> IO.puts("  #{inspect(item)}")
+      end
+    end)
+
+  # this is a transport/protocol error
   {:error, error} ->
     IO.puts("Error calling tool: #{inspect(error)}")
 end
@@ -151,18 +233,23 @@ To list available prompts:
 
 ```elixir
 case Hermes.Client.list_prompts(MyApp.MCPClient) do
-  {:ok, %{"prompts" => prompts}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
+    IO.puts("Error listing prompts")
+
+  {:ok, %Hermes.MCP.Response{data: %{"prompts" => prompts}}} ->
     IO.puts("Available prompts:")
     Enum.each(prompts, fn prompt ->
-      required_args = prompt["arguments"] 
+      required_args = prompt["arguments"]
                       |> Enum.filter(& &1["required"])
                       |> Enum.map(& &1["name"])
                       |> Enum.join(", ")
-      
+
       IO.puts("  - #{prompt["name"]}")
       IO.puts("    Required args: #{required_args}")
     end)
-    
+
+  # this is a transport/protocol error
   {:error, error} ->
     IO.puts("Error listing prompts: #{inspect(error)}")
 end
@@ -177,7 +264,11 @@ prompt_name = "code_review"
 prompt_args = %{"code" => "def hello():\n    print('world')"}
 
 case Hermes.Client.get_prompt(MyApp.MCPClient, prompt_name, prompt_args) do
-  {:ok, %{"messages" => messages}} ->
+  # this is an "application" error, from the server
+  {:ok, %Hermes.MCP.Response{is_error: true}} ->
+    IO.puts("Error getting prompt")
+
+  {:ok, %Hermes.MCP.Response{data: %{"messages" => messages}}} ->
     IO.puts("Prompt messages:")
     Enum.each(messages, fn message ->
       role = message["role"]
@@ -185,35 +276,13 @@ case Hermes.Client.get_prompt(MyApp.MCPClient, prompt_name, prompt_args) do
         %{"type" => "text", "text" => text} -> text
         _ -> inspect(message["content"])
       end
-      
+
       IO.puts("  #{role}: #{content}")
     end)
-    
+
+  # this is a transport/protocol error
   {:error, error} ->
     IO.puts("Error getting prompt: #{inspect(error)}")
-end
-```
-
-## Error Handling
-
-Hermes follows a consistent pattern for error handling:
-
-```elixir
-case Hermes.Client.some_operation(MyApp.MCPClient, args) do
-  {:ok, result} ->
-    # Handle successful result
-    
-  {:error, %{"code" => code, "message" => message}} ->
-    # Handle protocol-level error
-    IO.puts("Protocol error #{code}: #{message}")
-    
-  {:error, {:transport_error, reason}} ->
-    # Handle transport-level error
-    IO.puts("Transport error: #{inspect(reason)}")
-    
-  {:error, other_error} ->
-    # Handle other errors
-    IO.puts("Unexpected error: #{inspect(other_error)}")
 end
 ```
 
@@ -223,7 +292,7 @@ You can specify custom timeouts for operations:
 
 ```elixir
 # Use a custom timeout (in milliseconds)
-Hermes.Client.call_tool(MyApp.MCPClient, "slow_tool", %{}, timeout: 60_000)
+Hermes.Client.call_tool(MyApp.MCPClient, "slow_tool", %{}, timeout: to_timeout(second: 60))
 ```
 
 ## Extended Capabilities
@@ -243,3 +312,5 @@ To gracefully close a client connection:
 ```elixir
 Hermes.Client.close(MyApp.MCPClient)
 ```
+
+> This will shutdown the transport layer too

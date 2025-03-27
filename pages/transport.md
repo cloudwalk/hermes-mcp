@@ -1,4 +1,4 @@
-# Transport Options
+# Transport Layer
 
 Hermes MCP supports multiple transport mechanisms to connect clients with servers. This page covers the available options and how to configure them.
 
@@ -8,17 +8,18 @@ All transports in Hermes implement the `Hermes.Transport.Behaviour` behavior, wh
 
 ```elixir
 defmodule Hermes.Transport.Behaviour do
-  @type t :: pid() | atom()
+  @moduledoc """
+  Defines the behavior that all transport implementations must follow.
+  """
 
-  @typedoc "encoded JSON-RPC message"
+  @type t :: GenServer.server()
+  @typedoc "The JSON-RPC message to send, encoded"
   @type message :: String.t()
+  @type reason :: term()
 
-  @callback start_link(keyword()) :: Supervisor.on_start()
-  @callback send_message(message()) :: :ok | {:error, reason()}
+  @callback start_link(keyword()) :: GenServer.on_start()
   @callback send_message(t(), message()) :: :ok | {:error, reason()}
   @callback shutdown(t()) :: :ok | {:error, reason()}
-  
-  @optional_callbacks send_message: 1
 end
 ```
 
@@ -33,7 +34,7 @@ The STDIO transport (`Hermes.Transport.STDIO`) enables communication with an MCP
 ```elixir
 {Hermes.Transport.STDIO, [
   name: MyApp.MCPTransport,
-  client: MyApp.MCPClient, 
+  client: MyApp.MCPClient,
   command: "mcp",
   args: ["run", "path/to/server.py"],
   env: %{"CUSTOM_VAR" => "value"},
@@ -45,19 +46,19 @@ The STDIO transport (`Hermes.Transport.STDIO`) enables communication with an MCP
 
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
-| `:name` | atom | Registration name for the transport process | `__MODULE__` |
-| `:client` | atom or pid | The client process that will receive messages | Required |
-| `:command` | string | The command to execute | Required |
-| `:args` | list | Command line arguments | `nil` |
-| `:env` | map | Environment variables | System defaults |
-| `:cwd` | string | Working directory | Current directory |
+| `:name` | [GenServer.name](https://hexdocs.pm/elixir/GenServer.html#t:name/0) | Registration name for the transport process | `__MODULE__` |
+| `:client` | [GenServer.server](https://hexdocs.pm/elixir/GenServer.html#t:server/0) | The client process that will receive messages | Required |
+| `:command` | string | The command to execute, it will be searched on `$PATH` | Required |
+| `:args` | list(String.t()) | Command line arguments | `[]` |
+| `:env` | map | Environment variables to merge into the default ones | System defaults |
+| `:cwd` | string | Working directory | Current directory (aka `Path.expand(".")`) |
 
 ### Example: Running a Python MCP Server
 
 ```elixir
 {Hermes.Transport.STDIO, [
   name: MyApp.MCPTransport,
-  client: MyApp.MCPClient, 
+  client: MyApp.MCPClient,
   command: "python",
   args: ["-m", "mcp.server", "my_server.py"],
   env: %{"PYTHONPATH" => "/path/to/python/modules"}
@@ -69,31 +70,32 @@ The STDIO transport (`Hermes.Transport.STDIO`) enables communication with an MCP
 ```elixir
 {Hermes.Transport.STDIO, [
   name: MyApp.MCPTransport,
-  client: MyApp.MCPClient, 
+  client: MyApp.MCPClient,
   command: "node",
   args: ["server.js"],
-  env: %{"NODE_ENV" => "production"}
+  env: %{"NODE_ENV" => "production"},
+  cwd: "/path/to/server"
 ]}
 ```
 
 ## HTTP/SSE Transport
 
-Support for HTTP with Server-Sent Events (SSE) transport is planned for future releases. This will enable communication with remote MCP servers over HTTP.
+The HTTP/SSE transport (`Hermes.Transport.SSE`) enables communication with an MCP server over HTTP using [Server-Sent Events (SSE)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events). It's suitable for remote integrations and provides secure communication over TLS.
 
 ### Configuration
 
 ```elixir
-{Hermes.Transport.HTTP, [
+{Hermes.Transport.SSE, [
   name: MyApp.HTTPTransport,
   client: MyApp.MCPClient,
   server: [
     base_url: "https://example.com",
     base_path: "/mcp", # defaults to "/"
-    sse_path: "/sse" # defaults to "/sse"
+    sse_path: "/sse" # defaults to `:base_path` <> "/sse"
   ],
   headers: [{"Authorization", "Bearer token"}],
   transport_opts: [verify: :verify_peer],
-  http_options: [recv_timeout: 30_000]
+  http_options: [request_timeout: 30_000]
 ]}
 ```
 
@@ -101,15 +103,15 @@ Support for HTTP with Server-Sent Events (SSE) transport is planned for future r
 
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
-| `:name` | atom | Registration name for the transport process | `__MODULE__` |
-| `:client` | atom or pid | The client process that will receive messages | Required |
-| `:server` | keyword | The SSE server config | Required |
+| `:name` | [GenServer.name](https://hexdocs.pm/elixir/GenServer.html#t:name/0) | Registration name for the transport process | `__MODULE__` |
+| `:client` | [GenServer.server](https://hexdocs.pm/elixir/GenServer.html#t:server/0) | The client process that will receive messages | Required |
+| `:server` | enumerable | The SSE server config | Required |
 | `:server.base_url` | string | The SSE server base url | Required |
 | `:server.base_path` | string | The SSE server base path | `"/"`|
 | `:server.sse_path` | string | The SSE server base path for starting a SSE connection | `"/sse"`|
 | `:headers` | map | Additional request headers to be sent | `%{}` |
-| `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, yo ucan check the avaiable options on https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options | System defaults |
-| `:http_options` | string | Options passed directly to the HTTP Client, you can check the available options on https://hexdocs.pm/finch/Finch.html#t:request_opt/0 | Current directory |
+| `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, you can check the avaiable options on [Mint docs](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options) | System defaults |
+| `:http_options` | keyword | Options passed directly to the HTTP Client, you can check the available options on [Finch docs](https://hexdocs.pm/finch/Finch.html#t:request_opt/0) | Current directory |
 
 ## Custom Transport Implementation
 
@@ -120,73 +122,71 @@ You can implement custom transports by creating a module that implements the `He
 ```elixir
 defmodule MyApp.Transport.TCP do
   @behaviour Hermes.Transport.Behaviour
+
   use GenServer
-  
-  @impl true
+
+  alias Hermes.Transport.Behaviour, as: Transport
+
+  @impl Transport
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: opts[:name])
   end
-  
-  @impl true
-  def send_message(message) when is_binary(message) do
-    GenServer.call(__MODULE__, {:send, message})
-  end
-  
-  @impl true
-  def send_message(pid, message) when is_pid(pid) and is_binary(message) do
+
+  @impl Transport
+  def send_message(pid, message) when is_binary(message) do
     GenServer.call(pid, {:send, message})
   end
-  
-  @impl true
+
+  @impl Transport
+  def shutdown(pid) do
+    GenServer.cast(pid, :shutdown)
+  end
+
+  @impl GenServer
   def init(opts) do
     client = opts[:client]
     host = opts[:host] || "localhost"
     port = opts[:port] || 8080
-    
+
     case :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: true]) do
       {:ok, socket} ->
         {:ok, %{socket: socket, client: client}}
-        
+
       {:error, reason} ->
         {:stop, reason}
     end
   end
-  
-  @impl true
+
+  @impl GenServer
   def handle_call({:send, message}, _from, %{socket: socket} = state) do
     case :gen_tcp.send(socket, message) do
       :ok -> {:reply, :ok, state}
       {:error, reason} -> {:reply, {:error, reason}, state}
     end
   end
-  
-  @impl true
+
+  @impl GenServer
+  def handle_cast(:shutdown, %{socket: socket} = state) do
+    :gen_tcp.close(socket)
+    {:stop, :normal, state}
+  end
+
+  @impl GenServer
   def handle_info({:tcp, _socket, data}, %{client: client} = state) do
     # Forward data to client
     GenServer.cast(client, {:response, data})
     {:noreply, state}
   end
-  
-  @impl true
+
   def handle_info({:tcp_closed, _socket}, state) do
     {:stop, :normal, state}
   end
-  
-  @impl true
+
   def handle_info({:tcp_error, _socket, reason}, state) do
     {:stop, reason, state}
   end
 end
 ```
-
-## Transport Selection Guidelines
-
-When choosing a transport mechanism, consider:
-
-1. **Location**: For local servers, STDIO is typically the simplest and most efficient option.
-2. **Security**: For remote servers, HTTP/SSE with TLS provides secure communication.
-3. **Performance**: STDIO generally has lower latency for local communication.
-4. **Reliability**: HTTP transports can handle intermittent network issues more gracefully.
 
 ## Transport Lifecycle Management
 
@@ -200,7 +200,13 @@ children = [
   # ...
 ]
 
-# The transport will automatically restart if it crashes
-opts = [strategy: :one_for_one]
+# We recommend using :one_for_all strategy
+# to restart all children if one of them fails
+# since the client depends on the transport and vice-versa
+opts = [strategy: :one_for_all]
 Supervisor.start_link(children, opts)
 ```
+
+## References
+
+You can find more detailed information about MCP transport layers on the official [MCP specification](https://spec.modelcontextprotocol.io/specification/2024-11-05/basic/transports/)
