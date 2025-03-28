@@ -30,9 +30,6 @@ defmodule Hermes.Client do
 
   @type t :: GenServer.server()
 
-  @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
-  @type log_callback :: (String.t(), term(), String.t() | nil -> any())
-
   @typedoc """
   MCP client transport options
 
@@ -363,7 +360,7 @@ defmodule Hermes.Client do
 
   The callback function will be called whenever a log message notification is received.
   """
-  @spec register_log_callback(t, log_callback()) :: :ok
+  @spec register_log_callback(t, State.log_callback()) :: :ok
   def register_log_callback(client, callback) when is_function(callback, 3) do
     GenServer.call(client, {:register_log_callback, callback})
   end
@@ -578,28 +575,21 @@ defmodule Hermes.Client do
   end
 
   def handle_call({:cancel_request, request_id, reason}, _from, state) do
-    # Check if request exists
-    if Map.has_key?(state.pending_requests, request_id) do
-      # Send cancellation notification
-      case send_cancellation(state, request_id, reason) do
-        :ok ->
-          # Remove the request and notify the caller
-          {request, updated_state} = State.remove_request(state, request_id)
+    with true <- Map.has_key?(state.pending_requests, request_id),
+         :ok <- send_cancellation(state, request_id, reason) do
+      {request, updated_state} = State.remove_request(state, request_id)
 
-          error =
-            Error.client_error(:request_cancelled, %{
-              message: "Request cancelled by client",
-              reason: reason
-            })
+      error =
+        Error.client_error(:request_cancelled, %{
+          message: "Request cancelled by client",
+          reason: reason
+        })
 
-          GenServer.reply(request.from, {:error, error})
-          {:reply, :ok, updated_state}
-
-        error ->
-          {:reply, error, state}
-      end
+      GenServer.reply(request.from, {:error, error})
+      {:reply, :ok, updated_state}
     else
-      {:reply, {:not_found, request_id}, state}
+      false -> {:reply, Error.client_error(:request_not_found), state}
+      error -> {:reply, error, state}
     end
   end
 
