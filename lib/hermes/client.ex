@@ -394,7 +394,7 @@ defmodule Hermes.Client do
   @spec register_progress_callback(
           t,
           String.t() | integer(),
-          progress_callback()
+          State.progress_callback()
         ) ::
           :ok
   def register_progress_callback(client, progress_token, callback)

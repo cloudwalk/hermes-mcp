@@ -1046,7 +1046,7 @@ defmodule Hermes.ClientTest do
 
     test "client returns not_found when cancelling non-existent request", %{client: client} do
       result = Hermes.Client.cancel_request(client, "non_existent_id")
-      assert result == {:not_found, "non_existent_id"}
+      assert %Error{reason: :request_not_found} = result
     end
 
     test "cancel_all_requests cancels all pending requests", %{client: client} do
