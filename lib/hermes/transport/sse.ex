@@ -201,8 +201,7 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_cast(:close_connection, %{stream_task: task} = state) do
-    Task.shutdown(task, to_timeout(second: 3))
+  def handle_cast(:close_connection, state) do
     {:stop, :normal, state}
   end
 
