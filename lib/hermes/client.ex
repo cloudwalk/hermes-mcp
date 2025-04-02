@@ -625,21 +625,6 @@ defmodule Hermes.Client do
 
   @impl true
   def handle_cast(:close, state) do
-    pending_requests = State.list_pending_requests(state)
-
-    if length(pending_requests) > 0 do
-      Logger.warning("Closing client with #{length(pending_requests)} pending requests")
-    end
-
-    for request <- pending_requests do
-      send_notification(state, "notifications/cancelled", %{
-        "requestId" => request.id,
-        "reason" => "client closed"
-      })
-    end
-
-    state.transport.layer.shutdown(state.transport.name)
-
     {:stop, :normal, state}
   end
 
@@ -716,6 +701,26 @@ defmodule Hermes.Client do
 
         {:noreply, updated_state}
     end
+  end
+
+  @impl true
+  def terminate(reason, %{client_info: %{"name" => name}} = state) do
+    Logger.warning("Terminating #{name} MCP client with #{inspect(reason)}, closing transport")
+
+    pending_requests = State.list_pending_requests(state)
+
+    if length(pending_requests) > 0 do
+      Logger.warning("Closing client with #{length(pending_requests)} pending requests")
+    end
+
+    for request <- pending_requests do
+      send_notification(state, "notifications/cancelled", %{
+        "requestId" => request.id,
+        "reason" => "client closed"
+      })
+    end
+
+    state.transport.layer.shutdown(state.transport.name)
   end
 
   # Response handling
