@@ -8,22 +8,14 @@ defmodule Hermes.Transport.SSETest do
   @test_http_opts [max_reconnections: 0]
 
   setup do
-    client =
-      start_supervised!(
-        {Hermes.Client,
-         name: :sse_test,
-         transport: [layer: SSE],
-         client_info: %{"name" => "Hermes.Transport.SSETest", "version" => "1.0.0"}}
-      )
-
     bypass = Bypass.open()
     Process.group_leader(self(), self())
 
-    {:ok, client: client, bypass: bypass}
+    {:ok, bypass: bypass}
   end
 
   describe "start_link/1" do
-    test "successfully establishes SSE connection", %{client: _client, bypass: bypass} do
+    test "successfully establishes SSE connection", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
 
       # Start a stub client to avoid interference with other tests
@@ -75,10 +67,7 @@ defmodule Hermes.Transport.SSETest do
   end
 
   describe "send_message/2" do
-    test "sends message to endpoint after receiving endpoint event", %{
-      client: _client,
-      bypass: bypass
-    } do
+    test "sends message to endpoint after receiving endpoint event", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
 
       # Start a stub client
@@ -144,8 +133,11 @@ defmodule Hermes.Transport.SSETest do
       SSE.shutdown(transport)
     end
 
-    test "fails to send message when no endpoint is available", %{client: client, bypass: bypass} do
+    test "fails to send message when no endpoint is available", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
+
+      # Start a stub client for this test
+      {:ok, stub_client} = StubClient.start_link()
 
       # Set up the SSE connection but don't send an endpoint event
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
@@ -156,7 +148,7 @@ defmodule Hermes.Transport.SSETest do
       # Start the SSE transport
       {:ok, transport} =
         SSE.start_link(
-          client: client,
+          client: stub_client,
           server: %{
             base_url: server_url,
             sse_path: "/sse"
@@ -172,10 +164,14 @@ defmodule Hermes.Transport.SSETest do
 
       # Clean up
       SSE.shutdown(transport)
+      StubClient.clear_messages()
     end
 
-    test "handles HTTP error responses", %{client: client, bypass: bypass} do
+    test "handles HTTP error responses", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
+
+      # Start a stub client for this test to avoid client termination affecting transport
+      {:ok, stub_client} = StubClient.start_link()
 
       # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
@@ -201,7 +197,7 @@ defmodule Hermes.Transport.SSETest do
       # Start the SSE transport
       {:ok, transport} =
         SSE.start_link(
-          client: client,
+          client: stub_client,
           server: %{
             base_url: server_url,
             sse_path: "/sse"
@@ -222,11 +218,12 @@ defmodule Hermes.Transport.SSETest do
 
       # Clean up
       SSE.shutdown(transport)
+      StubClient.clear_messages()
     end
   end
 
   describe "handling SSE events" do
-    test "processes message events correctly", %{client: _client, bypass: bypass} do
+    test "processes message events correctly", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
 
       # Create a test message
@@ -289,7 +286,7 @@ defmodule Hermes.Transport.SSETest do
       SSE.shutdown(transport)
     end
 
-    test "handles server disconnection", %{client: _client, bypass: bypass} do
+    test "handles server disconnection", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
 
       # Start a stub client
@@ -330,8 +327,11 @@ defmodule Hermes.Transport.SSETest do
   end
 
   describe "handling headers and options" do
-    test "passes custom headers to requests", %{client: client, bypass: bypass} do
+    test "passes custom headers to requests", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
+
+      # Start a stub client for this test
+      {:ok, stub_client} = StubClient.start_link()
 
       # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
@@ -365,7 +365,7 @@ defmodule Hermes.Transport.SSETest do
       # Start the SSE transport with custom headers
       {:ok, transport} =
         SSE.start_link(
-          client: client,
+          client: stub_client,
           server: %{
             base_url: server_url,
             sse_path: "/sse"
@@ -389,6 +389,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Clean up
       SSE.shutdown(transport)
+      StubClient.clear_messages()
     end
   end
 end
