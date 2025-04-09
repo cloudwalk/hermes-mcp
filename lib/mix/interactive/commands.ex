@@ -2,7 +2,7 @@ defmodule Mix.Interactive.Commands do
   @moduledoc """
   Common command implementations for interactive MCP shells.
 
-  This module contains the implementation of all commands available in the 
+  This module contains the implementation of all commands available in the
   interactive MCP shells. It provides a consistent set of commands across
   different transport implementations, with shared functionality for:
 
@@ -217,7 +217,7 @@ defmodule Mix.Interactive.Commands do
   defp initialize_client(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Reinitializing client connection...#{UI.colors().reset}")
 
-    send(client, :initialize)
+    GenServer.cast(client, :initialize)
     Process.flag(:trap_exit, true)
     :timer.sleep(500)
 
