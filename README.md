@@ -12,21 +12,40 @@ A high-performance Model Context Protocol (MCP) implementation in Elixir.
 
 ## Overview
 
-Hermes MCP provides a robust client implementation for the [Model Context Protocol](https://spec.modelcontextprotocol.io/specification/2024-11-05/), leveraging Elixir's exceptional concurrency model and fault tolerance capabilities.
+Hermes MCP is a comprehensive Elixir SDK for the [Model Context Protocol](https://spec.modelcontextprotocol.io/), aiming to provide complete client and server implementations. The library leverages Elixir's exceptional concurrency model and fault tolerance capabilities to deliver a robust MCP experience.
+
+Currently, Hermes MCP offers a feature-complete client implementation conforming to the MCP 2024-11-05 specification. Server-side components are planned for future releases.
 
 ## Roadmap
 
-- [x] Complete client implementation with protocol lifecycle management
+### Current Status
+
+- [x] Complete client implementation (MCP 2024-11-05)
 - [x] Multiple transport options (STDIO and HTTP/SSE)
 - [x] Built-in connection supervision and automatic recovery
 - [x] Comprehensive capability negotiation
-- [x] Progress notification support for tracking long-running operations
-- [x] Structured logging system with log level control
-- [ ] Server implementation using STDIO
-- [ ] Server implementation using HTTP/SSE 
-- [ ] Sample server implementation: Hex Packages 
-- [ ] Sample server implementation: Ash Documentation 
-- [ ] Sample server implementation: Oban Documentation
+- [x] Progress tracking and cancellation support
+- [x] Structured logging system
+
+### Upcoming
+
+- [ ] Client support for MCP 2025-03-26 specification
+  - Authorization framework (OAuth 2.1)
+  - Streamable HTTP transport
+  - JSON-RPC batch operations
+  - Enhanced tool annotations
+
+- [ ] Server Implementation
+  - STDIO transport
+  - HTTP/SSE transport
+  - Streamable HTTP transport
+  - Support for resources, tools, and prompts
+
+- [ ] Sample Implementations
+  - Reference servers
+  - Integration examples with popular Elixir libraries
+
+For a more detailed roadmap, see [ROADMAP.md](./ROADMAP.md).
 
 ## Installation
 
