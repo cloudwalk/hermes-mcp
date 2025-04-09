@@ -30,7 +30,7 @@ defmodule Hermes.Telemetry do
     "log-client-requests",
     [:hermes_mcp, :client, :request, :stop],
     fn _event, %{duration: duration}, %{method: method}, _config ->
-      Logger.info("Request to #{method} completed in \#{div(duration, 1_000_000)} ms")
+      Logger.info("Request to \#{method} completed in \#{div(duration, 1_000_000)} ms")
     end,
     nil
   )
@@ -101,7 +101,7 @@ defmodule Hermes.Telemetry do
   """
   @spec attach_many(binary(), list(list(atom())), function(), term()) :: :ok | {:error, term()}
   def attach_many(handler_id, event_names, handler, config) do
-    prefixed_events = Enum.map(event_names, &([:hermes_mcp | &1]))
+    prefixed_events = Enum.map(event_names, &[:hermes_mcp | &1])
     :telemetry.attach_many(handler_id, prefixed_events, handler, config)
   end
 
