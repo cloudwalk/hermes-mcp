@@ -14,14 +14,19 @@ A high-performance Model Context Protocol (MCP) implementation in Elixir.
 
 Hermes MCP provides a robust client implementation for the [Model Context Protocol](https://spec.modelcontextprotocol.io/specification/2024-11-05/), leveraging Elixir's exceptional concurrency model and fault tolerance capabilities.
 
-## Features
+## Roadmap
 
-- Complete client implementation with protocol lifecycle management
-- Multiple transport options (STDIO and HTTP/SSE)
-- Built-in connection supervision and automatic recovery
-- Comprehensive capability negotiation
-- Progress notification support for tracking long-running operations
-- Structured logging system with log level control
+- [x] Complete client implementation with protocol lifecycle management
+- [x] Multiple transport options (STDIO and HTTP/SSE)
+- [x] Built-in connection supervision and automatic recovery
+- [x] Comprehensive capability negotiation
+- [x] Progress notification support for tracking long-running operations
+- [x] Structured logging system with log level control
+- [ ] Server implementation using STDIO
+- [ ] Server implementation using HTTP/SSE 
+- [ ] Sample server implementation: Hex Packages 
+- [ ] Sample server implementation: Ash Documentation 
+- [ ] Sample server implementation: Oban Documentation
 
 ## Installation
 
