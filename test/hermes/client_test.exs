@@ -3,6 +3,7 @@ defmodule Hermes.ClientTest do
 
   import Mox
 
+  alias Hermes.Client.Operation
   alias Hermes.Client.State
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
@@ -1087,12 +1088,7 @@ defmodule Hermes.ClientTest do
     end
 
     test "request timeout sends cancellation notification", %{client: client} do
-      client_state = :sys.get_state(client)
-      # 50ms timeout for faster test
       test_timeout = 50
-
-      client_with_short_timeout = %{client_state | request_timeout: test_timeout}
-      :sys.replace_state(client, fn _ -> client_with_short_timeout end)
 
       expect(Hermes.MockTransport, :send_message, fn _, message ->
         decoded = JSON.decode!(message)
@@ -1107,7 +1103,7 @@ defmodule Hermes.ClientTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      task = Task.async(fn -> Hermes.Client.list_resources(client, timeout: test_timeout) end)
 
       Process.sleep(test_timeout * 2)
 
@@ -1145,7 +1141,9 @@ defmodule Hermes.ClientTest do
       Process.sleep(50)
       refute Process.alive?(client)
 
-      assert_receive {:EXIT, ^pid, {:normal, {GenServer, :call, [_, {:request, "resources/list", %{}}, _]}}}
+      operation = Operation.new(%{method: "resources/list"})
+
+      assert_receive {:EXIT, ^pid, {:normal, {GenServer, :call, [_, {:operation, ^operation}, _]}}}
     end
   end
 

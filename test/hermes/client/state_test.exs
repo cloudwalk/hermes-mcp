@@ -1,6 +1,7 @@
 defmodule Hermes.Client.StateTest do
   use ExUnit.Case, async: true
 
+  alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.Client.State
   alias Hermes.MCP.Error
@@ -11,7 +12,6 @@ defmodule Hermes.Client.StateTest do
         client_info: %{"name" => "TestClient", "version" => "1.0.0"},
         capabilities: %{"resources" => %{}},
         protocol_version: "2024-11-05",
-        request_timeout: 30_000,
         transport: %{layer: :fake_transport, name: :fake_name}
       }
 
@@ -20,7 +20,6 @@ defmodule Hermes.Client.StateTest do
       assert state.client_info == %{"name" => "TestClient", "version" => "1.0.0"}
       assert state.capabilities == %{"resources" => %{}}
       assert state.protocol_version == "2024-11-05"
-      assert state.request_timeout == 30_000
       assert state.transport == %{layer: :fake_transport, name: :fake_name}
       assert state.pending_requests == %{}
       assert state.progress_callbacks == %{}
@@ -28,12 +27,17 @@ defmodule Hermes.Client.StateTest do
     end
   end
 
-  describe "add_request/4" do
+  describe "add_request_from_operation/3" do
     test "adds a request to the state" do
       state = new_test_state()
       from = {self(), make_ref()}
 
-      {request_id, updated_state} = State.add_request(state, "test_method", %{}, from)
+      operation =
+        Operation.new(%{
+          method: "test_method"
+        })
+
+      {request_id, updated_state} = State.add_request_from_operation(state, operation, from)
 
       assert is_binary(request_id)
       assert Map.has_key?(updated_state.pending_requests, request_id)
@@ -52,7 +56,10 @@ defmodule Hermes.Client.StateTest do
     test "returns the request if it exists" do
       state = new_test_state()
       from = {self(), make_ref()}
-      {request_id, state} = State.add_request(state, "test_method", %{}, from)
+
+      operation = Operation.new(%{method: "test_method"})
+
+      {request_id, state} = State.add_request_from_operation(state, operation, from)
 
       result = State.get_request(state, request_id)
 
@@ -72,7 +79,10 @@ defmodule Hermes.Client.StateTest do
     test "removes a request and returns its info" do
       state = new_test_state()
       from = {self(), make_ref()}
-      {request_id, state} = State.add_request(state, "test_method", %{}, from)
+
+      operation = Operation.new(%{method: "test_method"})
+
+      {request_id, state} = State.add_request_from_operation(state, operation, from)
 
       {request, updated_state} = State.remove_request(state, request_id)
 
@@ -96,7 +106,10 @@ defmodule Hermes.Client.StateTest do
     test "handles a request timeout" do
       state = new_test_state()
       from = {self(), make_ref()}
-      {request_id, state} = State.add_request(state, "test_method", %{}, from)
+
+      operation = Operation.new(%{method: "test_method"})
+
+      {request_id, state} = State.add_request_from_operation(state, operation, from)
 
       {request, updated_state} = State.handle_request_timeout(state, request_id)
 
@@ -205,7 +218,10 @@ defmodule Hermes.Client.StateTest do
     test "returns a list of pending requests" do
       state = new_test_state()
       from = {self(), make_ref()}
-      {request_id, state} = State.add_request(state, "test_method", %{}, from)
+
+      operation = Operation.new(%{method: "test_method"})
+
+      {request_id, state} = State.add_request_from_operation(state, operation, from)
 
       requests = State.list_pending_requests(state)
 
@@ -311,7 +327,6 @@ defmodule Hermes.Client.StateTest do
       client_info: %{"name" => "TestClient", "version" => "1.0.0"},
       capabilities: %{},
       protocol_version: "2024-11-05",
-      request_timeout: 30_000,
       transport: %{layer: :fake_transport, name: :fake_name}
     }
   end

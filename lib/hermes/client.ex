@@ -16,6 +16,7 @@ defmodule Hermes.Client do
 
   import Peri
 
+  alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.Client.State
   alias Hermes.MCP.Error
@@ -26,7 +27,6 @@ defmodule Hermes.Client do
   require Logger
 
   @default_protocol_version "2024-11-05"
-  @default_timeout to_timeout(second: 30)
 
   @type t :: GenServer.server()
 
@@ -77,7 +77,6 @@ defmodule Hermes.Client do
   - `:client_info` - Information about the client
   - `:capabilities` - Client capabilities to advertise to the MCP server
   - `:protocol_version` - Protocol version to use (defaults to "2024-11-05")
-  - `:request_timeout` - Default timeout for requests in milliseconds (default: 30s)
 
   Any other option support by `GenServer`.
   """
@@ -87,7 +86,6 @@ defmodule Hermes.Client do
           | {:client_info, map}
           | {:capabilities, map}
           | {:protocol_version, String.t()}
-          | {:request_timeout, integer}
           | GenServer.option()
 
   @default_client_capabilities %{"roots" => %{"listChanged" => true}, "sampling" => %{}}
@@ -101,8 +99,7 @@ defmodule Hermes.Client do
      ]},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, @default_client_capabilities}}},
-    {:protocol_version, {:string, {:default, @default_protocol_version}}},
-    {:request_timeout, {:integer, {:default, @default_timeout}}}
+    {:protocol_version, {:string, {:default, @default_protocol_version}}}
   ])
 
   @doc """
@@ -116,17 +113,25 @@ defmodule Hermes.Client do
 
   @doc """
   Sends a ping request to the server to check connection health. Returns `:pong` if successful.
+
+  ## Options
+
+    * `:timeout` - Request timeout in milliseconds (default: 30s)
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
   """
   @spec ping(t, keyword) :: :pong | {:error, Error.t()}
   def ping(client, opts \\ []) when is_list(opts) do
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
+    operation =
+      Operation.new(%{
+        method: "ping",
+        params: %{},
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
 
-    if progress_opts do
-      GenServer.call(client, {:request, "ping", %{}, progress_opts}, timeout || @default_timeout)
-    else
-      GenServer.call(client, {:request, "ping", %{}}, timeout || @default_timeout)
-    end
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -143,20 +148,17 @@ defmodule Hermes.Client do
   @spec list_resources(t, keyword) :: {:ok, Response.t()} | {:error, Error.t()}
   def list_resources(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
-
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
 
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "resources/list", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "resources/list", params}, timeout || @default_timeout)
-    end
+    operation =
+      Operation.new(%{
+        method: "resources/list",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -171,20 +173,15 @@ defmodule Hermes.Client do
   """
   @spec read_resource(t, String.t(), keyword) :: {:ok, Response.t()} | {:error, Error.t()}
   def read_resource(client, uri, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
+    operation =
+      Operation.new(%{
+        method: "resources/read",
+        params: %{"uri" => uri},
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
 
-    params = %{"uri" => uri}
-
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "resources/read", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "resources/read", params}, timeout || @default_timeout)
-    end
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -201,20 +198,17 @@ defmodule Hermes.Client do
   @spec list_prompts(t, keyword) :: {:ok, Response.t()} | {:error, Error.t()}
   def list_prompts(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
-
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
 
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "prompts/list", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "prompts/list", params}, timeout || @default_timeout)
-    end
+    operation =
+      Operation.new(%{
+        method: "prompts/list",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -230,21 +224,18 @@ defmodule Hermes.Client do
   @spec get_prompt(t, String.t(), map() | nil, keyword) ::
           {:ok, Response.t()} | {:error, Error.t()}
   def get_prompt(client, name, arguments \\ nil, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
-
     params = %{"name" => name}
     params = if arguments, do: Map.put(params, "arguments", arguments), else: params
 
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "prompts/get", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "prompts/get", params}, timeout || @default_timeout)
-    end
+    operation =
+      Operation.new(%{
+        method: "prompts/get",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -261,20 +252,17 @@ defmodule Hermes.Client do
   @spec list_tools(t, keyword) :: {:ok, Response.t()} | {:error, Error.t()}
   def list_tools(client, opts \\ []) do
     cursor = Keyword.get(opts, :cursor)
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
-
     params = if cursor, do: %{"cursor" => cursor}, else: %{}
 
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "tools/list", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "tools/list", params}, timeout || @default_timeout)
-    end
+    operation =
+      Operation.new(%{
+        method: "tools/list",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -290,21 +278,18 @@ defmodule Hermes.Client do
   @spec call_tool(t, String.t(), map() | nil, keyword) ::
           {:ok, Response.t()} | {:error, Error.t()}
   def call_tool(client, name, arguments \\ nil, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout)
-    progress_opts = Keyword.get(opts, :progress)
-
     params = %{"name" => name}
     params = if arguments, do: Map.put(params, "arguments", arguments), else: params
 
-    if progress_opts do
-      GenServer.call(
-        client,
-        {:request, "tools/call", params, progress_opts},
-        timeout || @default_timeout
-      )
-    else
-      GenServer.call(client, {:request, "tools/call", params}, timeout || @default_timeout)
-    end
+    operation =
+      Operation.new(%{
+        method: "tools/call",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -347,7 +332,13 @@ defmodule Hermes.Client do
   """
   @spec set_log_level(t, String.t()) :: {:ok, Response.t()} | {:error, Error.t()}
   def set_log_level(client, level) when level in ~w(debug info notice warning error critical alert emergency) do
-    GenServer.call(client, {:request, "logging/setLevel", %{"level" => level}})
+    operation =
+      Operation.new(%{
+        method: "logging/setLevel",
+        params: %{"level" => level}
+      })
+
+    GenServer.call(client, {:operation, operation})
   end
 
   @doc """
@@ -496,7 +487,6 @@ defmodule Hermes.Client do
         client_info: opts.client_info,
         capabilities: opts.capabilities,
         protocol_version: opts.protocol_version,
-        request_timeout: opts.request_timeout,
         transport: transport
       })
 
@@ -506,24 +496,12 @@ defmodule Hermes.Client do
   end
 
   @impl true
-  def handle_call({:request, method, params}, from, state) do
-    with :ok <- State.validate_capability(state, method),
-         {request_id, updated_state} = State.add_request(state, method, params, from),
-         {:ok, request_data} <- encode_request(method, params, request_id),
-         :ok <- send_to_transport(state.transport, request_data) do
-      {:noreply, updated_state}
-    else
-      {:error, _reason} = err -> {:reply, err, state}
-    end
-  end
+  def handle_call({:operation, %Operation{} = operation}, from, state) do
+    params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
 
-  def handle_call({:request, method, params, progress_opts}, from, state) do
-    state = maybe_register_progress_callback(state, progress_opts)
-    params = maybe_add_progress_token(params, progress_opts)
-
-    with :ok <- State.validate_capability(state, method),
-         {request_id, updated_state} = State.add_request(state, method, params, from),
-         {:ok, request_data} <- encode_request(method, params, request_id),
+    with :ok <- State.validate_capability(state, operation.method),
+         {request_id, updated_state} = State.add_request_from_operation(state, operation, from),
+         {:ok, request_data} <- encode_request(operation.method, params_with_token, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
       {:noreply, updated_state}
     else
@@ -637,8 +615,14 @@ defmodule Hermes.Client do
       "clientInfo" => state.client_info
     }
 
+    operation =
+      Operation.new(%{
+        method: "initialize",
+        params: params
+      })
+
     {request_id, updated_state} =
-      State.add_request(state, "initialize", params, {self(), make_ref()})
+      State.add_request_from_operation(state, operation, {self(), make_ref()})
 
     with {:ok, request_data} <- encode_request("initialize", params, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
@@ -876,27 +860,6 @@ defmodule Hermes.Client do
 
       _ ->
         Logger.info(message)
-    end
-  end
-
-  defp maybe_register_progress_callback(state, progress_opts) do
-    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
-         {:ok, callback} when is_function(callback, 3) <- {:ok, Keyword.get(opts, :callback)},
-         {:ok, token} when not is_nil(token) <- {:ok, Keyword.get(opts, :token)} do
-      State.register_progress_callback(state, token, callback)
-    else
-      _ -> state
-    end
-  end
-
-  defp maybe_add_progress_token(params, progress_opts) do
-    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
-         {:ok, token} when not is_nil(token) and (is_binary(token) or is_integer(token)) <-
-           {:ok, Keyword.get(opts, :token)} do
-      meta = %{"progressToken" => token}
-      Map.put(params, "_meta", meta)
-    else
-      _ -> params
     end
   end
 
