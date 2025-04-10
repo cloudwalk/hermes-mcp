@@ -86,6 +86,8 @@ Client-specific errors follow the same error struct pattern with appropriate rea
   reason: :request_timeout,
   data: %{type: :client, message: "Request timed out after 30000ms"}
 }}
+
+> **Note:** Each client API call accepts a `:timeout` option which can be used to set a custom timeout for individual operations. The default timeout for all operations is 30 seconds.
 ```
 
 ## Handling Errors

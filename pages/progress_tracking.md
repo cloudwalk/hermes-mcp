@@ -21,7 +21,7 @@ progress_token = Hermes.MCP.ID.generate_progress_token()
 
 ## Making Requests with Progress Tracking
 
-Any request can include a progress token to indicate you want to track progress:
+Any client API request can include progress tracking options. Internally, these options are encapsulated in the `Operation` struct, which standardizes how client operations are handled:
 
 ```elixir
 # Make a request with progress tracking
@@ -29,6 +29,22 @@ Hermes.Client.read_resource(client, "resource-uri",
   progress: [token: progress_token]
 )
 ```
+
+### Internal Operation Structure
+
+Behind the scenes, client methods create an `Operation` struct that encapsulates the method, parameters, progress options, and timeout:
+
+```elixir
+# This is what happens internally in client methods
+operation = Operation.new(%{
+  method: "resources/read",
+  params: %{"uri" => uri},
+  progress_opts: [token: progress_token, callback: callback],
+  timeout: custom_timeout
+})
+```
+
+The `Operation` struct provides a standardized way to handle all client requests with consistent timeout and progress tracking behavior.
 
 ## Receiving Progress Updates
 

@@ -286,14 +286,33 @@ case Hermes.Client.get_prompt(MyApp.MCPClient, prompt_name, prompt_args) do
 end
 ```
 
+## Operation Structure
+
+All client API calls use the `Hermes.Client.Operation` struct internally to standardize how requests are processed. This provides consistent handling of parameters, timeouts, and progress tracking.
+
+```elixir
+# Example of direct Operation usage (advanced)
+operation = Hermes.Client.Operation.new(%{
+  method: "tools/call",
+  params: %{"name" => "calculator", "arguments" => %{"expression" => "2+2"}},
+  timeout: to_timeout(second: 60),
+  progress_opts: [token: "progress-123", callback: fn token, progress, total -> IO.puts("Progress: #{progress}/#{total || "unknown"}") end]
+})
+
+# Send operation directly (most users won't need this)
+GenServer.call(MyApp.MCPClient, {:operation, operation})
+```
+
 ## Timeouts and Cancellation
 
-You can specify custom timeouts for operations:
+You can specify custom timeouts for individual operations:
 
 ```elixir
 # Use a custom timeout (in milliseconds)
 Hermes.Client.call_tool(MyApp.MCPClient, "slow_tool", %{}, timeout: to_timeout(second: 60))
 ```
+
+Each client API call accepts a `:timeout` option which overrides the default operation timeout (30 seconds). This timeout is operation-specific and does not affect other client requests.
 
 ## Extended Capabilities
 
