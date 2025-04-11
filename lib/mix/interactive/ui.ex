@@ -94,6 +94,11 @@ defmodule Mix.Interactive.UI do
     Enum.each(items, fn item ->
       IO.puts("  #{@colors.command}#{item[key_field]}#{@colors.reset}")
       if Map.has_key?(item, "description"), do: IO.puts("    #{item["description"]}")
+
+      # Print schema for tools
+      if title == "tools" && Map.has_key?(item, "inputSchema") do
+        print_schema(item["inputSchema"])
+      end
     end)
 
     IO.puts("")
@@ -103,5 +108,31 @@ defmodule Mix.Interactive.UI do
     IO.puts("#{@colors.success}Found #{length(items)} #{title}#{@colors.reset}")
 
     IO.puts("")
+  end
+
+  # Prints a tool's input schema parameters in a readable format
+  defp print_schema(schema) when is_map(schema) do
+    if schema["type"] == "object" && Map.has_key?(schema, "properties") do
+      IO.puts("    #{@colors.info}Arguments:#{@colors.reset}")
+      print_properties(schema["properties"], Map.get(schema, "required", []))
+    end
+  end
+
+  defp print_schema(_), do: nil
+
+  # Prints individual properties from a schema with their type and description
+  defp print_properties(properties, required) when is_map(properties) do
+    Enum.each(properties, fn {prop_name, prop_schema} ->
+      print_property(prop_name, prop_schema, prop_name in required)
+    end)
+  end
+
+  defp print_property(name, schema, required) do
+    req_marker = if required, do: " (required)", else: ""
+    type = Map.get(schema, "type", "any")
+    description = Map.get(schema, "description", "")
+
+    IO.puts("      #{@colors.command}#{name}#{@colors.reset}#{req_marker}: #{type}")
+    if description != "", do: IO.puts("        #{description}")
   end
 end
