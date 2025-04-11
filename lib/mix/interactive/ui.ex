@@ -12,7 +12,6 @@ defmodule Mix.Interactive.UI do
   alias Hermes.MCP.Error
   alias IO.ANSI
 
-  # Color definitions for better UI
   @colors %{
     prompt: ANSI.bright() <> ANSI.cyan(),
     command: ANSI.green(),
@@ -35,7 +34,7 @@ defmodule Mix.Interactive.UI do
     """
     #{ANSI.bright()}#{ANSI.cyan()}
     ┌─────────────────────────────────────────┐
-    │       #{String.pad_trailing(title, 35)}│
+    │       #{String.pad_trailing(title, 34)}│
     └─────────────────────────────────────────┘
     #{ANSI.reset()}
     """
@@ -74,12 +73,10 @@ defmodule Mix.Interactive.UI do
   end
 
   defp format_error_message(%Error{reason: reason, data: data}) do
-    # For any other MCP error, format in a user-friendly way
     "#{reason} #{inspect(data, pretty: true)}"
   end
 
   defp format_error_message(other) do
-    # For anything else, just use inspect
     inspect(other, pretty: true)
   end
 
@@ -95,9 +92,18 @@ defmodule Mix.Interactive.UI do
       IO.puts("  #{@colors.command}#{item[key_field]}#{@colors.reset}")
       if Map.has_key?(item, "description"), do: IO.puts("    #{item["description"]}")
 
-      # Print schema for tools
-      if title == "tools" && Map.has_key?(item, "inputSchema") do
-        print_schema(item["inputSchema"])
+      cond do
+        title == "tools" && Map.has_key?(item, "inputSchema") ->
+          print_schema(item["inputSchema"])
+
+        title == "prompts" && Map.has_key?(item, "arguments") ->
+          print_prompt_arguments(item["arguments"])
+
+        title == "resources" ->
+          print_resource_details(item)
+
+        true ->
+          nil
       end
     end)
 
@@ -110,7 +116,6 @@ defmodule Mix.Interactive.UI do
     IO.puts("")
   end
 
-  # Prints a tool's input schema parameters in a readable format
   defp print_schema(schema) when is_map(schema) do
     if schema["type"] == "object" && Map.has_key?(schema, "properties") do
       IO.puts("    #{@colors.info}Arguments:#{@colors.reset}")
@@ -120,7 +125,6 @@ defmodule Mix.Interactive.UI do
 
   defp print_schema(_), do: nil
 
-  # Prints individual properties from a schema with their type and description
   defp print_properties(properties, required) when is_map(properties) do
     Enum.each(properties, fn {prop_name, prop_schema} ->
       print_property(prop_name, prop_schema, prop_name in required)
@@ -134,5 +138,30 @@ defmodule Mix.Interactive.UI do
 
     IO.puts("      #{@colors.command}#{name}#{@colors.reset}#{req_marker}: #{type}")
     if description != "", do: IO.puts("        #{description}")
+  end
+
+  defp print_prompt_arguments(arguments) when is_list(arguments) do
+    IO.puts("    #{@colors.info}Arguments:#{@colors.reset}")
+
+    Enum.each(arguments, fn arg ->
+      req_marker = if Map.get(arg, "required", false), do: " (required)", else: ""
+      name = Map.get(arg, "name", "")
+      description = Map.get(arg, "description", "")
+
+      IO.puts("      #{@colors.command}#{name}#{@colors.reset}#{req_marker}")
+      if description != "", do: IO.puts("        #{description}")
+    end)
+  end
+
+  defp print_prompt_arguments(_), do: nil
+
+  defp print_resource_details(resource) when is_map(resource) do
+    if Map.has_key?(resource, "mimeType") do
+      IO.puts("    #{@colors.info}Type:#{@colors.reset} #{resource["mimeType"]}")
+    end
+
+    if Map.has_key?(resource, "name") && resource["name"] != resource["uri"] do
+      IO.puts("    #{@colors.info}Name:#{@colors.reset} #{resource["name"]}")
+    end
   end
 end
