@@ -181,8 +181,8 @@ defmodule Hermes.Transport.SSE do
   @impl GenServer
   def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
     GenServer.cast(client, :initialize)
-    message_url = HermesURI.join_path(server_url, endpoint)
-    {:noreply, %{state | message_url: message_url}}
+    msg_url = URI.merge(URI.parse(server_url), endpoint)
+    {:noreply, %{state | message_url: to_string(msg_url)}}
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
