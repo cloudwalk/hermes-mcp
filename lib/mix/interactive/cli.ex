@@ -26,10 +26,15 @@ defmodule Mix.Interactive.CLI do
           base_path: :string,
           sse_path: :string,
           command: :string,
-          args: :string
+          args: :string,
+          verbose: :boolean
         ],
-        aliases: [t: :transport, c: :command]
+        aliases: [t: :transport, c: :command, v: :verbose]
       )
+
+    if opts[:verbose] do
+      System.put_env("HERMES_VERBOSE", "1")
+    end
 
     transport = opts[:transport] || "sse"
 
@@ -57,14 +62,12 @@ defmodule Mix.Interactive.CLI do
   end
 
   defp run_sse_interactive(opts) do
-    # Disable logger output to keep the UI clean
     Logger.configure(level: :error)
 
     server_options = Keyword.put_new(opts, :base_url, "http://localhost:8000")
     server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
 
-    header = UI.header("HERMES MCP SSE INTERACTIVE")
-    IO.puts(header)
+    IO.puts(UI.header("HERMES MCP SSE INTERACTIVE"))
 
     children = [
       {SSE, client: :sse_test, server: server_options},
@@ -77,7 +80,7 @@ defmodule Mix.Interactive.CLI do
        }}
     ]
 
-    {:ok, sup} = Supervisor.start_link(children, strategy: :one_for_all)
+    Supervisor.start_link(children, strategy: :one_for_all)
 
     sse = Process.whereis(SSE)
     IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
@@ -90,19 +93,15 @@ defmodule Mix.Interactive.CLI do
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
-
-    {:ok, sup}
   end
 
   defp run_stdio_interactive(opts) do
-    # Disable logger output to keep the UI clean
     Logger.configure(level: :error)
 
     cmd = opts[:command] || "mcp"
     args = String.split(opts[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
-    header = UI.header("HERMES MCP STDIO INTERACTIVE")
-    IO.puts(header)
+    IO.puts(UI.header("HERMES MCP STDIO INTERACTIVE"))
     IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
@@ -206,6 +205,7 @@ defmodule Mix.Interactive.CLI do
     #{colors.info}OPTIONS:#{colors.reset}
       #{colors.command}-h, --help#{colors.reset}             Show this help message and exit
       #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|stdio) [default: sse]
+      #{colors.command}-v, --verbose#{colors.reset}          Enable verbose output and detailed error information
       
     #{colors.info}SSE TRANSPORT OPTIONS:#{colors.reset}
       #{colors.command}--base-url URL#{colors.reset}         Base URL for SSE server [default: http://localhost:8000]

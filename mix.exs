@@ -105,6 +105,7 @@ defmodule Hermes.MixProject do
         "pages/logging.md",
         "pages/error_handling.md",
         "pages/protocol_upgrade_2025_03_26.md",
+        "pages/cli_usage.md",
         "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
@@ -120,7 +121,8 @@ defmodule Hermes.MixProject do
           "pages/message_handling.md",
           "pages/error_handling.md",
           "pages/progress_tracking.md",
-          "pages/logging.md"
+          "pages/logging.md",
+          "pages/cli_usage.md"
         ],
         References: [
           "pages/rfc.md",
