@@ -19,7 +19,6 @@ defmodule Hermes.Transport.SSE do
   alias Hermes.SSE
   alias Hermes.SSE.Event
   alias Hermes.Transport.Behaviour, as: Transport
-  alias Hermes.URI, as: HermesURI
 
   require Logger
 
@@ -98,8 +97,8 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def init(%{} = opts) do
-    server_url = make_server_url(opts.server)
-    sse_url = HermesURI.join_path(server_url, opts.server[:sse_path])
+    server_url = URI.append_path(opts.server[:base_url], opts.server[:base_path])
+    sse_url = URI.append_path(server_url, opts.server[:sse_path])
 
     state =
       opts
@@ -180,9 +179,14 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
-    GenServer.cast(client, :initialize)
-    msg_url = URI.merge(URI.parse(server_url), endpoint)
-    {:noreply, %{state | message_url: to_string(msg_url)}}
+    case URI.new(endpoint) do
+      {:ok, endpoint} ->
+        GenServer.cast(client, :initialize)
+        {:noreply, %{state | message_url: parse_message_url(URI.parse(server_url), endpoint)}}
+
+      {:error, _} = err ->
+        {:stop, err, state}
+    end
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
@@ -223,7 +227,24 @@ defmodule Hermes.Transport.SSE do
     )
   end
 
-  defp make_server_url(server_opts) do
-    HermesURI.join_path(server_opts[:base_url], server_opts[:base_path])
+  # tries to handle multiple possibles formats for message_url URI
+  # https://github.com/cloudwalk/hermes-mcp/pull/60#issuecomment-2806309443
+  defp parse_message_url(%{path: base_path} = base, %{scheme: nil, path: path} = uri)
+       when is_binary(base_path) and is_binary(path) do
+    if path =~ base_path do
+      base
+      |> URI.merge(uri)
+      |> URI.to_string()
+    else
+      base
+      |> URI.append_path(URI.to_string(uri))
+      |> URI.to_string()
+    end
+  end
+
+  defp parse_message_url(base, uri) do
+    base
+    |> URI.merge(uri)
+    |> URI.to_string()
   end
 end

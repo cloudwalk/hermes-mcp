@@ -329,40 +329,22 @@ defmodule Hermes.Transport.SSETest do
   describe "handling headers and options" do
     test "passes custom headers to requests", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
-
-      # Start a stub client for this test
       {:ok, stub_client} = StubClient.start_link()
 
-      # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
-        # Headers specific to SSE are expected by default, so custom headers must be used in addition to them
         assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
-        # "accept" header will be overridden by SSE module's default "text/event-stream"
-
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
-
-        # Send an endpoint event
-        {:ok, conn} =
-          Plug.Conn.chunk(conn, """
-          event: endpoint
-          data: /messages/123
-
-          """)
-
+        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
         conn
       end)
 
-      # Set up the POST endpoint
       Bypass.expect(bypass, "POST", "/messages/123", fn conn ->
-        # POST requests should preserve custom headers
         assert "application/json" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
         assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
-
         Plug.Conn.resp(conn, 200, "")
       end)
 
-      # Start the SSE transport with custom headers
       {:ok, transport} =
         SSE.start_link(
           client: stub_client,
@@ -377,17 +359,117 @@ defmodule Hermes.Transport.SSETest do
           transport_opts: @test_http_opts
         )
 
-      # Wait for the transport to connect and process the endpoint event
       Process.sleep(200)
 
-      # Verify the transport has set the message URL
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
-
-      # Send a message
       assert :ok = SSE.send_message(transport, "test message")
 
-      # Clean up
+      SSE.shutdown(transport)
+      StubClient.clear_messages()
+    end
+  end
+
+  describe "handling endpoint URLs" do
+    test "properly handles relative endpoint URLs", %{bypass: bypass} do
+      server_url = "http://localhost:#{bypass.port}/mcp"
+      {:ok, stub_client} = StubClient.start_link()
+
+      Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
+        conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
+        conn = Plug.Conn.send_chunked(conn, 200)
+        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
+        conn
+      end)
+
+      Bypass.expect(bypass, "POST", "/mcp/messages/123", fn conn ->
+        Plug.Conn.resp(conn, 200, "")
+      end)
+
+      {:ok, transport} =
+        SSE.start_link(
+          client: stub_client,
+          server: %{
+            base_url: server_url,
+            sse_path: "/sse"
+          },
+          transport_opts: @test_http_opts
+        )
+
+      Process.sleep(200)
+
+      transport_state = :sys.get_state(transport)
+      assert transport_state.message_url == "#{server_url}/messages/123"
+      assert :ok = SSE.send_message(transport, "test message")
+
+      SSE.shutdown(transport)
+      StubClient.clear_messages()
+    end
+
+    test "properly handles absolute endpoint URLs", %{bypass: bypass} do
+      server_url = "http://localhost:#{bypass.port}/mcp"
+      absolute_endpoint = "http://api.example.com/messages/session-123"
+      {:ok, stub_client} = StubClient.start_link()
+
+      Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
+        conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
+        conn = Plug.Conn.send_chunked(conn, 200)
+        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: #{absolute_endpoint}\n\n")
+        conn
+      end)
+
+      {:ok, transport} =
+        SSE.start_link(
+          client: stub_client,
+          server: %{
+            base_url: server_url,
+            sse_path: "/sse"
+          },
+          transport_opts: @test_http_opts
+        )
+
+      Process.sleep(200)
+
+      transport_state = :sys.get_state(transport)
+      assert transport_state.message_url == absolute_endpoint
+
+      SSE.shutdown(transport)
+      StubClient.clear_messages()
+    end
+
+    test "handles path duplication from MCP servers", %{bypass: bypass} do
+      server_url = "http://localhost:#{bypass.port}/mcp"
+      duplicate_path = "/mcp/messages/123"
+      {:ok, stub_client} = StubClient.start_link()
+
+      Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
+        conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
+        conn = Plug.Conn.send_chunked(conn, 200)
+        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: #{duplicate_path}\n\n")
+        conn
+      end)
+
+      Bypass.expect(bypass, "POST", "/mcp/messages/123", fn conn ->
+        Plug.Conn.resp(conn, 200, "")
+      end)
+
+      {:ok, transport} =
+        SSE.start_link(
+          client: stub_client,
+          server: %{
+            base_url: server_url,
+            sse_path: "/sse"
+          },
+          transport_opts: @test_http_opts
+        )
+
+      Process.sleep(200)
+
+      transport_state = :sys.get_state(transport)
+      assert transport_state.message_url == "#{server_url}/messages/123"
+      assert not String.contains?(transport_state.message_url, "/mcp/mcp/")
+      assert :ok = SSE.send_message(transport, "test message")
+
       SSE.shutdown(transport)
       StubClient.clear_messages()
     end
