@@ -340,41 +340,68 @@ defmodule Hermes.ClientTest do
       assert response.is_error == false
     end
 
-    test "call_tool sends correct request", %{client: client} do
+    test "call_tool times out with short genserver_timeout", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/call"
-        assert decoded["params"] == %{"name" => "test_tool", "arguments" => %{"arg1" => "value1"}}
+        assert decoded["params"] == %{"name" => "test_tool"}
+        # Simulate slow response
+        Process.sleep(200)
+        :ok
+      end)
+
+      Process.flag(:trap_exit, true)
+
+      {pid, ref} =
+        spawn_monitor(fn ->
+          Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 100)
+        end)
+
+      # Wait for the process to die from timeout
+      assert_receive {:DOWN, ^ref, :process, ^pid, _}, 300
+    end
+
+    test "call_tool succeeds with sufficient genserver_timeout", %{client: client} do
+      # We need the request_id *before* the transport mock sleeps
+      test_pid = self()
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "tools/call"
+        assert decoded["params"] == %{"name" => "test_tool"}
+        send(test_pid, {:request_id, decoded["id"]})
+        # Return immediately, don't block the GenServer
         :ok
       end)
 
       task =
-        Task.async(fn -> Hermes.Client.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
+        Task.async(fn ->
+          Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 7_000)
+        end)
 
-      Process.sleep(50)
+      # Wait for the request_id to be sent from the mock
+      request_id =
+        receive do
+          {:request_id, req_id} -> req_id
+        after
+          1000 -> flunk("Did not receive request_id within 1 second")
+        end
 
-      assert request_id = get_request_id(client, "tools/call")
+      # Sleep to simulate delay before sending response
+      # This should NOT cause a timeout since genserver_timeout is 7000ms
+      Process.sleep(6000)
 
       response = %{
         "id" => request_id,
         "jsonrpc" => "2.0",
-        "result" => %{
-          "content" => [%{"type" => "text", "text" => "Tool result"}],
-          "isError" => false
-        }
+        "result" => %{"status" => "success"}
       }
 
       send_response(client, response)
 
-      expected_result = %{
-        "content" => [%{"type" => "text", "text" => "Tool result"}],
-        "isError" => false
-      }
-
-      assert {:ok, response} = Task.await(task)
+      assert {:ok, response} = Task.await(task, 8000)
       assert %Response{} = response
-      assert response.result == expected_result
-      assert response.is_error == false
+      assert response.result == %{"status" => "success"}
     end
 
     test "handles domain error responses as {:ok, response}", %{client: client} do
