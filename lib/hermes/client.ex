@@ -19,12 +19,12 @@ defmodule Hermes.Client do
   alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.Client.State
+  alias Hermes.Logging
   alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
 
   require Hermes.MCP.Message
-  require Logger
 
   @default_protocol_version "2024-11-05"
 
@@ -508,7 +508,19 @@ defmodule Hermes.Client do
         transport: transport
       })
 
-    Logger.metadata(mcp_client: opts.name, mcp_transport: opts.transport)
+    # Set up logging context
+    client_name = get_in(opts, [:client_info, "name"])
+
+    Hermes.Logging.context(
+      mcp_client: opts.name,
+      mcp_client_name: client_name,
+      mcp_transport: opts.transport
+    )
+
+    Hermes.Logging.client_event("initializing", %{
+      protocol_version: opts.protocol_version,
+      capabilities: opts.capabilities
+    })
 
     {:ok, state, :hibernate}
   end
@@ -625,7 +637,7 @@ defmodule Hermes.Client do
   end
 
   def handle_cast(:initialize, state) do
-    Logger.debug("Making initial client <> server handshake")
+    Logging.client_event("handshake", "Making initial client <> server handshake")
 
     params = %{
       "protocolVersion" => state.protocol_version,
@@ -651,7 +663,7 @@ defmodule Hermes.Client do
   rescue
     e ->
       err = Exception.format(:error, e, __STACKTRACE__)
-      Logger.error("Failed to initialize client: #{err}")
+      Logging.client_event("initialization_failed", %{error: err})
       {:stop, :unexpected, state}
   end
 
@@ -659,26 +671,42 @@ defmodule Hermes.Client do
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
-        Logger.debug("Received server error response: #{inspect(error)}")
+        Hermes.Logging.message("incoming", "error", error["id"], error)
         {:noreply, handle_error_response(error, error["id"], state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        Logger.debug("Received server response: #{response["id"]}")
+        Hermes.Logging.message("incoming", "response", response["id"], response)
         {:noreply, handle_success_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
-        method = notification["method"]
-        Logger.debug("Received server notification: #{method}")
+        Hermes.Logging.message("incoming", "notification", nil, notification)
         {:noreply, handle_notification(notification, state)}
 
       {:error, error} ->
-        Logger.error("Failed to decode response: #{inspect(error)}")
+        Logging.client_event(
+          "decode_failed",
+          %{
+            error: error,
+            message_sample: String.slice(response_data, 0, 200)
+          },
+          level: :warning
+        )
+
         {:noreply, state}
     end
   rescue
     e ->
       err = Exception.format(:error, e, __STACKTRACE__)
-      Logger.error("Failed to handle response: #{err}")
+
+      Logging.client_event(
+        "response_handling_failed",
+        %{
+          error: err,
+          response_sample: String.slice(response_data, 0, 200)
+        },
+        level: :error
+      )
+
       {:noreply, state}
   end
 
@@ -707,12 +735,17 @@ defmodule Hermes.Client do
 
   @impl true
   def terminate(reason, %{client_info: %{"name" => name}} = state) do
-    Logger.warning("Terminating #{name} MCP client with #{inspect(reason)}, closing transport")
+    Logging.client_event("terminating", %{
+      name: name,
+      reason: reason
+    })
 
     pending_requests = State.list_pending_requests(state)
 
     if length(pending_requests) > 0 do
-      Logger.warning("Closing client with #{length(pending_requests)} pending requests")
+      Logging.client_event("pending_requests", %{
+        count: length(pending_requests)
+      })
     end
 
     for request <- pending_requests do
@@ -730,16 +763,27 @@ defmodule Hermes.Client do
   defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        Logger.warning("Received error response for unknown request ID: #{id}")
+        error_code = json_error["code"]
+        error_msg = json_error["message"]
+
+        Logging.client_event("unknown_error_response", %{
+          id: id,
+          code: error_code,
+          message: error_msg,
+          pending_ids: state.pending_requests |> Map.keys() |> Enum.join(", ")
+        })
+
         state
 
       {request, updated_state} ->
-        # Convert JSON-RPC error to our domain error
         error = Error.from_json_rpc(json_error)
 
-        # Unblock original caller with error
-        GenServer.reply(request.from, {:error, error})
+        Logging.client_event("error_response", %{
+          id: id,
+          method: request.method
+        })
 
+        GenServer.reply(request.from, {:error, error})
         updated_state
     end
   end
@@ -758,7 +802,10 @@ defmodule Hermes.Client do
             result["serverInfo"]
           )
 
-        Logger.info("Initialized successfully, notifying server")
+        Logging.client_event("initialized", %{
+          server_info: result["serverInfo"],
+          capabilities: result["capabilities"]
+        })
 
         # Confirm to the server the handshake is complete
         :ok = send_notification(updated_state, "notifications/initialized")
@@ -770,12 +817,34 @@ defmodule Hermes.Client do
   defp handle_success_response(%{"id" => id, "result" => result}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        Logger.warning("Received response for unknown request ID: #{id}")
+        result_summary =
+          case result do
+            %{} -> "fields: #{Enum.join(Map.keys(result), ", ")}"
+            _ -> "type: #{inspect(result)}"
+          end
+
+        Logging.client_event("unknown_response", %{
+          id: id,
+          result_summary: result_summary,
+          pending_ids: state.pending_requests |> Map.keys() |> Enum.join(", ")
+        })
+
         state
 
       {request, updated_state} ->
-        # Convert to our domain response
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
+
+        result_summary =
+          case result do
+            %{} -> "with #{map_size(result)} fields"
+            _ -> ""
+          end
+
+        Logging.client_event("success_response", %{
+          id: id,
+          method: request.method,
+          result_summary: result_summary
+        })
 
         if request.method == "ping" do
           GenServer.reply(request.from, :pong)
@@ -788,7 +857,7 @@ defmodule Hermes.Client do
   end
 
   defp handle_success_response(%{"id" => id}, _id, state) do
-    Logger.warning("Received malformed response for request ID: #{id}")
+    Logging.client_event("malformed_response", %{id: id})
     state
   end
 
@@ -815,7 +884,10 @@ defmodule Hermes.Client do
     {request, updated_state} = State.remove_request(state, request_id)
 
     if request do
-      Logger.info("Request #{request_id} cancelled by server: #{reason}")
+      Logging.client_event("request_cancelled", %{
+        id: request_id,
+        reason: reason
+      })
 
       error =
         Error.client_error(:request_cancelled, %{
@@ -859,35 +931,30 @@ defmodule Hermes.Client do
   end
 
   defp log_to_logger(level, data, logger) do
-    prefix = if logger, do: "[#{logger}] ", else: ""
-    message = "#{prefix}#{inspect(data)}"
-
     # Map MCP log levels to Elixir Logger levels
-    case level do
-      level when level in ["debug"] ->
-        Logger.debug(message)
+    elixir_level =
+      case level do
+        level when level in ["debug"] -> :debug
+        level when level in ["info", "notice"] -> :info
+        level when level in ["warning"] -> :warning
+        level when level in ["error", "critical", "alert", "emergency"] -> :error
+        _ -> :info
+      end
 
-      level when level in ["info", "notice"] ->
-        Logger.info(message)
-
-      level when level in ["warning"] ->
-        Logger.warning(message)
-
-      level when level in ["error", "critical", "alert", "emergency"] ->
-        Logger.error(message)
-
-      _ ->
-        Logger.info(message)
-    end
+    Logging.client_event("server_log", %{level: level, data: data, logger: logger}, level: elixir_level)
   end
 
   # Helper functions
   defp encode_request(method, params, request_id) do
-    Message.encode_request(%{"method" => method, "params" => params}, request_id)
+    request = %{"method" => method, "params" => params}
+    Hermes.Logging.message("outgoing", "request", request_id, request)
+    Message.encode_request(request, request_id)
   end
 
   defp encode_notification(method, params) do
-    Message.encode_notification(%{"method" => method, "params" => params})
+    notification = %{"method" => method, "params" => params}
+    Hermes.Logging.message("outgoing", "notification", nil, notification)
+    Message.encode_notification(notification)
   end
 
   defp send_cancellation(state, request_id, reason) do

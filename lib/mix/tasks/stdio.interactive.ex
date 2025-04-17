@@ -19,17 +19,25 @@ defmodule Mix.Tasks.Hermes.Stdio.Interactive do
 
   @switches [
     command: :string,
-    args: :string
+    args: :string,
+    verbose: :count
   ]
 
   def run(args) do
     # Start required applications without requiring a project
     Application.ensure_all_started(:hermes_mcp)
 
-    # Disable logger output to keep the UI clean
-    Logger.configure(level: :error)
+    # Parse arguments and set log level
+    {parsed, _} =
+      OptionParser.parse!(args,
+        strict: @switches,
+        aliases: [c: :command, v: :verbose]
+      )
 
-    {parsed, _} = OptionParser.parse!(args, strict: @switches, aliases: [c: :command])
+    verbose_count = parsed[:verbose] || 0
+    log_level = get_log_level(verbose_count)
+    configure_logger(log_level)
+
     cmd = parsed[:command] || "mcp"
     args = String.split(parsed[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
@@ -74,5 +82,21 @@ defmodule Mix.Tasks.Hermes.Stdio.Interactive do
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
+  end
+
+  # Helper functions
+  defp get_log_level(count) do
+    case count do
+      0 -> :error
+      1 -> :warning
+      2 -> :info
+      _ -> :debug
+    end
+  end
+
+  defp configure_logger(log_level) do
+    metadata = Logger.metadata()
+    Logger.configure(level: log_level)
+    Logger.metadata(metadata)
   end
 end

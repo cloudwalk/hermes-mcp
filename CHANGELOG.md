@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.11](https://github.com/cloudwalk/hermes-mcp) - 2025-04-17
+
+### Added
+- Improved core library logging and added verbosity level on interactive/CLI (#68)
+
 ## [0.3.10](https://github.com/cloudwalk/hermes-mcp) - 2025-04-17
 
 ### Fixed

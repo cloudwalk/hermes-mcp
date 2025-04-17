@@ -16,11 +16,10 @@ defmodule Hermes.Transport.SSE do
   import Peri
 
   alias Hermes.HTTP
+  alias Hermes.Logging
   alias Hermes.SSE
   alias Hermes.SSE.Event
   alias Hermes.Transport.Behaviour, as: Transport
-
-  require Logger
 
   @type t :: GenServer.server()
 
@@ -116,7 +115,7 @@ defmodule Hermes.Transport.SSE do
 
     task =
       Task.async(fn ->
-        Logger.metadata(parent_metadata)
+        Logging.context(parent_metadata)
 
         stream =
           SSE.connect(state.sse_url, state.headers,
@@ -138,24 +137,24 @@ defmodule Hermes.Transport.SSE do
   end
 
   defp handle_sse_event({:error, :halted}, pid) do
-    Logger.debug("Received halt notification from SSE streaming, transport will be restarted")
+    Hermes.Logging.transport_event("sse_halted", "Transport will be restarted")
     shutdown(pid)
   end
 
   defp handle_sse_event(%Event{event: "endpoint", data: endpoint}, pid) do
-    Logger.debug("Received endpoint event from server")
+    Hermes.Logging.transport_event("endpoint", endpoint)
     send(pid, {:endpoint, endpoint})
   end
 
   defp handle_sse_event(%Event{event: "message", data: data}, pid) do
-    Logger.debug("Received message event from server")
+    Hermes.Logging.transport_event("message", data)
     send(pid, {:message, data})
   end
 
   # coming from fast-mcp ruby
   # https://github.com/yjacquin/fast-mcp/issues/38
-  defp handle_sse_event(%Event{event: "ping"}, _) do
-    Logger.debug("Received SSE ping event from server")
+  defp handle_sse_event(%Event{event: "ping", data: data}, _) do
+    Hermes.Logging.transport_event("ping", data)
   end
 
   defp handle_sse_event(%Event{event: "reconnect", data: data}, _pid) do
@@ -165,11 +164,11 @@ defmodule Hermes.Transport.SSE do
         _ -> "unknown"
       end
 
-    Logger.debug("Received SSE reconnect event from server: #{reason}, connection will be refreshed")
+    Hermes.Logging.transport_event("reconnect", %{reason: reason, data: data})
   end
 
   defp handle_sse_event(event, _pid) do
-    Logger.warning("Unhandled SSE event from stream: #{inspect(event)}")
+    Hermes.Logging.transport_event("unknown", event, level: :warning)
   end
 
   @impl GenServer
@@ -185,7 +184,7 @@ defmodule Hermes.Transport.SSE do
         {:reply, :ok, state}
 
       {:ok, %Finch.Response{status: status, body: body}} ->
-        Logger.error("HTTP error: #{status}, #{body}")
+        Logging.transport_event("http_error", %{status: status, body: body}, level: :error)
         {:reply, {:error, {:http_error, status, body}}, state}
 
       {:error, reason} ->
@@ -211,12 +210,12 @@ defmodule Hermes.Transport.SSE do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{stream_task: %Task{pid: pid}} = state) do
-    Logger.error("SSE stream task terminated: #{inspect(reason)}")
+    Logging.transport_event("stream_terminated", %{reason: reason}, level: :error)
     {:stop, {:stream_terminated, reason}, state}
   end
 
   def handle_info(msg, state) do
-    Logger.debug("Unexpected genserver message: #{inspect(msg)}")
+    Logging.transport_event("unexpected_message", %{message: msg})
     {:noreply, state}
   end
 
