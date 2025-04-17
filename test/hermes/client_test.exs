@@ -345,14 +345,17 @@ defmodule Hermes.ClientTest do
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/call"
         assert decoded["params"] == %{"name" => "test_tool"}
-        Process.sleep(200) # Simulate slow response
+        # Simulate slow response
+        Process.sleep(200)
         :ok
       end)
 
       Process.flag(:trap_exit, true)
-      {pid, ref} = spawn_monitor(fn ->
-        Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 100)
-      end)
+
+      {pid, ref} =
+        spawn_monitor(fn ->
+          Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 100)
+        end)
 
       # Wait for the process to die from timeout
       assert_receive {:DOWN, ^ref, :process, ^pid, _}, 300
@@ -371,9 +374,10 @@ defmodule Hermes.ClientTest do
         :ok
       end)
 
-      task = Task.async(fn ->
-        Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 7_000)
-      end)
+      task =
+        Task.async(fn ->
+          Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 7_000)
+        end)
 
       # Wait for the request_id to be sent from the mock
       request_id =
