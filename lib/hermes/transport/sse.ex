@@ -152,9 +152,10 @@ defmodule Hermes.Transport.SSE do
     send(pid, {:message, data})
   end
 
+  # coming from fast-mcp ruby
+  # https://github.com/yjacquin/fast-mcp/issues/38
   defp handle_sse_event(%Event{event: "ping", data: data}, pid) do
     Logger.debug("Received SSE ping event from server")
-    send(pid, {:message, data})
   end
 
   defp handle_sse_event(%Event{event: "reconnect", data: data}, _pid) do
