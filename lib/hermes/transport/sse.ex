@@ -152,6 +152,21 @@ defmodule Hermes.Transport.SSE do
     send(pid, {:message, data})
   end
 
+  defp handle_sse_event(%Event{event: "ping", data: data}, pid) do
+    Logger.debug("Received SSE ping event from server")
+    send(pid, {:message, data})
+  end
+
+  defp handle_sse_event(%Event{event: "reconnect", data: data}, _pid) do
+    reason =
+      case JSON.decode(data) do
+        {:ok, %{"reason" => reason}} -> reason
+        _ -> "unknown"
+      end
+
+    Logger.debug("Received SSE reconnect event from server: #{reason}, connection will be refreshed")
+  end
+
   defp handle_sse_event(event, _pid) do
     Logger.warning("Unhandled SSE event from stream: #{inspect(event)}")
   end

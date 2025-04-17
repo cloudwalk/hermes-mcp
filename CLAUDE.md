@@ -24,7 +24,7 @@ mix format
 mix credo --strict
 
 # Type checking
-mix dialyxir
+mix dialyzer
 
 # Generate documentation
 mix docs
