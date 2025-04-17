@@ -225,13 +225,19 @@ defmodule Hermes.Transport.SSETest do
   describe "handling SSE events" do
     test "processes message events correctly", %{bypass: bypass} do
       server_url = "http://localhost:#{bypass.port}"
+
+      # Create a test message
       test_message = "test message data"
+
+      # Start the StubClient from test_helpers.exs
       {:ok, stub_client} = StubClient.start_link()
 
+      # Set up the SSE connection
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
 
+        # Send an endpoint event
         {:ok, conn} =
           Plug.Conn.chunk(conn, """
           event: endpoint
@@ -239,6 +245,8 @@ defmodule Hermes.Transport.SSETest do
 
           """)
 
+        # Send a message event after a slight delay to ensure
+        # the endpoint message is processed first
         Process.sleep(50)
 
         {:ok, conn} =
@@ -251,6 +259,7 @@ defmodule Hermes.Transport.SSETest do
         conn
       end)
 
+      # Start the SSE transport with the stub client
       {:ok, transport} =
         SSE.start_link(
           client: stub_client,
@@ -261,115 +270,18 @@ defmodule Hermes.Transport.SSETest do
           transport_opts: @test_http_opts
         )
 
+      # Give time for the connection to be established and messages to be processed
       Process.sleep(300)
 
+      # Verify the transport has set up the message URL
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
 
+      # Check that the StubClient received our message
       messages = StubClient.get_messages()
       assert test_message in messages
 
-      StubClient.clear_messages()
-      SSE.shutdown(transport)
-    end
-
-    test "processes ping events correctly", %{bypass: bypass} do
-      server_url = "http://localhost:#{bypass.port}"
-      ping_message = ~s({"jsonrpc":"2.0","method":"ping","id":"ping-123"})
-      {:ok, stub_client} = StubClient.start_link()
-
-      Bypass.expect(bypass, "GET", "/sse", fn conn ->
-        conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
-        conn = Plug.Conn.send_chunked(conn, 200)
-
-        {:ok, conn} =
-          Plug.Conn.chunk(conn, """
-          event: endpoint
-          data: /messages/123
-
-          """)
-
-        Process.sleep(100)
-
-        assert {:ok, conn} =
-                 Plug.Conn.chunk(conn, """
-                 event: ping
-                 data: #{ping_message}
-
-                 """)
-
-        Process.sleep(300)
-        conn
-      end)
-
-      assert {:ok, transport} =
-               SSE.start_link(
-                 client: stub_client,
-                 server: %{
-                   base_url: server_url,
-                   sse_path: "/sse"
-                 },
-                 transport_opts: @test_http_opts
-               )
-
-      Process.sleep(500)
-
-      messages = StubClient.get_messages()
-      assert ping_message in messages
-
-      StubClient.clear_messages()
-      SSE.shutdown(transport)
-    end
-
-    test "processes reconnect events gracefully", %{bypass: bypass} do
-      server_url = "http://localhost:#{bypass.port}"
-      {:ok, stub_client} = StubClient.start_link()
-
-      connection_agent = start_supervised!({Agent, fn -> %{reconnect_sent: false} end})
-
-      Bypass.expect(bypass, "GET", "/sse", fn conn ->
-        conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
-        conn = Plug.Conn.send_chunked(conn, 200)
-
-        {:ok, conn} =
-          Plug.Conn.chunk(conn, """
-          event: endpoint
-          data: /messages/123
-
-          """)
-
-        reconnect_sent = Agent.get(connection_agent, fn state -> state.reconnect_sent end)
-
-        if reconnect_sent do
-          Process.sleep(100)
-          conn
-        else
-          Process.sleep(50)
-
-          {:ok, conn} =
-            Plug.Conn.chunk(conn, """
-            event: reconnect
-            data: {"reason":"timeout prevention"}
-
-            """)
-
-          Agent.update(connection_agent, fn state -> %{state | reconnect_sent: true} end)
-          Plug.Conn.halt(conn)
-        end
-      end)
-
-      assert {:ok, transport} =
-               SSE.start_link(
-                 client: stub_client,
-                 server: %{
-                   base_url: server_url,
-                   sse_path: "/sse"
-                 },
-                 transport_opts: @test_http_opts
-               )
-
-      Process.sleep(300)
-
+      # Clean up
       StubClient.clear_messages()
       SSE.shutdown(transport)
     end

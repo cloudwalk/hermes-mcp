@@ -497,8 +497,7 @@ defmodule Hermes.Client do
 
   @impl true
   def handle_call({:operation, %Operation{} = operation}, from, state) do
-    params_with_token =
-      State.add_progress_token_to_params(operation.params, operation.progress_opts)
+    params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
 
     with :ok <- State.validate_capability(state, operation.method),
          {request_id, updated_state} = State.add_request_from_operation(state, operation, from),
@@ -641,10 +640,6 @@ defmodule Hermes.Client do
   @impl true
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
-      {:ok, [request]} when Message.is_request(request) ->
-        Logger.debug("Received server #{inspect(request["method"])} request")
-        {:noreply, handle_server_request(request, request["id"], state)}
-
       {:ok, [error]} when Message.is_error(error) ->
         Logger.debug("Received server error response: #{inspect(error)}")
         {:noreply, handle_error_response(error, error["id"], state)}
@@ -713,18 +708,6 @@ defmodule Hermes.Client do
   end
 
   # Response handling
-  defp handle_server_request(%{"method" => "ping", "id" => id}, id, state) do
-    with {:ok, data} <- Message.encode_response(%{"result" => %{}}, id),
-         :ok <- send_to_transport(state.transport, data) do
-      state
-    end
-  end
-
-  defp handle_server_request(%{"method" => method, "id" => id} = req, id, state) do
-    params = inspect(req["params"], pretty: true)
-    Logger.warning("Received unhandled server request #{id}: #{method} with #{params}")
-    state
-  end
 
   defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
     case State.remove_request(state, id) do
