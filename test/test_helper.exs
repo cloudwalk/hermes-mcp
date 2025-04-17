@@ -14,7 +14,29 @@ defmodule Hermes.MockTransportImpl do
   def shutdown(_), do: :ok
 end
 
+defmodule Hermes.SlowMockTransportImpl do
+  @moduledoc """
+  A mock transport implementation that simulates a transport which is slower than the default
+  gen server timeout (5s)
+  """
+  @behaviour Hermes.Transport
+
+  @impl true
+  def send_message(_pid, message) do
+    # Simulate a slow transport by sleeping
+    Process.sleep(6_000)
+    :ok
+  end
+
+  @impl true
+  def shutdown(_pid) do
+    :ok
+  end
+end
+
+
 Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)
+Mox.defmock(Hermes.SlowMockTransport, for: Hermes.Transport.Behaviour)
 
 defmodule StubClient do
   @moduledoc false

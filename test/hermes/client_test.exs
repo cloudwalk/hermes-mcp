@@ -17,6 +17,7 @@ defmodule Hermes.ClientTest do
 
   setup do
     Mox.stub_with(Hermes.MockTransport, Hermes.MockTransportImpl)
+    Mox.stub_with(Hermes.SlowMockTransport, Hermes.SlowMockTransportImpl)
 
     :ok
   end
@@ -1144,6 +1145,48 @@ defmodule Hermes.ClientTest do
       operation = Operation.new(%{method: "resources/list"})
 
       assert_receive {:EXIT, ^pid, {:normal, {GenServer, :call, [_, {:operation, ^operation}, _]}}}
+    end
+  end
+
+  describe "slow client operations" do
+    setup do
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: [layer: Hermes.SlowMockTransport, name: Hermes.SlowMockTransportImpl],
+           client_info: %{"name" => "SlowTestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.SlowMockTransport, self(), client)
+
+      %{client: client}
+    end
+
+    test "call_tool with slow transport succeeds with longer timeout", %{client: client} do
+      # First try with default timeout - should fail
+      assert {:error, %Error{code: :request_timeout}} =
+        Hermes.Client.call_tool(client, "test_tool")
+
+      # Now try with longer timeout - should work
+      task = Task.async(fn ->
+        Hermes.Client.call_tool(client, "test_tool", nil, genserver_timeout: 10_000)
+      end)
+
+      Process.sleep(50)
+      assert request_id = get_request_id(client, "tools/call")
+
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{"status" => "success"}
+      }
+
+      send_response(client, response)
+
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == %{"status" => "success"}
     end
   end
 
