@@ -149,13 +149,25 @@ defmodule Hermes.Transport.SSE do
 
   defp handle_sse_event(%Event{event: "message", data: data}, pid) do
     Logger.debug("Received message event from server")
+
+    if String.length(data) < 500 do
+      Logger.debug("Message data: #{data}")
+    else
+      Logger.debug("Message data (truncated): #{String.slice(data, 0, 100)}...")
+    end
+
     send(pid, {:message, data})
   end
 
   # coming from fast-mcp ruby
   # https://github.com/yjacquin/fast-mcp/issues/38
-  defp handle_sse_event(%Event{event: "ping"}, _) do
+  defp handle_sse_event(%Event{event: "ping", data: data}, _) do
     Logger.debug("Received SSE ping event from server")
+    Logger.debug("Ping event data: #{data}")
+  end
+
+  defp handle_sse_event(%Event{event: "ping"}, _) do
+    Logger.debug("Received empty SSE ping event from server")
   end
 
   defp handle_sse_event(%Event{event: "reconnect", data: data}, _pid) do
@@ -166,6 +178,7 @@ defmodule Hermes.Transport.SSE do
       end
 
     Logger.debug("Received SSE reconnect event from server: #{reason}, connection will be refreshed")
+    Logger.debug("Reconnect event data: #{data}")
   end
 
   defp handle_sse_event(event, _pid) do

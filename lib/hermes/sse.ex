@@ -105,7 +105,8 @@ defmodule Hermes.SSE do
   defp process_task_stream({ref, _task} = state) do
     receive do
       {:chunk, {:data, data}, ^ref} ->
-        Logger.debug("Received sse streaming data chunk")
+        # Only log this at trace level - too verbose for debug
+        # Logger.debug("Received sse streaming data chunk")
         {Parser.run(data), state}
 
       {:chunk, {:status, status}, ^ref} ->

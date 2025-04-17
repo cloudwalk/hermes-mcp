@@ -641,26 +641,46 @@ defmodule Hermes.Client do
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
-        Logger.debug("Received server error response: #{inspect(error)}")
-        {:noreply, handle_error_response(error, error["id"], state)}
+        error_code = get_in(error, ["error", "code"])
+        error_msg = get_in(error, ["error", "message"])
+        error_id = error["id"]
+
+        Logger.debug("Received server error response: code=#{error_code}, message=#{error_msg}, id=#{error_id}")
+        Logger.debug(fn -> "Error response details: #{inspect(error)}" end)
+
+        {:noreply, handle_error_response(error, error_id, state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        Logger.debug("Received server response: #{response["id"]}")
-        {:noreply, handle_success_response(response, response["id"], state)}
+        resp_id = response["id"]
+        result_summary = if is_map(response["result"]), do: "result=#{map_size(response["result"])} fields", else: ""
+
+        Logger.debug("Received server response with id: #{resp_id} #{result_summary}")
+        Logger.debug(fn -> "Response details: #{inspect(response)}" end)
+
+        {:noreply, handle_success_response(response, resp_id, state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
         method = notification["method"]
-        Logger.debug("Received server notification: #{method}")
+
+        params_summary =
+          if is_map(notification["params"]), do: "params=#{map_size(notification["params"])} fields", else: ""
+
+        Logger.debug("Received server notification: method=#{method} #{params_summary}")
+        Logger.debug(fn -> "Notification details: #{inspect(notification)}" end)
+
         {:noreply, handle_notification(notification, state)}
 
       {:error, error} ->
         Logger.error("Failed to decode response: #{inspect(error)}")
+        Logger.debug(fn -> "Failed message content: #{inspect(String.slice(response_data, 0, 200))}" end)
+
         {:noreply, state}
     end
   rescue
     e ->
       err = Exception.format(:error, e, __STACKTRACE__)
       Logger.error("Failed to handle response: #{err}")
+      Logger.debug(fn -> "Failed response data: #{inspect(String.slice(response_data, 0, 200))}" end)
       {:noreply, state}
   end
 
@@ -712,16 +732,24 @@ defmodule Hermes.Client do
   defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        Logger.warning("Received error response for unknown request ID: #{id}")
+        error_code = json_error["code"]
+        error_msg = json_error["message"]
+
+        Logger.warning(
+          "Received error response for unknown request ID: #{id}, code: #{error_code}, message: #{error_msg}"
+        )
+
+        pending_ids = state.pending_requests |> Map.keys() |> Enum.join(", ")
+        Logger.debug("Current pending request IDs: [#{pending_ids}]")
+
         state
 
       {request, updated_state} ->
-        # Convert JSON-RPC error to our domain error
         error = Error.from_json_rpc(json_error)
 
-        # Unblock original caller with error
-        GenServer.reply(request.from, {:error, error})
+        Logger.debug("Delivering error response for request ID: #{id}, method: #{request.method}")
 
+        GenServer.reply(request.from, {:error, error})
         updated_state
     end
   end
@@ -752,12 +780,29 @@ defmodule Hermes.Client do
   defp handle_success_response(%{"id" => id, "result" => result}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        Logger.warning("Received response for unknown request ID: #{id}")
+        result_summary =
+          case result do
+            %{} -> "fields: #{Enum.join(Map.keys(result), ", ")}"
+            _ -> "type: #{inspect(result)}"
+          end
+
+        Logger.warning("Received response for unknown request ID: #{id}, result #{result_summary}")
+
+        pending_ids = state.pending_requests |> Map.keys() |> Enum.join(", ")
+        Logger.debug("Current pending request IDs: [#{pending_ids}]")
+
         state
 
       {request, updated_state} ->
-        # Convert to our domain response
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
+
+        result_summary =
+          case result do
+            %{} -> "with #{map_size(result)} fields"
+            _ -> ""
+          end
+
+        Logger.debug("Delivering success response for request ID: #{id}, method: #{request.method} #{result_summary}")
 
         if request.method == "ping" do
           GenServer.reply(request.from, :pong)
