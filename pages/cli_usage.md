@@ -70,6 +70,7 @@ Once connected, the CLI provides an interactive shell with several commands:
 | `list_resources` | List available server resources |
 | `read_resource` | Read a server resource |
 | `show_state` | Show internal state of client and transport |
+| `history` | Show command history |
 | `initialize` | Retry server connection initialization |
 | `clear` | Clear the screen |
 | `exit` | Exit the interactive session |
@@ -111,14 +112,52 @@ mix hermes.stdio.interactive --command=./my-mcp-server --args=arg1,arg2
 
 ### Calling a Tool
 
+The `call_tool` command now supports two modes for entering arguments:
+
+#### JSON Mode (Raw JSON Input)
+
 ```
 mcp> list_tools
 # Lists available tools
 
 mcp> call_tool
 Tool name: calculator
+Use JSON mode? (y/N): y
 Tool arguments (JSON): {"operation": "+", "a": 1, "b": 2}
 # Returns: 3
+```
+
+#### Interactive Argument Mode
+
+```
+mcp> call_tool
+Tool name: calculator
+Use JSON mode? (y/N): n
+Enter arguments one by one (empty line to finish):
+Argument name (or enter to finish): operation
+Value for 'operation': +
+Argument name (or enter to finish): a
+Value for 'a': 1
+Argument name (or enter to finish): b
+Value for 'b': 2
+Argument name (or enter to finish): 
+
+Calling tool calculator...
+# Returns: 3
+```
+
+### Using Command History
+
+The CLI maintains a history of commands you've entered. Use the `history` command to see your previous commands:
+
+```
+mcp> history
+
+Command history:
+  1 help
+  2 list_tools
+  3 call_tool
+  4 history
 ```
 
 ### Advanced Debugging

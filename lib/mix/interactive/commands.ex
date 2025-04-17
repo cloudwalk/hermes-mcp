@@ -34,6 +34,7 @@ defmodule Mix.Interactive.Commands do
     "read_resource" => "Read a server resource",
     "initialize" => "Retry server connection initialization",
     "show_state" => "Show internal state of client and transport",
+    "history" => "Show command history",
     "clear" => "Clear the screen",
     "exit" => "Exit the interactive session"
   }
@@ -53,6 +54,9 @@ defmodule Mix.Interactive.Commands do
   def process_command("get_prompt", client, loop_fn), do: get_prompt(client, loop_fn)
   def process_command("initialize", client, loop_fn), do: initialize_client(client, loop_fn)
   def process_command("show_state", client, loop_fn), do: show_state(client, loop_fn)
+
+  def process_command("history", _client, loop_fn) when is_function(loop_fn, 0),
+    do: Mix.Interactive.Shell.print_history(Process.get(:readline_state), loop_fn)
 
   def process_command("list_resources", client, loop_fn) do
     list_resources(client, loop_fn)
@@ -96,18 +100,72 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Tool name: #{UI.colors().reset}")
     tool_name = "" |> IO.gets() |> String.trim()
 
-    IO.write("#{UI.colors().prompt}Tool arguments (JSON): #{UI.colors().reset}")
-    args_input = "" |> IO.gets() |> String.trim()
+    IO.write("#{UI.colors().prompt}Use JSON mode? (y/N): #{UI.colors().reset}")
+    json_mode = "" |> IO.gets() |> String.trim() |> String.downcase() |> String.starts_with?("y")
 
-    case JSON.decode(args_input) do
-      {:ok, tool_args} ->
-        perform_tool_call(client, tool_name, tool_args)
+    tool_args = get_tool_arguments(json_mode)
+
+    case tool_args do
+      {:ok, args} ->
+        perform_tool_call(client, tool_name, args)
 
       {:error, error} ->
-        IO.puts("#{UI.colors().error}Error parsing JSON: #{inspect(error)}#{UI.colors().reset}")
+        IO.puts("#{UI.colors().error}Error with arguments: #{inspect(error)}#{UI.colors().reset}")
     end
 
     loop_fn.()
+  end
+
+  defp get_tool_arguments(true) do
+    IO.write("#{UI.colors().prompt}Tool arguments (JSON): #{UI.colors().reset}")
+    args_input = "" |> IO.gets() |> String.trim()
+    JSON.decode(args_input)
+  end
+
+  defp get_tool_arguments(false) do
+    IO.puts("#{UI.colors().info}Enter arguments one by one (empty line to finish):#{UI.colors().reset}")
+    gather_args_loop(%{})
+  end
+
+  defp gather_args_loop(args) do
+    IO.write("#{UI.colors().prompt}Argument name (or enter to finish): #{UI.colors().reset}")
+    arg_name = "" |> IO.gets() |> String.trim()
+
+    if arg_name == "" do
+      {:ok, args}
+    else
+      IO.write("#{UI.colors().prompt}Value for '#{arg_name}': #{UI.colors().reset}")
+      arg_value = "" |> IO.gets() |> String.trim() |> parse_argument_value()
+
+      updated_args = Map.put(args, arg_name, arg_value)
+      gather_args_loop(updated_args)
+    end
+  end
+
+  defp parse_argument_value("true"), do: true
+  defp parse_argument_value("false"), do: false
+  defp parse_argument_value("null"), do: nil
+
+  defp parse_argument_value(value) do
+    parse_number(value) || parse_json(value) || value
+  end
+
+  defp parse_number(value) do
+    cond do
+      String.match?(value, ~r/^-?\d+$/) -> String.to_integer(value)
+      String.match?(value, ~r/^-?\d+\.\d+$/) -> String.to_float(value)
+      true -> nil
+    end
+  end
+
+  defp parse_json(value) do
+    if (String.starts_with?(value, "[") && String.ends_with?(value, "]")) ||
+         (String.starts_with?(value, "{") && String.ends_with?(value, "}")) do
+      case JSON.decode(value) do
+        {:ok, decoded} -> decoded
+        _ -> nil
+      end
+    end
   end
 
   defp perform_tool_call(client, tool_name, tool_args) do
