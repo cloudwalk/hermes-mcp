@@ -63,6 +63,7 @@ Once connected, the CLI provides an interactive shell with several commands:
 | Command | Description |
 |---------|-------------|
 | `help` | Show list of available commands |
+| `ping` | Send a ping to the server to check connection health |
 | `list_tools` | List available server tools |
 | `call_tool` | Call a server tool with arguments |
 | `list_prompts` | List available server prompts |
@@ -107,6 +108,13 @@ mix hermes.sse.interactive --base-url=https://remote-server.example.com --verbos
 
 ```shell
 mix hermes.stdio.interactive --command=./my-mcp-server --args=arg1,arg2
+```
+
+### Checking Server Connection
+
+```
+mcp> ping
+# Shows if the server is responding with a pong
 ```
 
 ### Calling a Tool

@@ -26,6 +26,7 @@ defmodule Mix.Interactive.Commands do
 
   @commands %{
     "help" => "Show this help message",
+    "ping" => "Send a ping to the server to check connection health",
     "list_tools" => "List server tools",
     "call_tool" => "Call a server tool with arguments",
     "list_prompts" => "List server prompts",
@@ -47,6 +48,7 @@ defmodule Mix.Interactive.Commands do
   Process a command entered by the user.
   """
   def process_command("help", _client, loop_fn), do: print_help(loop_fn)
+  def process_command("ping", client, loop_fn), do: ping_server(client, loop_fn)
   def process_command("list_tools", client, loop_fn), do: list_tools(client, loop_fn)
   def process_command("call_tool", client, loop_fn), do: call_tool(client, loop_fn)
   def process_command("list_prompts", client, loop_fn), do: list_prompts(client, loop_fn)
@@ -330,6 +332,21 @@ defmodule Mix.Interactive.Commands do
     IO.puts("\n#{UI.colors().info}Getting internal state information...#{UI.colors().reset}")
 
     State.print_state(client)
+
+    IO.puts("")
+    loop_fn.()
+  end
+
+  defp ping_server(client, loop_fn) do
+    IO.puts("\n#{UI.colors().info}Pinging server...#{UI.colors().reset}")
+
+    case Client.ping(client) do
+      :pong ->
+        IO.puts("#{UI.colors().success}✓ Pong! Server is responding#{UI.colors().reset}")
+
+      {:error, reason} ->
+        UI.print_error(reason)
+    end
 
     IO.puts("")
     loop_fn.()

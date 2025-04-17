@@ -29,7 +29,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     Application.ensure_all_started([:hermes_mcp, :peri])
 
     # Disable logger output to keep the UI clean
-    Logger.configure(level: :error)
+    Logger.configure(level: :debug)
 
     {parsed, _} = OptionParser.parse!(args, strict: @switches)
     server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
