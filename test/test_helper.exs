@@ -19,19 +19,20 @@ defmodule Hermes.SlowMockTransportImpl do
   A mock transport implementation that simulates a transport which is slower than the default
   gen server timeout (5s)
   """
-  @behaviour Hermes.Transport
+  @behaviour Hermes.Transport.Behaviour
 
   @impl true
-  def send_message(_pid, message) do
+  def start_link(_opts), do: {:ok, self()}
+
+  @impl true
+  def send_message(_pid, _message) do
     # Simulate a slow transport by sleeping
     Process.sleep(6_000)
     :ok
   end
 
   @impl true
-  def shutdown(_pid) do
-    :ok
-  end
+  def shutdown(_pid), do: :ok
 end
 
 
