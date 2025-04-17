@@ -20,7 +20,7 @@ defmodule Hermes.MCP.Message do
     }
   }
 
-  @ping_params_schema :map
+  @ping_params_schema {:either, {:map, nil}}
 
   @resources_list_params_schema %{
     "cursor" => :string

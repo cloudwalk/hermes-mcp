@@ -945,6 +945,85 @@ defmodule Hermes.ClientTest do
     end
   end
 
+  describe "server request handling" do
+    setup do
+      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
+
+      client =
+        start_supervised!(
+          {Hermes.Client,
+           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+          restart: :temporary
+        )
+
+      allow(Hermes.MockTransport, self(), client)
+
+      initialize_client(client)
+
+      assert request_id = get_request_id(client, "initialize")
+
+      init_response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "capabilities" => %{"resources" => %{}, "tools" => %{}},
+          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
+          "protocolVersion" => "2024-11-05"
+        }
+      }
+
+      send_response(client, init_response)
+
+      Process.sleep(50)
+
+      %{client: client}
+    end
+
+    test "responds to server ping requests", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["jsonrpc"] == "2.0"
+        assert decoded["result"] == %{}
+        assert is_binary(decoded["id"]) || is_integer(decoded["id"])
+        :ok
+      end)
+
+      # Create a server ping request to simulate what would come from the server
+      ping_request = %{
+        "jsonrpc" => "2.0",
+        "method" => "ping",
+        "id" => "server-ping-123",
+        "params" => %{}
+      }
+
+      # Encode and send the ping request
+      encoded = JSON.encode!(ping_request)
+      GenServer.cast(client, {:response, encoded})
+
+      # We just need to verify that the mock transport expectation was fulfilled
+      Process.sleep(50)
+    end
+
+    test "logs unhandled server requests", %{client: client} do
+      unknown_request = %{
+        "method" => "resources/list",
+        "params" => %{"cursor" => "123"}
+      }
+
+      assert {:ok, encoded} = Message.encode_request(unknown_request, "unknown-req-123")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          GenServer.cast(client, {:response, encoded})
+          Process.sleep(50)
+        end)
+
+      assert String.contains?(log, "unhandled server request")
+      assert String.contains?(log, "resources/list")
+    end
+  end
+
   describe "cancellation" do
     setup do
       expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
