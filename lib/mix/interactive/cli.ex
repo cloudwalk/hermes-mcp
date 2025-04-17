@@ -27,14 +27,14 @@ defmodule Mix.Interactive.CLI do
           sse_path: :string,
           command: :string,
           args: :string,
-          verbose: :boolean
+          verbose: :count
         ],
         aliases: [t: :transport, c: :command, v: :verbose]
       )
 
-    if opts[:verbose] do
-      System.put_env("HERMES_VERBOSE", "1")
-    end
+    verbose_count = opts[:verbose] || 0
+    log_level = get_log_level_from_verbose(verbose_count)
+    configure_logger_with_metadata(log_level)
 
     transport = opts[:transport] || "sse"
 
@@ -62,8 +62,6 @@ defmodule Mix.Interactive.CLI do
   end
 
   defp run_sse_interactive(opts) do
-    Logger.configure(level: :error)
-
     server_options = Keyword.put_new(opts, :base_url, "http://localhost:8000")
     server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
 
@@ -96,8 +94,6 @@ defmodule Mix.Interactive.CLI do
   end
 
   defp run_stdio_interactive(opts) do
-    Logger.configure(level: :error)
-
     cmd = opts[:command] || "mcp"
     args = String.split(opts[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
@@ -205,7 +201,7 @@ defmodule Mix.Interactive.CLI do
     #{colors.info}OPTIONS:#{colors.reset}
       #{colors.command}-h, --help#{colors.reset}             Show this help message and exit
       #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|stdio) [default: sse]
-      #{colors.command}-v, --verbose#{colors.reset}          Enable verbose output and detailed error information
+      #{colors.command}-v#{colors.reset}                     Set log level: -v (warning), -vv (info), -vvv (debug) [default: error]
       
     #{colors.info}SSE TRANSPORT OPTIONS:#{colors.reset}
       #{colors.command}--base-url URL#{colors.reset}         Base URL for SSE server [default: http://localhost:8000]
@@ -230,5 +226,21 @@ defmodule Mix.Interactive.CLI do
     #{colors.info}INTERACTIVE COMMANDS:#{colors.reset}
       Once connected, type 'help' to see available interactive commands.
     """)
+  end
+
+  # Helper functions for log levels
+  defp get_log_level_from_verbose(count) do
+    case count do
+      0 -> :error
+      1 -> :warning
+      2 -> :info
+      _ -> :debug
+    end
+  end
+
+  defp configure_logger_with_metadata(log_level) do
+    metadata = Logger.metadata()
+    Logger.configure(level: log_level)
+    Logger.metadata(metadata)
   end
 end

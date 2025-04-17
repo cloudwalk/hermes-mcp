@@ -39,7 +39,11 @@ Both CLIs support the following common options:
 | Option | Description |
 |--------|-------------|
 | `-h, --help` | Show help message and exit |
-| `-v, --verbose` | Enable verbose output and detailed error information |
+| `-v` | Set log level (accumulating flag) |
+|      | No flag: `:error` level (default) |
+|      | `-v`: `:warning` level |
+|      | `-vv`: `:info` level |
+|      | `-vvv`: `:debug` level |
 
 ### SSE Transport Options
 
@@ -132,11 +136,23 @@ Tool arguments (JSON): {"operation": "+", "a": 1, "b": 2}
 ### Advanced Debugging
 
 ```shell
-# Enable verbose mode
-HERMES_VERBOSE=1 mix hermes.sse.interactive
+# Basic error-only logging (default)
+mix hermes.sse.interactive
 
-# Or use the command-line flag
+# Warning-level logging
 mix hermes.sse.interactive -v
+
+# Info-level logging
+mix hermes.sse.interactive -vv
+
+# Debug-level (most verbose) logging
+mix hermes.sse.interactive -vvv
 ```
 
-Then use the `show_state` command to see detailed internal state information, or examine extended error information when initialization fails.
+The verbosity level controls which log messages are displayed:
+- Default (no flags): Only errors are shown
+- `-v`: Errors and warnings are shown
+- `-vv`: Errors, warnings, and info messages are shown
+- `-vvv`: All messages including debug details are shown
+
+Use the `show_state` command to see detailed internal state information, or examine extended error information when initialization fails.

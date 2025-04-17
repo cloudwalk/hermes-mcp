@@ -16,50 +16,75 @@ defmodule Hermes.Logging do
     * type - message type (e.g., "request", "response", "notification", "error")
     * id - message ID (can be nil)
     * data - the message content
-    * metadata - additional metadata to include
+    * metadata - additional metadata to include with level option (:debug, :info, :warning, :error, etc.)
   """
   def message(direction, type, id, data, metadata \\ []) do
     summary = create_message_summary(type, id, data)
+    level = Keyword.get(metadata, :level, :debug)
+    metadata = Keyword.delete(metadata, :level)
 
-    Logger.debug("[MCP message] #{direction} #{type}: #{summary}", metadata)
+    log(level, "[MCP message] #{direction} #{type}: #{summary}", metadata)
 
     if should_log_details?(data) do
-      Logger.debug("[MCP message] #{direction} #{type} data: #{inspect(data)}", metadata)
+      log(level, "[MCP message] #{direction} #{type} data: #{inspect(data)}", metadata)
     else
-      Logger.debug("[MCP message] #{direction} #{type} data (truncated): #{truncate_data(data)}", metadata)
+      log(level, "[MCP message] #{direction} #{type} data (truncated): #{truncate_data(data)}", metadata)
     end
   end
 
   @doc """
   Log server events with structured format.
+
+  ## Options
+    * metadata - Additional metadata including:
+      * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def server_event(event, details, metadata \\ []) do
-    Logger.info("MCP server event: #{event}", metadata)
+    level = Keyword.get(metadata, :level, :info)
+    metadata = Keyword.delete(metadata, :level)
+
+    log(level, "MCP server event: #{event}", metadata)
 
     if details do
-      Logger.debug("MCP event details: #{inspect(details)}", metadata)
+      details_level = if level == :debug, do: :debug, else: level
+      log(details_level, "MCP event details: #{inspect(details)}", metadata)
     end
   end
 
   @doc """
   Log client events with structured format.
+
+  ## Options
+    * metadata - Additional metadata including:
+      * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def client_event(event, details, metadata \\ []) do
-    Logger.info("MCP client event: #{event}", metadata)
+    level = Keyword.get(metadata, :level, :info)
+    metadata = Keyword.delete(metadata, :level)
+
+    log(level, "MCP client event: #{event}", metadata)
 
     if details do
-      Logger.debug("MCP event details: #{inspect(details)}", metadata)
+      details_level = if level == :debug, do: :debug, else: level
+      log(details_level, "MCP event details: #{inspect(details)}", metadata)
     end
   end
 
   @doc """
   Log transport events with structured format.
+
+  ## Options
+    * metadata - Additional metadata including:
+      * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def transport_event(event, details, metadata \\ []) do
-    Logger.debug("MCP transport event: #{event}", metadata)
+    level = Keyword.get(metadata, :level, :debug)
+    metadata = Keyword.delete(metadata, :level)
+
+    log(level, "MCP transport event: #{event}", metadata)
 
     if details do
-      Logger.debug("MCP transport details: #{inspect(details)}", metadata)
+      log(level, "MCP transport details: #{inspect(details)}", metadata)
     end
   end
 
@@ -78,6 +103,22 @@ defmodule Hermes.Logging do
   end
 
   # Private helpers
+
+  # Route log messages to the appropriate Logger function based on level
+  defp log(level, message, metadata) when is_atom(level) do
+    log_by_level(level, message, metadata)
+  end
+
+  # Map MCP log levels to Elixir logger levels
+  defp log_by_level(:debug, message, metadata), do: Logger.debug(message, metadata)
+  defp log_by_level(:info, message, metadata), do: Logger.info(message, metadata)
+  defp log_by_level(:notice, message, metadata), do: Logger.info(message, metadata)
+  defp log_by_level(:warning, message, metadata), do: Logger.warning(message, metadata)
+  defp log_by_level(:error, message, metadata), do: Logger.error(message, metadata)
+  defp log_by_level(:critical, message, metadata), do: Logger.error(message, metadata)
+  defp log_by_level(:alert, message, metadata), do: Logger.error(message, metadata)
+  defp log_by_level(:emergency, message, metadata), do: Logger.error(message, metadata)
+  defp log_by_level(_, message, metadata), do: Logger.info(message, metadata)
 
   defp create_message_summary("request", id, data) when is_map(data) do
     method = Map.get(data, "method", "unknown")

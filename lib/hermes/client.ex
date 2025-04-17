@@ -665,11 +665,14 @@ defmodule Hermes.Client do
         {:noreply, handle_notification(notification, state)}
 
       {:error, error} ->
-        Logging.client_event("decode_failed", %{
-          error: error,
-          message_sample: String.slice(response_data, 0, 200),
+        Logging.client_event(
+          "decode_failed",
+          %{
+            error: error,
+            message_sample: String.slice(response_data, 0, 200)
+          },
           level: :warning
-        })
+        )
 
         {:noreply, state}
     end
@@ -677,10 +680,14 @@ defmodule Hermes.Client do
     e ->
       err = Exception.format(:error, e, __STACKTRACE__)
 
-      Logging.client_event("response_handling_failed", %{
-        error: err,
-        response_sample: String.slice(response_data, 0, 200)
-      })
+      Logging.client_event(
+        "response_handling_failed",
+        %{
+          error: err,
+          response_sample: String.slice(response_data, 0, 200)
+        },
+        level: :error
+      )
 
       {:noreply, state}
   end
@@ -907,22 +914,16 @@ defmodule Hermes.Client do
 
   defp log_to_logger(level, data, logger) do
     # Map MCP log levels to Elixir Logger levels
-    case level do
-      level when level in ["debug"] ->
-        Logging.client_event("server_log", %{level: level, data: data, logger: logger})
+    elixir_level =
+      case level do
+        level when level in ["debug"] -> :debug
+        level when level in ["info", "notice"] -> :info
+        level when level in ["warning"] -> :warning
+        level when level in ["error", "critical", "alert", "emergency"] -> :error
+        _ -> :info
+      end
 
-      level when level in ["info", "notice"] ->
-        Logging.client_event("server_log", %{level: level, data: data, logger: logger})
-
-      level when level in ["warning"] ->
-        Logging.client_event("server_log", %{level: level, data: data, logger: logger})
-
-      level when level in ["error", "critical", "alert", "emergency"] ->
-        Logging.client_event("server_log", %{level: level, data: data, logger: logger})
-
-      _ ->
-        Logging.client_event("server_log", %{level: level, data: data, logger: logger})
-    end
+    Logging.client_event("server_log", %{level: level, data: data, logger: logger}, level: elixir_level)
   end
 
   # Helper functions

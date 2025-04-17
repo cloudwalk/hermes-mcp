@@ -21,17 +21,25 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
   @switches [
     base_url: :string,
     base_path: :string,
-    sse_path: :string
+    sse_path: :string,
+    verbose: :count
   ]
 
   def run(args) do
     # Start required applications without requiring a project
     Application.ensure_all_started([:hermes_mcp, :peri])
 
-    # Disable logger output to keep the UI clean
-    Logger.configure(level: :debug)
+    # Parse arguments and set log level
+    {parsed, _} =
+      OptionParser.parse!(args,
+        strict: @switches,
+        aliases: [v: :verbose]
+      )
 
-    {parsed, _} = OptionParser.parse!(args, strict: @switches)
+    verbose_count = parsed[:verbose] || 0
+    log_level = get_log_level(verbose_count)
+    configure_logger(log_level)
+
     server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
     server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
 
@@ -65,5 +73,21 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
+  end
+
+  # Helper functions
+  defp get_log_level(count) do
+    case count do
+      0 -> :error
+      1 -> :warning
+      2 -> :info
+      _ -> :debug
+    end
+  end
+
+  defp configure_logger(log_level) do
+    metadata = Logger.metadata()
+    Logger.configure(level: log_level)
+    Logger.metadata(metadata)
   end
 end
