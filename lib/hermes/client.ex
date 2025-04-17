@@ -271,6 +271,7 @@ defmodule Hermes.Client do
   ## Options
 
     * `:timeout` - Request timeout in milliseconds
+    * `:genserver_timeout` - GenServer.call/3 timeout in milliseconds (default: 5s)
     * `:progress` - Progress tracking options
       * `:token` - A unique token to track progress (string or integer)
       * `:callback` - A function to call when progress updates are received
@@ -289,7 +290,9 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    genserver_timeout = Keyword.get(opts, :genserver_timeout, 5_000)
+
+    GenServer.call(client, {:operation, operation}, genserver_timeout)
   end
 
   @doc """
