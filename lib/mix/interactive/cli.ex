@@ -3,12 +3,13 @@ defmodule Mix.Interactive.CLI do
   Standalone CLI application for Hermes MCP interactive shells.
 
   This module serves as the entry point for the standalone binary compiled with Burrito.
-  It can start either the SSE or STDIO interactive shell based on command-line arguments.
+  It can start SSE, WebSocket, or STDIO interactive shells based on command-line arguments.
   """
 
   alias Hermes.Client
   alias Hermes.Transport.SSE
   alias Hermes.Transport.STDIO
+  alias Hermes.Transport.WebSocket
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
@@ -25,6 +26,7 @@ defmodule Mix.Interactive.CLI do
           base_url: :string,
           base_path: :string,
           sse_path: :string,
+          ws_path: :string,
           command: :string,
           args: :string,
           verbose: :count
@@ -42,17 +44,21 @@ defmodule Mix.Interactive.CLI do
       "sse" ->
         run_sse_interactive(opts)
 
+      "websocket" ->
+        run_websocket_interactive(opts)
+
       "stdio" ->
         run_stdio_interactive(opts)
 
       _ ->
         IO.puts("""
         #{UI.colors().error}ERROR: Unknown transport type "#{transport}"
-        Usage: hermes-mcp --transport [sse|stdio] [options]
+        Usage: hermes-mcp --transport [sse|websocket|stdio] [options]
 
         Available transports:
-          sse   - SSE transport implementation
-          stdio - STDIO transport implementation
+          sse       - SSE transport implementation
+          websocket - WebSocket transport implementation
+          stdio     - STDIO transport implementation
 
         Run with --help for more information#{UI.colors().reset}
         """)
@@ -85,6 +91,38 @@ defmodule Mix.Interactive.CLI do
     check_sse_connection(sse)
 
     client = Process.whereis(:sse_test)
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    check_client_connection(client)
+
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
+
+    Shell.loop(client)
+  end
+
+  defp run_websocket_interactive(opts) do
+    server_options = Keyword.put_new(opts, :base_url, "http://localhost:8000")
+    server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
+
+    IO.puts(UI.header("HERMES MCP WEBSOCKET INTERACTIVE"))
+
+    children = [
+      {WebSocket, client: :websocket_test, server: server_options},
+      {Client,
+       name: :websocket_test,
+       transport: [layer: WebSocket],
+       client_info: %{
+         "name" => "Hermes.CLI.WebSocket",
+         "version" => "1.0.0"
+       }}
+    ]
+
+    Supervisor.start_link(children, strategy: :one_for_all)
+
+    ws = Process.whereis(WebSocket)
+    IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
+    check_websocket_connection(ws)
+
+    client = Process.whereis(:websocket_test)
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
@@ -187,6 +225,29 @@ defmodule Mix.Interactive.CLI do
     end
   end
 
+  def check_websocket_connection(ws, attempt \\ 3)
+
+  def check_websocket_connection(_ws, attempt) when attempt <= 0 do
+    IO.puts("#{UI.colors().error}✗ WebSocket connection not established#{UI.colors().reset}")
+
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
+  end
+
+  def check_websocket_connection(ws, attempt) do
+    :timer.sleep(500)
+
+    state = :sys.get_state(ws)
+
+    if state[:stream_ref] == nil do
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
+      check_websocket_connection(ws, attempt - 1)
+    else
+      IO.puts("#{UI.colors().info}WebSocket connection:\n\s\s- ws url: #{state[:ws_url]}#{UI.colors().reset}")
+
+      IO.puts("#{UI.colors().success}✓ Successfully connected via WebSocket#{UI.colors().reset}")
+    end
+  end
+
   @doc false
   def show_help do
     colors = UI.colors()
@@ -200,13 +261,18 @@ defmodule Mix.Interactive.CLI do
 
     #{colors.info}OPTIONS:#{colors.reset}
       #{colors.command}-h, --help#{colors.reset}             Show this help message and exit
-      #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|stdio) [default: sse]
+      #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|websocket|stdio) [default: sse]
       #{colors.command}-v#{colors.reset}                     Set log level: -v (warning), -vv (info), -vvv (debug) [default: error]
       
     #{colors.info}SSE TRANSPORT OPTIONS:#{colors.reset}
       #{colors.command}--base-url URL#{colors.reset}         Base URL for SSE server [default: http://localhost:8000]
       #{colors.command}--base-path PATH#{colors.reset}       Base path for the SSE server
       #{colors.command}--sse-path PATH#{colors.reset}        Path for SSE endpoint
+
+    #{colors.info}WEBSOCKET TRANSPORT OPTIONS:#{colors.reset}
+      #{colors.command}--base-url URL#{colors.reset}         Base URL for WebSocket server [default: http://localhost:8000]
+      #{colors.command}--base-path PATH#{colors.reset}       Base path for the WebSocket server
+      #{colors.command}--ws-path PATH#{colors.reset}         Path for WebSocket endpoint [default: /ws]
 
     #{colors.info}STDIO TRANSPORT OPTIONS:#{colors.reset}
       #{colors.command}-c, --command CMD#{colors.reset}      Command to execute [default: mcp]
@@ -219,6 +285,9 @@ defmodule Mix.Interactive.CLI do
 
       # Connect to a remote SSE server
       hermes-mcp --transport sse --base-url https://remote-server.example.com
+
+      # Connect to a WebSocket server
+      hermes-mcp --transport websocket --base-url http://localhost:8000 --ws-path /mcp/ws
 
       # Run a local MCP server with stdio
       hermes-mcp --transport stdio --command ./my-mcp-server --args arg1,arg2

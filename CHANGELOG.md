@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Implemented WebSocket transport (#10)
+  - Support for bidirectional WebSocket communication
+  - Integration with the Gun library for WebSocket handling
+  - New mix task for testing WebSocket servers interactively
+
 ## [0.3.11](https://github.com/cloudwalk/hermes-mcp) - 2025-04-17
 
 ### Added

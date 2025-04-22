@@ -33,12 +33,12 @@ defmodule Hermes.Client do
   @typedoc """
   MCP client transport options
 
-  - `:layer` - The transport layer to use, either `Hermes.Transport.STDIO` or `Hermes.Transport.SSE` (required)
+  - `:layer` - The transport layer to use, either `Hermes.Transport.STDIO`, `Hermes.Transport.SSE`, or `Hermes.Transport.WebSocket` (required)
   - `:name` - The transport optional custom name
   """
   @type transport ::
           list(
-            {:layer, Hermes.Transport.STDIO | Hermes.Transport.SSE}
+            {:layer, Hermes.Transport.STDIO | Hermes.Transport.SSE | Hermes.Transport.WebSocket}
             | {:name, GenServer.server()}
           )
 

@@ -7,7 +7,7 @@ This document outlines the development roadmap for Hermes MCP, an Elixir impleme
 Hermes MCP currently provides a complete client implementation for the MCP 2024-11-05 specification with:
 
 - Full protocol lifecycle management (initialization, operation, shutdown)
-- Multiple transport options (STDIO and HTTP/SSE)
+- Multiple transport options (STDIO, HTTP/SSE, and WebSocket)
 - Connection supervision and automatic recovery
 - Comprehensive capability negotiation
 - Progress tracking for long-running operations
@@ -86,7 +86,6 @@ Once both client and server implementations are stable, we plan to provide:
 
 Beyond the core roadmap, we maintain a backlog of features for future consideration:
 
-- **WebSockets Transport**: Alternative transport layer for bidirectional communication
 - **Observability**: Advanced telemetry and monitoring integration
 - **Rate Limiting and Quota Management**: For server implementations
 - **Testing Tools**: Extended tools for protocol testing and validation

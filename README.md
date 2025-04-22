@@ -21,7 +21,7 @@ Currently, Hermes MCP offers a feature-complete client implementation conforming
 ### Current Status
 
 - [x] Complete client implementation (MCP 2024-11-05)
-- [x] Multiple transport options (STDIO and HTTP/SSE)
+- [x] Multiple transport options (STDIO, HTTP/SSE, and WebSocket)
 - [x] Built-in connection supervision and automatic recovery
 - [x] Comprehensive capability negotiation
 - [x] Progress tracking and cancellation support
@@ -86,6 +86,9 @@ Hermes MCP provides interactive tools for testing MCP servers with a user-friend
 # Test an SSE server
 hermes_cli --transport sse --base-url="http://localhost:8000" --base-path="/mcp"
 
+# Test a WebSocket server
+hermes_cli --transport websocket --base-url="http://localhost:8000" --base-path="/mcp" --ws-path="/ws"
+
 # Test a local process via STDIO
 hermes_cli --transport stdio --command="mcp" --args="run,path/to/server.py"
 ```
@@ -95,6 +98,9 @@ hermes_cli --transport stdio --command="mcp" --args="run,path/to/server.py"
 ```bash
 # Test an SSE server
 mix hermes.sse.interactive --base-url="http://localhost:8000" --base-path="/mcp"
+
+# Test a WebSocket server
+mix hermes.websocket.interactive --base-url="http://localhost:8000" --base-path="/mcp" --ws-path="/ws"
 
 # Test a local process via STDIO
 mix hermes.stdio.interactive --command="mcp" --args="run,path/to/server.py"
