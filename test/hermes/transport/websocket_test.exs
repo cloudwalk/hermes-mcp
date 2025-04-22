@@ -1,51 +1,45 @@
 defmodule Hermes.Transport.WebSocketTest do
-  use ExUnit.Case, async: true
-
-  import Mox
+  use ExUnit.Case, async: false
+  use Mimic
 
   alias Hermes.Transport.WebSocket
 
+  @moduletag capture_log: true
+
+  setup :set_mimic_global
   setup :verify_on_exit!
 
-  describe "start_link/1" do
-    setup do
-      stub(Hermes.MockTransport, :start_link, fn _opts -> {:ok, self()} end)
-      stub(Hermes.MockTransport, :send_message, fn _pid, _message -> :ok end)
-      stub(Hermes.MockTransport, :shutdown, fn _pid -> :ok end)
+  setup do
+    gun_pid = self()
+    mock_ref = make_ref()
 
-      client = start_supervised!(StubClient)
-      %{client: client}
-    end
+    client = start_supervised!(StubClient)
 
-    setup do
-      :meck.new(:gun, [:non_strict, :passthrough])
-      :meck.expect(:gun, :open, fn _host, _port, _opts -> {:ok, self()} end)
-      :meck.expect(:gun, :await_up, fn _pid, _timeout -> {:ok, :http} end)
-      :meck.expect(:gun, :ws_upgrade, fn _pid, _path, _headers -> make_ref() end)
-      :meck.expect(:gun, :ws_send, fn _pid, _stream_ref, _data -> :ok end)
-      :meck.expect(:gun, :close, fn _pid -> :ok end)
+    Mimic.stub(:gun, :open, fn _host, _port, _opts ->
+      Process.sleep(50)
+      {:ok, gun_pid}
+    end)
 
-      on_exit(fn ->
-        :meck.unload(:gun)
-      end)
+    Mimic.stub(:gun, :await_up, fn _pid, _timeout ->
+      {:ok, :http}
+    end)
 
+    Mimic.stub(:gun, :ws_upgrade, fn _pid, _path, _headers ->
+      mock_ref
+    end)
+
+    Mimic.stub(:gun, :ws_send, fn _pid, _stream_ref, _data ->
       :ok
-    end
+    end)
 
-    test "starts with valid options", %{client: client} do
-      transport_opts = [
-        client: client,
-        server: [
-          base_url: "http://localhost:8000",
-          base_path: "/mcp",
-          ws_path: "/ws"
-        ]
-      ]
+    Mimic.stub(:gun, :close, fn _pid ->
+      :ok
+    end)
 
-      assert {:ok, pid} = WebSocket.start_link(transport_opts)
-      assert Process.alive?(pid)
-    end
+    %{client: client, gun_pid: gun_pid, mock_ref: mock_ref}
+  end
 
+  describe "start_link/1" do
     test "fails with invalid options" do
       transport_opts = [
         server: [
@@ -54,89 +48,151 @@ defmodule Hermes.Transport.WebSocketTest do
         ]
       ]
 
-      assert_raise RuntimeError, ~r/missing required key/, fn ->
+      assert_raise Peri.InvalidSchema, fn ->
         WebSocket.start_link(transport_opts)
       end
     end
-  end
 
-  describe "send_message/2" do
-    setup do
-      :meck.new(:gun, [:non_strict, :passthrough])
-      :meck.expect(:gun, :open, fn _host, _port, _opts -> {:ok, self()} end)
-      :meck.expect(:gun, :await_up, fn _pid, _timeout -> {:ok, :http} end)
-      :meck.expect(:gun, :ws_upgrade, fn _pid, _path, _headers -> make_ref() end)
-      :meck.expect(:gun, :ws_send, fn _pid, _stream_ref, _data -> :ok end)
-      :meck.expect(:gun, :close, fn _pid -> :ok end)
-
-      client = start_supervised!(StubClient)
-
+    test "successfully connects to a WebSocket server", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
       transport_opts = [
         client: client,
         server: [
-          base_url: "http://localhost:8000",
+          base_url: "ws://localhost:4000",
           base_path: "/mcp",
           ws_path: "/ws"
         ]
       ]
 
-      {:ok, pid} = WebSocket.start_link(transport_opts)
+      {:ok, ws_pid} = WebSocket.start_link(transport_opts)
+      Process.monitor(ws_pid)
 
-      ref = make_ref()
-      send(pid, {:gun_upgrade, self(), ref, ["websocket"], []})
+      send(ws_pid, {:gun_upgrade, gun_pid, mock_ref, ["websocket"], %{}})
 
-      on_exit(fn ->
-        :meck.unload(:gun)
+      assert Process.alive?(ws_pid)
+
+      :ok = WebSocket.shutdown(ws_pid)
+
+      assert_receive {:DOWN, _, :process, ^ws_pid, :normal}, 1000
+    end
+
+    test "can send messages through the WebSocket", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test_message = "test message"
+      test_pid = self()
+
+      Mimic.expect(:gun, :ws_send, fn pid, stream_ref, {:text, message} ->
+        assert pid == gun_pid
+        assert stream_ref == mock_ref
+        assert message == test_message
+        send(test_pid, {:message_sent, message})
+        :ok
       end)
-
-      %{ws: pid, client: client, stream_ref: ref}
-    end
-
-    test "sends message successfully", %{ws: pid, stream_ref: _ref} do
-      assert :ok = WebSocket.send_message(pid, "test message")
-    end
-
-    test "handles server messages", %{ws: pid, client: _client, stream_ref: ref} do
-      message = ~s({"jsonrpc":"2.0","method":"test","params":{}})
-      send(pid, {:gun_ws, self(), ref, {:text, message}})
-
-      assert Process.alive?(pid)
-    end
-  end
-
-  describe "shutdown/1" do
-    setup do
-      :meck.new(:gun, [:non_strict, :passthrough])
-      :meck.expect(:gun, :open, fn _host, _port, _opts -> {:ok, self()} end)
-      :meck.expect(:gun, :await_up, fn _pid, _timeout -> {:ok, :http} end)
-      :meck.expect(:gun, :ws_upgrade, fn _pid, _path, _headers -> make_ref() end)
-      :meck.expect(:gun, :ws_send, fn _pid, _stream_ref, _data -> :ok end)
-      :meck.expect(:gun, :close, fn _pid -> :ok end)
-
-      client = start_supervised!(StubClient)
 
       transport_opts = [
         client: client,
         server: [
-          base_url: "http://localhost:8000",
+          base_url: "ws://localhost:4000",
           base_path: "/mcp",
           ws_path: "/ws"
         ]
       ]
 
-      {:ok, pid} = WebSocket.start_link(transport_opts)
+      {:ok, ws_pid} = WebSocket.start_link(transport_opts)
+      ref = Process.monitor(ws_pid)
 
-      on_exit(fn ->
-        :meck.unload(:gun)
-      end)
+      send(ws_pid, {:gun_upgrade, gun_pid, mock_ref, ["websocket"], %{}})
 
-      %{ws: pid, client: client}
+      assert Process.alive?(ws_pid)
+
+      assert :ok = WebSocket.send_message(ws_pid, test_message)
+
+      assert_receive {:message_sent, ^test_message}, 1000
+
+      :ok = WebSocket.shutdown(ws_pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^ws_pid, :normal}, 1000
     end
 
-    test "shuts down connection", %{ws: pid} do
-      assert :ok = WebSocket.shutdown(pid)
-      :timer.sleep(10)
-      refute Process.alive?(pid)
+    test "can receive messages from the WebSocket", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test_message = ~s({"jsonrpc":"2.0","method":"test","params":{}})
+
+      transport_opts = [
+        client: client,
+        server: [
+          base_url: "ws://localhost:4000",
+          base_path: "/mcp",
+          ws_path: "/ws"
+        ]
+      ]
+
+      :ok = StubClient.clear_messages()
+
+      {:ok, ws_pid} = WebSocket.start_link(transport_opts)
+      ref = Process.monitor(ws_pid)
+
+      send(ws_pid, {:gun_upgrade, gun_pid, mock_ref, ["websocket"], %{}})
+      Process.sleep(50)
+
+      send(ws_pid, {:gun_ws, gun_pid, mock_ref, {:text, test_message}})
+
+      Process.sleep(100)
+
+      messages = StubClient.get_messages()
+      assert test_message in messages
+
+      :ok = WebSocket.shutdown(ws_pid)
+
+      assert_receive {:DOWN, ^ref, :process, ^ws_pid, :normal}, 1000
+    end
+
+    test "handles WebSocket close events", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      transport_opts = [
+        client: client,
+        server: [
+          base_url: "ws://localhost:4000",
+          base_path: "/mcp",
+          ws_path: "/ws"
+        ]
+      ]
+
+      {:ok, ws_pid} = WebSocket.start_link(transport_opts)
+      ref = Process.monitor(ws_pid)
+
+      send(ws_pid, {:gun_upgrade, gun_pid, mock_ref, ["websocket"], %{}})
+
+      send(ws_pid, {:gun_ws, gun_pid, mock_ref, :close})
+
+      assert_receive {:DOWN, ^ref, :process, ^ws_pid, :normal}, 1000
+      refute Process.alive?(ws_pid)
+    end
+
+    test "handles WebSocket close with code events", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      Process.flag(:trap_exit, true)
+
+      transport_opts = [
+        client: client,
+        server: [
+          base_url: "ws://localhost:4000",
+          base_path: "/mcp",
+          ws_path: "/ws"
+        ]
+      ]
+
+      {:ok, ws_pid} = WebSocket.start_link(transport_opts)
+
+      Process.link(ws_pid)
+
+      send(ws_pid, {:gun_upgrade, gun_pid, mock_ref, ["websocket"], %{}})
+      Process.sleep(50)
+
+      assert Process.alive?(ws_pid)
+
+      send(ws_pid, {:gun_ws, gun_pid, mock_ref, {:close, 1000, "Normal closure"}})
+
+      assert_receive {:EXIT, ^ws_pid, {:ws_closed, 1000, "Normal closure"}}, 1000
+
+      refute Process.alive?(ws_pid)
+
+      Process.flag(:trap_exit, false)
     end
   end
 end

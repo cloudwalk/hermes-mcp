@@ -1,19 +1,3 @@
-defmodule Hermes.MockTransportImpl do
-  @moduledoc false
-  @behaviour Hermes.Transport.Behaviour
-
-  @impl true
-  def start_link(_opts), do: {:ok, self()}
-
-  @impl true
-  def send_message(_, _), do: :ok
-
-  @impl true
-  def shutdown(_), do: :ok
-end
-
-Mox.defmock(Hermes.MockTransport, for: Hermes.Transport.Behaviour)
-
 defmodule StubClient do
   @moduledoc false
   use GenServer
@@ -50,9 +34,3 @@ defmodule StubClient do
     {:noreply, [data | messages]}
   end
 end
-
-Application.ensure_all_started(:mimic)
-Mimic.copy(Hermes.MockTransport)
-Mimic.copy(:gun)
-
-ExUnit.start()

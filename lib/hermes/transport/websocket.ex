@@ -104,37 +104,49 @@ defmodule Hermes.Transport.WebSocket do
     protocol = if uri.scheme == "https", do: :https, else: :http
     port = uri.port || if protocol == :https, do: 443, else: 80
 
-    gun_opts = [
+    gun_opts = %{
       protocols: [:http],
       http_opts: %{keepalive: :infinity}
-    ]
+    }
 
-    gun_opts = Keyword.merge(gun_opts, state.transport_opts)
+    gun_opts = Map.merge(gun_opts, Map.new(state.transport_opts))
 
-    case :gun.open(to_charlist(uri.host), port, gun_opts) do
+    case open_connection(uri.host, port, gun_opts) do
       {:ok, gun_pid} ->
-        Logging.transport_event("gun_opened", %{host: uri.host, port: port})
-        Process.monitor(gun_pid)
-
-        case :gun.await_up(gun_pid, 5000) do
-          {:ok, _protocol} ->
-            headers = state.headers |> Map.to_list() |> Enum.map(fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
-            path = uri.path || "/"
-            path = if uri.query, do: "#{path}?#{uri.query}", else: path
-            stream_ref = :gun.ws_upgrade(gun_pid, to_charlist(path), headers)
-            Logging.transport_event("ws_upgrade_requested", %{path: path})
-
-            {:noreply, %{state | gun_pid: gun_pid, stream_ref: stream_ref}}
-
-          {:error, reason} ->
-            Logging.transport_event("gun_await_up_failed", %{reason: reason}, level: :error)
-            {:stop, {:gun_await_up_failed, reason}, state}
-        end
+        handle_connection_established(gun_pid, uri, state)
 
       {:error, reason} ->
         Logging.transport_event("gun_open_failed", %{reason: reason}, level: :error)
         {:stop, {:gun_open_failed, reason}, state}
     end
+  end
+
+  defp open_connection(host, port, gun_opts) do
+    :gun.open(to_charlist(host), port, gun_opts)
+  end
+
+  defp handle_connection_established(gun_pid, uri, state) do
+    Logging.transport_event("gun_opened", %{host: uri.host, port: uri.port})
+    Process.monitor(gun_pid)
+
+    case :gun.await_up(gun_pid, 5000) do
+      {:ok, _protocol} ->
+        initiate_websocket_upgrade(gun_pid, uri, state)
+
+      {:error, reason} ->
+        Logging.transport_event("gun_await_up_failed", %{reason: reason}, level: :error)
+        {:stop, {:gun_await_up_failed, reason}, state}
+    end
+  end
+
+  defp initiate_websocket_upgrade(gun_pid, uri, state) do
+    headers = state.headers |> Map.to_list() |> Enum.map(fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
+    path = uri.path || "/"
+    path = if uri.query, do: "#{path}?#{uri.query}", else: path
+    stream_ref = :gun.ws_upgrade(gun_pid, to_charlist(path), headers)
+    Logging.transport_event("ws_upgrade_requested", %{path: path})
+
+    {:noreply, %{state | gun_pid: gun_pid, stream_ref: stream_ref}}
   end
 
   @impl GenServer
