@@ -131,7 +131,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -158,7 +159,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -181,7 +183,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -208,7 +211,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -235,7 +239,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -262,7 +267,8 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -289,15 +295,17 @@ defmodule Hermes.Client do
         timeout: Keyword.get(opts, :timeout)
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
   Merges additional capabilities into the client's capabilities.
   """
-  @spec merge_capabilities(t, map()) :: map()
-  def merge_capabilities(client, additional_capabilities) do
-    GenServer.call(client, {:merge_capabilities, additional_capabilities})
+  @spec merge_capabilities(t, map(), opts :: Keyword.t()) :: map()
+  def merge_capabilities(client, additional_capabilities, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:merge_capabilities, additional_capabilities}, timeout)
   end
 
   @doc """
@@ -305,9 +313,10 @@ defmodule Hermes.Client do
 
   Returns `nil` if the client has not been initialized yet.
   """
-  @spec get_server_capabilities(t) :: map() | nil
-  def get_server_capabilities(client) do
-    GenServer.call(client, :get_server_capabilities)
+  @spec get_server_capabilities(t, opts :: Keyword.t()) :: map() | nil
+  def get_server_capabilities(client, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, :get_server_capabilities, timeout)
   end
 
   @doc """
@@ -315,9 +324,10 @@ defmodule Hermes.Client do
 
   Returns `nil` if the client has not been initialized yet.
   """
-  @spec get_server_info(t) :: map() | nil
-  def get_server_info(client) do
-    GenServer.call(client, :get_server_info)
+  @spec get_server_info(t, opts :: Keyword.t()) :: map() | nil
+  def get_server_info(client, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, :get_server_info, timeout)
   end
 
   @doc """
@@ -338,7 +348,8 @@ defmodule Hermes.Client do
         params: %{"level" => level}
       })
 
-    GenServer.call(client, {:operation, operation})
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
   end
 
   @doc """
@@ -351,9 +362,10 @@ defmodule Hermes.Client do
 
   The callback function will be called whenever a log message notification is received.
   """
-  @spec register_log_callback(t, State.log_callback()) :: :ok
-  def register_log_callback(client, callback) when is_function(callback, 3) do
-    GenServer.call(client, {:register_log_callback, callback})
+  @spec register_log_callback(t, State.log_callback(), opts :: Keyword.t()) :: :ok
+  def register_log_callback(client, callback, opts \\ []) when is_function(callback, 3) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:register_log_callback, callback}, timeout)
   end
 
   @doc """
@@ -364,9 +376,10 @@ defmodule Hermes.Client do
     * `client` - The client process
     * `callback` - The callback function to unregister
   """
-  @spec unregister_log_callback(t) :: :ok
-  def unregister_log_callback(client) do
-    GenServer.call(client, :unregister_log_callback)
+  @spec unregister_log_callback(t, opts :: Keyword.t()) :: :ok
+  def unregister_log_callback(client, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, :unregister_log_callback, timeout)
   end
 
   @doc """
@@ -385,12 +398,14 @@ defmodule Hermes.Client do
   @spec register_progress_callback(
           t,
           String.t() | integer(),
-          State.progress_callback()
+          State.progress_callback(),
+          opts :: Keyword.t()
         ) ::
           :ok
-  def register_progress_callback(client, progress_token, callback)
+  def register_progress_callback(client, progress_token, callback, opts \\ [])
       when is_function(callback, 3) and (is_binary(progress_token) or is_integer(progress_token)) do
-    GenServer.call(client, {:register_progress_callback, progress_token, callback})
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:register_progress_callback, progress_token, callback}, timeout)
   end
 
   @doc """
@@ -401,9 +416,11 @@ defmodule Hermes.Client do
     * `client` - The client process
     * `progress_token` - The progress token to stop watching (string or integer)
   """
-  @spec unregister_progress_callback(t, String.t() | integer()) :: :ok
-  def unregister_progress_callback(client, progress_token) when is_binary(progress_token) or is_integer(progress_token) do
-    GenServer.call(client, {:unregister_progress_callback, progress_token})
+  @spec unregister_progress_callback(t, String.t() | integer(), opts :: Keyword.t()) :: :ok
+  def unregister_progress_callback(client, progress_token, opts \\ [])
+      when is_binary(progress_token) or is_integer(progress_token) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:unregister_progress_callback, progress_token}, timeout)
   end
 
   @doc """
@@ -418,11 +435,12 @@ defmodule Hermes.Client do
 
   Returns `:ok` if notification was sent successfully, or `{:error, reason}` otherwise.
   """
-  @spec send_progress(t, String.t() | integer(), number(), number() | nil) ::
+  @spec send_progress(t, String.t() | integer(), number(), number() | nil, opts :: Keyword.t()) ::
           :ok | {:error, term()}
-  def send_progress(client, progress_token, progress, total \\ nil)
+  def send_progress(client, progress_token, progress, total \\ nil, opts \\ [])
       when is_number(progress) and (is_binary(progress_token) or is_integer(progress_token)) do
-    GenServer.call(client, {:send_progress, progress_token, progress, total})
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:send_progress, progress_token, progress, total}, timeout)
   end
 
   @doc """
@@ -440,10 +458,11 @@ defmodule Hermes.Client do
     * `{:error, reason}` if an error occurred
     * `{:not_found, request_id}` if the request ID was not found
   """
-  @spec cancel_request(t, String.t(), String.t()) ::
+  @spec cancel_request(t, String.t(), String.t(), opts :: Keyword.t()) ::
           :ok | {:error, Error.t()}
-  def cancel_request(client, request_id, reason \\ "client_cancelled") do
-    GenServer.call(client, {:cancel_request, request_id, reason})
+  def cancel_request(client, request_id, reason \\ "client_cancelled", opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:cancel_request, request_id, reason}, timeout)
   end
 
   @doc """
@@ -459,10 +478,11 @@ defmodule Hermes.Client do
     * `{:ok, requests}` - A list of the Request structs that were cancelled
     * `{:error, reason}` - If an error occurred
   """
-  @spec cancel_all_requests(t, String.t()) ::
+  @spec cancel_all_requests(t, String.t(), opts :: Keyword.t()) ::
           {:ok, list(Request.t())} | {:error, Error.t()}
-  def cancel_all_requests(client, reason \\ "client_cancelled") do
-    GenServer.call(client, {:cancel_all_requests, reason})
+  def cancel_all_requests(client, reason \\ "client_cancelled", opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:cancel_all_requests, reason}, timeout)
   end
 
   @doc """
