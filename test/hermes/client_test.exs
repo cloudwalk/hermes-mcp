@@ -1114,6 +1114,28 @@ defmodule Hermes.ClientTest do
       assert map_size(state.pending_requests) == 0
     end
 
+    test "buffer timeout allows operation timeout to trigger before GenServer timeout", %{client: client} do
+      test_timeout = 50
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/list"
+        Process.sleep(test_timeout + 10)
+        :ok
+      end)
+
+      expect(Hermes.MockTransport, :send_message, fn _, _ -> :ok end)
+
+      Process.flag(:trap_exit, true)
+      task = Task.async(fn -> Hermes.Client.list_resources(client, timeout: test_timeout) end)
+
+      result = Task.await(task)
+      assert {:error, error} = result
+      assert error.reason == :request_timeout
+
+      refute_receive {:EXIT, _, {:timeout, _}}, 100
+    end
+
     test "client.close sends cancellation for pending requests", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
         decoded = JSON.decode!(message)
