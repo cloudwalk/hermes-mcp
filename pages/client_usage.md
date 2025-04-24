@@ -314,6 +314,18 @@ Hermes.Client.call_tool(MyApp.MCPClient, "slow_tool", %{}, timeout: to_timeout(s
 
 Each client API call accepts a `:timeout` option which overrides the default operation timeout (30 seconds). This timeout is operation-specific and does not affect other client requests.
 
+> ### Note {: .info}
+>
+> Internally, the client uses two separate timeouts:
+> 
+> 1. The **operation timeout** - Set via the `:timeout` option and used to trigger request timeouts
+> 2. The **GenServer.call timeout** - Derived from the operation timeout with a 1-second buffer
+>
+> The 1-second buffer ensures the operation timeout is triggered first, allowing the client to
+> properly send cancellation notifications to the server before any GenServer timeout occurs.
+> This prevents "nested timeout" issues where a GenServer timeout would occur without 
+> the client knowing which request timed out.
+
 ## Extended Capabilities
 
 To extend the client's capabilities after initialization:
