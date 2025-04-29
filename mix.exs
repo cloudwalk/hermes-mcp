@@ -1,7 +1,7 @@
 defmodule Hermes.MixProject do
   use Mix.Project
 
-  @version "0.3.11"
+  @version "0.3.12"
   @source_url "https://github.com/cloudwalk/hermes-mcp"
 
   def project do
