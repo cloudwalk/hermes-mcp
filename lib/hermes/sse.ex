@@ -75,18 +75,40 @@ defmodule Hermes.SSE do
 
       case Finch.stream_while(req, Hermes.Finch, nil, on_chunk, http) do
         {:ok, _} ->
-          Logger.debug("SSE streaming closed with success, reconnecting...")
+          Hermes.Logging.transport_event("sse_reconnect", %{
+            reason: "success",
+            attempt: attempt,
+            max_attempts: retry[:max_reconnections]
+          })
+
           Process.sleep(backoff)
           loop_sse_stream(req, ref, dest, opts, attempt + 1)
 
         {:error, err} ->
-          Logger.error("SSE streaming closed with reason: #{inspect(err)}, reconnecting...")
+          Hermes.Logging.transport_event(
+            "sse_reconnect",
+            %{
+              reason: "error",
+              error: err,
+              attempt: attempt,
+              max_attempts: retry[:max_reconnections]
+            },
+            level: :error
+          )
+
           Process.sleep(backoff + to_timeout(second: 1))
           loop_sse_stream(req, ref, dest, opts, attempt + 1)
       end
     else
       send(dest, {:chunk, :halted, ref})
-      Logger.error("Max SSE streaming reconnection attempts achieved, giving up...")
+
+      Hermes.Logging.transport_event(
+        "sse_max_reconnects",
+        %{
+          max_attempts: retry[:max_reconnections]
+        },
+        level: :error
+      )
     end
   end
 
@@ -105,23 +127,22 @@ defmodule Hermes.SSE do
   defp process_task_stream({ref, _task} = state) do
     receive do
       {:chunk, {:data, data}, ^ref} ->
-        Logger.debug("Received sse streaming data chunk")
         {Parser.run(data), state}
 
       {:chunk, {:status, status}, ^ref} ->
-        Logger.debug("Received sse streaming status #{status}")
+        Hermes.Logging.transport_event("sse_status", status)
         {[], state}
 
-      {:chunk, {:headers, _headers}, ^ref} ->
-        Logger.debug("Received sse streaming headers")
+      {:chunk, {:headers, headers}, ^ref} ->
+        Hermes.Logging.transport_event("sse_headers", headers)
         {[], state}
 
       {:chunk, :halted, ^ref} ->
-        Logger.debug("SSE streaming halted, transport will try to restart")
+        Hermes.Logging.transport_event("sse_halted", "Transport will be restarted")
         {[{:error, :halted}], state}
 
       {:chunk, unknown, ^ref} ->
-        Logger.debug("Received unknonw chunk: #{inspect(unknown)}")
+        Hermes.Logging.transport_event("sse_unknown_chunk", unknown)
         {[], state}
     end
   end

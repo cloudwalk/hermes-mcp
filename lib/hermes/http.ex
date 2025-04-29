@@ -42,7 +42,11 @@ defmodule Hermes.HTTP do
   defp do_follow_redirect(req, %Finch.Response{status: 307, headers: headers}, attempts) when is_integer(attempts) do
     location = List.keyfind(headers, "location", 0)
 
-    Logger.debug("Following redirect to: #{location}, attempts left: #{attempts}")
+    Hermes.Logging.transport_event("redirect", %{
+      location: location,
+      attempts_left: attempts,
+      method: req.method
+    })
 
     {:ok, uri} = URI.new(location)
     req = %{req | host: uri.host, port: uri.port, path: uri.path, scheme: uri.scheme}

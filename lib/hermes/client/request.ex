@@ -6,7 +6,7 @@ defmodule Hermes.Client.Request do
   - `id` - The unique request ID
   - `method` - The MCP method being called
   - `from` - The GenServer caller reference
-  - `timer_ref` - Reference to the timeout timer
+  - `timer_ref` - Reference to the request-specific timeout timer
   - `start_time` - When the request started (monotonic time in milliseconds)
   """
 
@@ -29,7 +29,7 @@ defmodule Hermes.Client.Request do
       * `:id` - The unique request ID
       * `:method` - The MCP method name
       * `:from` - The GenServer caller reference
-      * `:timer_ref` - Reference to the timeout timer
+      * `:timer_ref` - Reference to the request-specific timeout timer
   """
   @spec new(%{id: String.t(), method: String.t(), from: GenServer.from(), timer_ref: reference()}) :: t()
   def new(%{id: id, method: method, from: from, timer_ref: timer_ref}) do

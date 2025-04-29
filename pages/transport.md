@@ -113,6 +113,39 @@ The HTTP/SSE transport (`Hermes.Transport.SSE`) enables communication with an MC
 | `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, you can check the avaiable options on [Mint docs](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options) | System defaults |
 | `:http_options` | keyword | Options passed directly to the HTTP Client, you can check the available options on [Finch docs](https://hexdocs.pm/finch/Finch.html#t:request_opt/0) | Current directory |
 
+## WebSocket Transport
+
+The WebSocket transport (`Hermes.Transport.WebSocket`) enables bidirectional communication with an MCP server over WebSockets. It's suitable for remote integrations requiring real-time bidirectional communication and provides secure communication over TLS.
+
+### Configuration
+
+```elixir
+{Hermes.Transport.WebSocket, [
+  name: MyApp.WebSocketTransport,
+  client: MyApp.MCPClient,
+  server: [
+    base_url: "https://example.com",
+    base_path: "/mcp", # defaults to "/"
+    ws_path: "/ws" # defaults to "/ws"
+  ],
+  headers: [{"Authorization", "Bearer token"}],
+  transport_opts: [protocols: [:http], verify: :verify_peer]
+]}
+```
+
+### Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `:name` | [GenServer.name](https://hexdocs.pm/elixir/GenServer.html#t:name/0) | Registration name for the transport process | `__MODULE__` |
+| `:client` | [GenServer.server](https://hexdocs.pm/elixir/GenServer.html#t:server/0) | The client process that will receive messages | Required |
+| `:server` | enumerable | The WebSocket server config | Required |
+| `:server.base_url` | string | The WebSocket server base url | Required |
+| `:server.base_path` | string | The WebSocket server base path | `"/"`|
+| `:server.ws_path` | string | The WebSocket server endpoint path | `"/ws"`|
+| `:headers` | map | Additional request headers to be sent | `%{}` |
+| `:transport_opts` | keyword | Options to be passed to the underlying Gun client | `[protocols: [:http], http_opts: %{keepalive: :infinity}]` |
+
 ## Custom Transport Implementation
 
 You can implement custom transports by creating a module that implements the `Hermes.Transport.Behaviour` behavior.

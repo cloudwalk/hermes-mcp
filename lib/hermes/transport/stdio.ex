@@ -121,28 +121,28 @@ defmodule Hermes.Transport.STDIO do
 
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
-    Logger.info("Received data from stdio server")
+    Hermes.Logging.transport_event("stdio_received", String.slice(data, 0, 100))
     GenServer.cast(state.client, {:response, data})
     {:noreply, state}
   end
 
   def handle_info({port, :closed}, %{port: port} = state) do
-    Logger.warning("stdio server closed connection, restarting")
+    Hermes.Logging.transport_event("stdio_closed", "Connection closed, transport will restart", level: :warning)
     {:stop, :normal, state}
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
-    Logger.warning("stdio server exited with status: #{status}")
+    Hermes.Logging.transport_event("stdio_exit", %{status: status}, level: :warning)
     {:stop, status, state}
   end
 
   def handle_info({:DOWN, ref, :port, port, reason}, %{ref: ref, port: port} = state) do
-    Logger.error("stdio server monitor DOWN: #{inspect(reason)}")
+    Hermes.Logging.transport_event("stdio_down", %{reason: reason}, level: :error)
     {:stop, reason, state}
   end
 
   def handle_info({:EXIT, port, reason}, %{port: port} = state) do
-    Logger.error("stdio server exited: #{inspect(reason)}")
+    Hermes.Logging.transport_event("stdio_exit", %{reason: reason}, level: :error)
     {:stop, reason, state}
   end
 

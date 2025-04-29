@@ -16,12 +16,10 @@ defmodule Hermes.Transport.SSE do
   import Peri
 
   alias Hermes.HTTP
+  alias Hermes.Logging
   alias Hermes.SSE
   alias Hermes.SSE.Event
   alias Hermes.Transport.Behaviour, as: Transport
-  alias Hermes.URI, as: HermesURI
-
-  require Logger
 
   @type t :: GenServer.server()
 
@@ -98,8 +96,8 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def init(%{} = opts) do
-    server_url = make_server_url(opts.server)
-    sse_url = HermesURI.join_path(server_url, opts.server[:sse_path])
+    server_url = URI.append_path(opts.server[:base_url], opts.server[:base_path])
+    sse_url = URI.append_path(server_url, opts.server[:sse_path])
 
     state =
       opts
@@ -117,7 +115,7 @@ defmodule Hermes.Transport.SSE do
 
     task =
       Task.async(fn ->
-        Logger.metadata(parent_metadata)
+        Logging.context(parent_metadata)
 
         stream =
           SSE.connect(state.sse_url, state.headers,
@@ -139,22 +137,38 @@ defmodule Hermes.Transport.SSE do
   end
 
   defp handle_sse_event({:error, :halted}, pid) do
-    Logger.debug("Received halt notification from SSE streaming, transport will be restarted")
+    Hermes.Logging.transport_event("sse_halted", "Transport will be restarted")
     shutdown(pid)
   end
 
   defp handle_sse_event(%Event{event: "endpoint", data: endpoint}, pid) do
-    Logger.debug("Received endpoint event from server")
+    Hermes.Logging.transport_event("endpoint", endpoint)
     send(pid, {:endpoint, endpoint})
   end
 
   defp handle_sse_event(%Event{event: "message", data: data}, pid) do
-    Logger.debug("Received message event from server")
+    Hermes.Logging.transport_event("message", data)
     send(pid, {:message, data})
   end
 
+  # coming from fast-mcp ruby
+  # https://github.com/yjacquin/fast-mcp/issues/38
+  defp handle_sse_event(%Event{event: "ping", data: data}, _) do
+    Hermes.Logging.transport_event("ping", data)
+  end
+
+  defp handle_sse_event(%Event{event: "reconnect", data: data}, _pid) do
+    reason =
+      case JSON.decode(data) do
+        {:ok, %{"reason" => reason}} -> reason
+        _ -> "unknown"
+      end
+
+    Hermes.Logging.transport_event("reconnect", %{reason: reason, data: data})
+  end
+
   defp handle_sse_event(event, _pid) do
-    Logger.warning("Unhandled SSE event from stream: #{inspect(event)}")
+    Hermes.Logging.transport_event("unknown", event, level: :warning)
   end
 
   @impl GenServer
@@ -170,7 +184,7 @@ defmodule Hermes.Transport.SSE do
         {:reply, :ok, state}
 
       {:ok, %Finch.Response{status: status, body: body}} ->
-        Logger.error("HTTP error: #{status}, #{body}")
+        Logging.transport_event("http_error", %{status: status, body: body}, level: :error)
         {:reply, {:error, {:http_error, status, body}}, state}
 
       {:error, reason} ->
@@ -180,9 +194,14 @@ defmodule Hermes.Transport.SSE do
 
   @impl GenServer
   def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
-    GenServer.cast(client, :initialize)
-    message_url = HermesURI.join_path(server_url, endpoint)
-    {:noreply, %{state | message_url: message_url}}
+    case URI.new(endpoint) do
+      {:ok, endpoint} ->
+        GenServer.cast(client, :initialize)
+        {:noreply, %{state | message_url: parse_message_url(URI.parse(server_url), endpoint)}}
+
+      {:error, _} = err ->
+        {:stop, err, state}
+    end
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
@@ -191,12 +210,12 @@ defmodule Hermes.Transport.SSE do
   end
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{stream_task: %Task{pid: pid}} = state) do
-    Logger.error("SSE stream task terminated: #{inspect(reason)}")
+    Logging.transport_event("stream_terminated", %{reason: reason}, level: :error)
     {:stop, {:stream_terminated, reason}, state}
   end
 
   def handle_info(msg, state) do
-    Logger.debug("Unexpected genserver message: #{inspect(msg)}")
+    Logging.transport_event("unexpected_message", %{message: msg})
     {:noreply, state}
   end
 
@@ -223,7 +242,24 @@ defmodule Hermes.Transport.SSE do
     )
   end
 
-  defp make_server_url(server_opts) do
-    HermesURI.join_path(server_opts[:base_url], server_opts[:base_path])
+  # tries to handle multiple possibles formats for message_url URI
+  # https://github.com/cloudwalk/hermes-mcp/pull/60#issuecomment-2806309443
+  defp parse_message_url(%{path: base_path} = base, %{scheme: nil, path: path} = uri)
+       when is_binary(base_path) and is_binary(path) do
+    if path =~ base_path do
+      base
+      |> URI.merge(uri)
+      |> URI.to_string()
+    else
+      base
+      |> URI.append_path(URI.to_string(uri))
+      |> URI.to_string()
+    end
+  end
+
+  defp parse_message_url(base, uri) do
+    base
+    |> URI.merge(uri)
+    |> URI.to_string()
   end
 end

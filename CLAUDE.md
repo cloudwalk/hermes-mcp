@@ -6,7 +6,7 @@
 mix deps.get
 
 # Compile code 
-mix compile
+mix compile --force --warnings-as-errors
 
 # Run all tests
 mix test
@@ -21,10 +21,10 @@ mix test test/path/to/test_file.exs:line_number
 mix format
 
 # Run linting
-mix credo
+mix credo --strict
 
 # Type checking
-mix dialyxir
+mix dialyzer
 
 # Generate documentation
 mix docs
@@ -35,6 +35,7 @@ just calculator-server
 ```
 
 ## Code Style Guidelines
+- **Code Comments**: Only add code comments if strictly necessary, avoid it generally
 - **Formatting**: Follow .formatter.exs rules with Peri imports
 - **Types**: Use @type/@spec for all public functions
 - **Naming**: snake_case for functions, PascalCase modules

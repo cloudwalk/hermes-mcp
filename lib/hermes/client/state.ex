@@ -39,6 +39,7 @@ defmodule Hermes.Client.State do
   ```
   """
 
+  alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
@@ -52,7 +53,6 @@ defmodule Hermes.Client.State do
           server_capabilities: map() | nil,
           server_info: map() | nil,
           protocol_version: String.t(),
-          request_timeout: integer(),
           transport: map(),
           pending_requests: %{String.t() => Request.t()},
           progress_callbacks: %{String.t() => progress_callback()},
@@ -65,7 +65,6 @@ defmodule Hermes.Client.State do
     :server_capabilities,
     :server_info,
     :protocol_version,
-    :request_timeout,
     :transport,
     pending_requests: %{},
     progress_callbacks: %{},
@@ -93,14 +92,12 @@ defmodule Hermes.Client.State do
       ...>   client_info: %{"name" => "MyClient", "version" => "1.0.0"},
       ...>   capabilities: %{"resources" => %{}},
       ...>   protocol_version: "2024-11-05",
-      ...>   request_timeout: 30000,
       ...>   transport: %{layer: Hermes.Transport.SSE, name: MyTransport}
       ...> })
       %Hermes.Client.State{
         client_info: %{"name" => "MyClient", "version" => "1.0.0"},
         capabilities: %{"resources" => %{}},
         protocol_version: "2024-11-05",
-        request_timeout: 30000,
         transport: %{layer: Hermes.Transport.SSE, name: MyTransport}
       }
   """
@@ -110,38 +107,46 @@ defmodule Hermes.Client.State do
       client_info: opts.client_info,
       capabilities: opts.capabilities,
       protocol_version: opts.protocol_version,
-      request_timeout: opts.request_timeout,
       transport: opts.transport
     }
   end
 
   @doc """
-  Adds a new request to the state and returns the request ID and updated state.
+  Adds a new request to the state from an Operation and returns the request ID and updated state.
+
+  This function:
+  1. Processes the operation details
+  2. Creates a new request with a unique ID
+  3. Sets up the timeout timer
+  4. Registers any progress callbacks
+  5. Updates the state with the new request
 
   ## Parameters
 
     * `state` - The current client state
-    * `method` - The method being requested
-    * `params` - The parameters for the request
+    * `operation` - The operation to perform
     * `from` - The GenServer.from for the caller
 
   ## Examples
 
-      iex> {req_id, updated_state} = Hermes.Client.State.add_request(state, "ping", %{}, {pid, ref})
+      iex> operation = Operation.new(%{method: "ping", params: %{}})
+      iex> {req_id, updated_state} = Hermes.Client.State.add_request_from_operation(state, operation, {pid, ref})
       iex> is_binary(req_id)
       true
       iex> map_size(updated_state.pending_requests) > map_size(state.pending_requests)
       true
   """
-  @spec add_request(t(), String.t(), map(), GenServer.from()) :: {String.t(), t()}
-  def add_request(state, method, _params, from) do
+  @spec add_request_from_operation(t(), Operation.t(), GenServer.from()) :: {String.t(), t()}
+  def add_request_from_operation(state, %Operation{} = operation, from) do
+    state = register_progress_callback_from_opts(state, operation.progress_opts)
+
     request_id = ID.generate_request_id()
-    timer_ref = Process.send_after(self(), {:request_timeout, request_id}, state.request_timeout)
+    timer_ref = Process.send_after(self(), {:request_timeout, request_id}, operation.timeout)
 
     request =
       Request.new(%{
         id: request_id,
-        method: method,
+        method: operation.method,
         from: from,
         timer_ref: timer_ref
       })
@@ -149,6 +154,35 @@ defmodule Hermes.Client.State do
     pending_requests = Map.put(state.pending_requests, request_id, request)
 
     {request_id, %{state | pending_requests: pending_requests}}
+  end
+
+  @doc """
+  Helper function to add progress token to params if provided.
+  """
+  @spec add_progress_token_to_params(map(), keyword() | nil) :: map()
+  def add_progress_token_to_params(params, progress_opts) do
+    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
+         {:ok, token} when not is_nil(token) and (is_binary(token) or is_integer(token)) <-
+           {:ok, Keyword.get(opts, :token)} do
+      meta = %{"progressToken" => token}
+      Map.put(params, "_meta", meta)
+    else
+      _ -> params
+    end
+  end
+
+  @doc """
+  Helper function to register progress callback from options.
+  """
+  @spec register_progress_callback_from_opts(t(), keyword() | nil) :: t()
+  def register_progress_callback_from_opts(state, progress_opts) do
+    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
+         {:ok, callback} when is_function(callback, 3) <- {:ok, Keyword.get(opts, :callback)},
+         {:ok, token} when not is_nil(token) <- {:ok, Keyword.get(opts, :token)} do
+      register_progress_callback(state, token, callback)
+    else
+      _ -> state
+    end
   end
 
   @doc """

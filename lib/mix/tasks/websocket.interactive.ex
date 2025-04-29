@@ -1,33 +1,33 @@
-defmodule Mix.Tasks.Hermes.Sse.Interactive do
-  @shortdoc "Test the SSE transport implementation interactively."
+defmodule Mix.Tasks.Hermes.Websocket.Interactive do
+  @shortdoc "Test the WebSocket transport implementation interactively."
 
   @moduledoc """
-  Mix task to test the SSE transport implementation, interactively sending commands.
+  Mix task to test the WebSocket transport implementation, interactively sending commands.
 
   ## Options
 
-  * `--base-url` - Base URL for the SSE server (default: http://localhost:8000)
+  * `--base-url` - Base URL for the WebSocket server (default: http://localhost:8000)
   * `--base-path` - Base path to append to the base URL
-  * `--sse-path` - Specific SSE endpoint path
+  * `--ws-path` - Specific WebSocket endpoint path (default: /ws)
   """
 
   use Mix.Task
 
   alias Hermes.Client
-  alias Hermes.Transport.SSE
+  alias Hermes.Transport.WebSocket
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
   @switches [
     base_url: :string,
     base_path: :string,
-    sse_path: :string,
+    ws_path: :string,
     verbose: :count
   ]
 
   def run(args) do
     # Start required applications without requiring a project
-    Application.ensure_all_started([:hermes_mcp, :peri])
+    Application.ensure_all_started([:hermes_mcp, :peri, :gun])
 
     # Parse arguments and set log level
     {parsed, _} =
@@ -43,24 +43,24 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
     server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
 
-    header = UI.header("HERMES MCP SSE INTERACTIVE")
+    header = UI.header("HERMES MCP WEBSOCKET INTERACTIVE")
     IO.puts(header)
-    IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
+    IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
 
     {:ok, _} =
-      SSE.start_link(
-        client: :sse_test,
+      WebSocket.start_link(
+        client: :websocket_test,
         server: server_options
       )
 
-    IO.puts("#{UI.colors().success}✓ SSE transport started#{UI.colors().reset}")
+    IO.puts("#{UI.colors().success}✓ WebSocket transport started#{UI.colors().reset}")
 
     {:ok, client} =
       Client.start_link(
-        name: :sse_test,
-        transport: [layer: SSE],
+        name: :websocket_test,
+        transport: [layer: WebSocket],
         client_info: %{
-          "name" => "Mix.Tasks.SSE",
+          "name" => "Mix.Tasks.WebSocket",
           "version" => "1.0.0"
         },
         capabilities: %{
