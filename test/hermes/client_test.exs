@@ -47,38 +47,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "request methods" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}, "completion" => %{"complete" => true}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-      Process.sleep(50)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "ping sends correct request", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -355,39 +324,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "non support request methods" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"prompts" => %{}, "completion" => %{"complete" => true}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      Process.sleep(50)
-
-      %{client: client}
-    end
+    setup :setup_client_with_limited_capabilities
 
     test "ping sends correct request since it is always supported", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -421,37 +358,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "error handling" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "completion" => %{}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "handles error response", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -521,39 +428,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "server information" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{"subscribe" => true}, "tools" => %{}, "completion" => %{}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      Process.sleep(500)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "get_server_capabilities returns server capabilities", %{client: client} do
       capabilities = Hermes.Client.get_server_capabilities(client)
@@ -574,39 +449,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "progress tracking" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}, "completion" => %{"complete" => true}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      Process.sleep(50)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "registers and calls progress callback when notification is received", %{client: client} do
       # Variables for progress tracking
@@ -694,40 +537,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "logging" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      # Initialize the client
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "logging" => %{}, "completion" => %{"complete" => true}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      Process.sleep(50)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "set_log_level sends the correct request", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -768,20 +578,11 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      assert request_id = get_request_id(client, "completion/complete")
+      request_id = get_request_id(client, "completion/complete")
+      assert request_id
 
-      response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "completion" => %{
-            "values" => ["python", "pytorch", "pyside"],
-            "total" => 3,
-            "hasMore" => false
-          }
-        }
-      }
-
+      values = ["python", "pytorch", "pyside"]
+      response = completion_complete_response(request_id, values, 3, false)
       send_response(client, response)
 
       assert {:ok, response} = Task.await(task)
@@ -789,7 +590,7 @@ defmodule Hermes.ClientTest do
 
       completion = Response.unwrap(response)["completion"]
       assert is_map(completion)
-      assert completion["values"] == ["python", "pytorch", "pyside"]
+      assert completion["values"] == values
       assert completion["total"] == 3
       assert completion["hasMore"] == false
     end
@@ -812,26 +613,17 @@ defmodule Hermes.ClientTest do
 
       Process.sleep(50)
 
-      assert request_id = get_request_id(client, "completion/complete")
+      request_id = get_request_id(client, "completion/complete")
+      assert request_id
 
-      response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "completion" => %{
-            "values" => ["utf-8", "utf-16"],
-            "total" => 2,
-            "hasMore" => false
-          }
-        }
-      }
-
+      values = ["utf-8", "utf-16"]
+      response = completion_complete_response(request_id, values, 2, false)
       send_response(client, response)
 
       assert {:ok, response} = Task.await(task)
 
       completion = Response.unwrap(response)["completion"]
-      assert completion["values"] == ["utf-8", "utf-16"]
+      assert completion["values"] == values
       assert completion["total"] == 2
       assert completion["hasMore"] == false
     end
@@ -901,17 +693,8 @@ defmodule Hermes.ClientTest do
 
       initialize_client(client)
 
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"completion" => %{}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
+      request_id = get_request_id(client, "initialize")
+      assert request_id
 
       init_response = init_response(request_id, %{"completion" => %{}})
       send_response(client, init_response)
@@ -921,39 +704,7 @@ defmodule Hermes.ClientTest do
   end
 
   describe "cancellation" do
-    setup do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
-
-      client =
-        start_supervised!(
-          {Hermes.Client,
-           transport: [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
-          restart: :temporary
-        )
-
-      allow(Hermes.MockTransport, self(), client)
-
-      initialize_client(client)
-
-      assert request_id = get_request_id(client, "initialize")
-
-      init_response = %{
-        "id" => request_id,
-        "jsonrpc" => "2.0",
-        "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "completion" => %{}},
-          "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
-          "protocolVersion" => "2024-11-05"
-        }
-      }
-
-      send_response(client, init_response)
-
-      Process.sleep(50)
-
-      %{client: client}
-    end
+    setup :setup_initialized_client
 
     test "handles cancelled notification from server", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
