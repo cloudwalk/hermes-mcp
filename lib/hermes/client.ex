@@ -23,6 +23,7 @@ defmodule Hermes.Client do
   alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
+  alias Hermes.Telemetry
 
   require Hermes.MCP.Message
 
@@ -524,20 +525,38 @@ defmodule Hermes.Client do
       capabilities: opts.capabilities
     })
 
+    Telemetry.execute(
+      Telemetry.event_client_init(),
+      %{system_time: System.system_time()},
+      %{
+        client_name: client_name,
+        transport: transport,
+        protocol_version: opts.protocol_version,
+        capabilities: opts.capabilities
+      }
+    )
+
     {:ok, state, :hibernate}
   end
 
   @impl true
   def handle_call({:operation, %Operation{} = operation}, from, state) do
+    method = operation.method
     params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
 
-    with :ok <- State.validate_capability(state, operation.method),
+    with :ok <- State.validate_capability(state, method),
          {request_id, updated_state} = State.add_request_from_operation(state, operation, from),
-         {:ok, request_data} <- encode_request(operation.method, params_with_token, request_id),
+         {:ok, request_data} <- encode_request(method, params_with_token, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
+      Telemetry.execute(
+        Telemetry.event_client_request(),
+        %{system_time: System.system_time()},
+        %{method: method, request_id: request_id}
+      )
+
       {:noreply, updated_state}
     else
-      {:error, _reason} = err -> {:reply, err, state}
+      err -> {:reply, err, state}
     end
   end
 
@@ -743,12 +762,23 @@ defmodule Hermes.Client do
     })
 
     pending_requests = State.list_pending_requests(state)
+    pending_count = length(pending_requests)
 
-    if length(pending_requests) > 0 do
+    if pending_count > 0 do
       Logging.client_event("pending_requests", %{
-        count: length(pending_requests)
+        count: pending_count
       })
     end
+
+    Telemetry.execute(
+      Telemetry.event_client_terminate(),
+      %{system_time: System.system_time()},
+      %{
+        client_name: name,
+        reason: reason,
+        pending_requests: pending_count
+      }
+    )
 
     for request <- pending_requests do
       send_notification(state, "notifications/cancelled", %{
@@ -779,11 +809,23 @@ defmodule Hermes.Client do
 
       {request, updated_state} ->
         error = Error.from_json_rpc(json_error)
+        elapsed_ms = Request.elapsed_time(request)
 
         Logging.client_event("error_response", %{
           id: id,
           method: request.method
         })
+
+        Telemetry.execute(
+          Telemetry.event_client_error(),
+          %{duration: elapsed_ms, system_time: System.system_time()},
+          %{
+            id: id,
+            method: request.method,
+            error_code: json_error["code"],
+            error_message: json_error["message"]
+          }
+        )
 
         GenServer.reply(request.from, {:error, error})
         updated_state
@@ -835,6 +877,7 @@ defmodule Hermes.Client do
 
       {request, updated_state} ->
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
+        elapsed_ms = Request.elapsed_time(request)
 
         result_summary =
           case result do
@@ -847,6 +890,16 @@ defmodule Hermes.Client do
           method: request.method,
           result_summary: result_summary
         })
+
+        Telemetry.execute(
+          Telemetry.event_client_response(),
+          %{duration: elapsed_ms, system_time: System.system_time()},
+          %{
+            id: id,
+            method: request.method,
+            status: :success
+          }
+        )
 
         if request.method == "ping" do
           GenServer.reply(request.from, :pong)

@@ -19,6 +19,7 @@ defmodule Hermes.Transport.SSE do
   alias Hermes.Logging
   alias Hermes.SSE
   alias Hermes.SSE.Event
+  alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
   @type t :: GenServer.server()
@@ -105,6 +106,19 @@ defmodule Hermes.Transport.SSE do
       |> Map.put(:server_url, server_url)
       |> Map.put(:sse_url, sse_url)
 
+    metadata = %{
+      server_url: URI.to_string(server_url),
+      sse_url: URI.to_string(sse_url),
+      transport: :sse,
+      client: opts.client
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_init(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     {:ok, state, {:continue, :connect}}
   end
 
@@ -112,6 +126,17 @@ defmodule Hermes.Transport.SSE do
   def handle_continue(:connect, state) do
     parent = self()
     parent_metadata = Logger.metadata()
+
+    metadata = %{
+      transport: :sse,
+      sse_url: URI.to_string(state.sse_url)
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_connect(),
+      %{system_time: System.system_time()},
+      metadata
+    )
 
     task =
       Task.async(fn ->
@@ -131,7 +156,6 @@ defmodule Hermes.Transport.SSE do
     {:noreply, %{state | stream_task: task}}
   end
 
-  # this function will run indefinitely
   defp process_stream(stream, pid) do
     Enum.each(stream, &handle_sse_event(&1, pid))
   end
@@ -177,6 +201,18 @@ defmodule Hermes.Transport.SSE do
   end
 
   def handle_call({:send, message}, _from, state) do
+    metadata = %{
+      transport: :sse,
+      message_size: byte_size(message),
+      endpoint: state.message_url
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_send(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     request = make_message_request(message, state)
 
     case HTTP.follow_redirect(request) do
@@ -205,12 +241,31 @@ defmodule Hermes.Transport.SSE do
   end
 
   def handle_info({:message, message}, %{client: client} = state) do
+    Telemetry.execute(
+      Telemetry.event_transport_receive(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :sse,
+        message_size: byte_size(message)
+      }
+    )
+
     GenServer.cast(client, {:response, message})
     {:noreply, state}
   end
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{stream_task: %Task{pid: pid}} = state) do
     Logging.transport_event("stream_terminated", %{reason: reason}, level: :error)
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :sse,
+        reason: reason
+      }
+    )
+
     {:stop, {:stream_terminated, reason}, state}
   end
 
@@ -225,7 +280,25 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def terminate(_reason, %{stream_task: task} = _state) when not is_nil(task) do
+  def terminate(reason, %{stream_task: task}) when not is_nil(task) do
+    Telemetry.execute(
+      Telemetry.event_transport_terminate(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :sse,
+        reason: reason
+      }
+    )
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :sse,
+        reason: reason
+      }
+    )
+
     Task.shutdown(task, :brutal_kill)
     :ok
   end

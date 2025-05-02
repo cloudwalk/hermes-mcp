@@ -14,6 +14,8 @@ defmodule Hermes.Transport.STDIO do
 
   import Peri
 
+  alias Hermes.Logging
+  alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
   require Logger
@@ -93,6 +95,19 @@ defmodule Hermes.Transport.STDIO do
   def init(%{} = opts) do
     state = Map.merge(opts, %{port: nil, ref: nil})
 
+    metadata = %{
+      transport: :stdio,
+      command: opts.command,
+      args: opts.args,
+      client: opts.client
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_init(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     {:ok, state, {:continue, :spawn}}
   end
 
@@ -111,45 +126,143 @@ defmodule Hermes.Transport.STDIO do
 
   @impl GenServer
   def handle_call({:send, message}, _, %{port: port} = state) when is_port(port) do
+    metadata = %{
+      transport: :stdio,
+      message_size: byte_size(message),
+      command: state.command
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_send(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     Port.command(port, message)
     {:reply, :ok, state}
   end
 
-  def handle_call({:send, _message}, _, state) do
+  def handle_call({:send, message}, _, state) do
+    Telemetry.execute(
+      Telemetry.event_transport_error(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        error: :port_not_connected,
+        message_size: byte_size(message)
+      }
+    )
+
     {:reply, {:error, :port_not_connected}, state}
   end
 
   @impl GenServer
   def handle_info({port, {:data, data}}, %{port: port} = state) do
-    Hermes.Logging.transport_event("stdio_received", String.slice(data, 0, 100))
+    Logging.transport_event("stdio_received", String.slice(data, 0, 100))
+
+    Telemetry.execute(
+      Telemetry.event_transport_receive(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        message_size: byte_size(data)
+      }
+    )
+
     GenServer.cast(state.client, {:response, data})
     {:noreply, state}
   end
 
   def handle_info({port, :closed}, %{port: port} = state) do
-    Hermes.Logging.transport_event("stdio_closed", "Connection closed, transport will restart", level: :warning)
+    Logging.transport_event("stdio_closed", "Connection closed, transport will restart", level: :warning)
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        reason: :normal
+      }
+    )
+
     {:stop, :normal, state}
   end
 
   def handle_info({port, {:exit_status, status}}, %{port: port} = state) do
-    Hermes.Logging.transport_event("stdio_exit", %{status: status}, level: :warning)
+    Logging.transport_event("stdio_exit", %{status: status}, level: :warning)
+
+    Telemetry.execute(
+      Telemetry.event_transport_error(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        error: :exit_status,
+        status: status
+      }
+    )
+
     {:stop, status, state}
   end
 
   def handle_info({:DOWN, ref, :port, port, reason}, %{ref: ref, port: port} = state) do
-    Hermes.Logging.transport_event("stdio_down", %{reason: reason}, level: :error)
+    Logging.transport_event("stdio_down", %{reason: reason}, level: :error)
+
+    Telemetry.execute(
+      Telemetry.event_transport_error(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        error: :port_down,
+        reason: reason
+      }
+    )
+
     {:stop, reason, state}
   end
 
   def handle_info({:EXIT, port, reason}, %{port: port} = state) do
-    Hermes.Logging.transport_event("stdio_exit", %{reason: reason}, level: :error)
+    Logging.transport_event("stdio_exit", %{reason: reason}, level: :error)
+
+    Telemetry.execute(
+      Telemetry.event_transport_error(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        error: :port_exit,
+        reason: reason
+      }
+    )
+
     {:stop, reason, state}
   end
 
   @impl GenServer
   def handle_cast(:close_port, %{port: port} = state) do
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        reason: :client_closed
+      }
+    )
+
     Port.close(port)
     {:stop, :normal, state}
+  end
+
+  @impl GenServer
+  def terminate(reason, _state) do
+    Telemetry.execute(
+      Telemetry.event_transport_terminate(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :stdio,
+        reason: reason
+      }
+    )
+
+    :ok
   end
 
   defp spawn_port(cmd, state) do

@@ -16,6 +16,7 @@ defmodule Hermes.Transport.WebSocket do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
   @type t :: GenServer.server()
@@ -95,6 +96,18 @@ defmodule Hermes.Transport.WebSocket do
 
     state = Map.merge(opts, %{ws_url: ws_url, gun_pid: nil, stream_ref: nil})
 
+    metadata = %{
+      transport: :websocket,
+      ws_url: URI.to_string(ws_url),
+      client: opts.client
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_init(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     {:ok, state, {:continue, :connect}}
   end
 
@@ -103,6 +116,27 @@ defmodule Hermes.Transport.WebSocket do
     uri = URI.parse(state.ws_url)
     protocol = if uri.scheme == "https", do: :https, else: :http
     port = uri.port || if protocol == :https, do: 443, else: 80
+
+    state =
+      Map.merge(state, %{
+        host: uri.host,
+        port: port,
+        protocol: protocol
+      })
+
+    metadata = %{
+      transport: :websocket,
+      ws_url: URI.to_string(state.ws_url),
+      host: uri.host,
+      port: port,
+      protocol: protocol
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_connect(),
+      %{system_time: System.system_time()},
+      metadata
+    )
 
     gun_opts = %{
       protocols: [:http],
@@ -117,6 +151,13 @@ defmodule Hermes.Transport.WebSocket do
 
       {:error, reason} ->
         Logging.transport_event("gun_open_failed", %{reason: reason}, level: :error)
+
+        Telemetry.execute(
+          Telemetry.event_transport_error(),
+          %{system_time: System.system_time()},
+          Map.put(metadata, :error, reason)
+        )
+
         {:stop, {:gun_open_failed, reason}, state}
     end
   end
@@ -140,7 +181,11 @@ defmodule Hermes.Transport.WebSocket do
   end
 
   defp initiate_websocket_upgrade(gun_pid, uri, state) do
-    headers = state.headers |> Map.to_list() |> Enum.map(fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
+    headers =
+      state.headers
+      |> Map.to_list()
+      |> Enum.map(fn {k, v} -> {to_charlist(k), to_charlist(v)} end)
+
     path = uri.path || "/"
     path = if uri.query, do: "#{path}?#{uri.query}", else: path
     stream_ref = :gun.ws_upgrade(gun_pid, to_charlist(path), headers)
@@ -152,6 +197,17 @@ defmodule Hermes.Transport.WebSocket do
   @impl GenServer
   def handle_call({:send, message}, _from, %{gun_pid: pid, stream_ref: stream_ref} = state)
       when not is_nil(pid) and not is_nil(stream_ref) do
+    metadata = %{
+      transport: :websocket,
+      message_size: byte_size(message)
+    }
+
+    Telemetry.execute(
+      Telemetry.event_transport_send(),
+      %{system_time: System.system_time()},
+      metadata
+    )
+
     :ok = :gun.ws_send(pid, stream_ref, {:text, message})
     Logging.transport_event("ws_message_sent", String.slice(message, 0, 100))
     {:reply, :ok, state}
@@ -171,17 +227,48 @@ defmodule Hermes.Transport.WebSocket do
         %{gun_pid: pid, stream_ref: stream_ref, client: client} = state
       ) do
     Logging.transport_event("ws_message_received", String.slice(data, 0, 100))
+
+    Telemetry.execute(
+      Telemetry.event_transport_receive(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        message_size: byte_size(data)
+      }
+    )
+
     GenServer.cast(client, {:response, data})
     {:noreply, state}
   end
 
   def handle_info({:gun_ws, pid, stream_ref, :close}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
     Logging.transport_event("ws_closed", "Connection closed by server", level: :warning)
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        reason: :normal_close
+      }
+    )
+
     {:stop, :normal, state}
   end
 
   def handle_info({:gun_ws, pid, stream_ref, {:close, code, reason}}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
     Logging.transport_event("ws_closed", %{code: code, reason: reason}, level: :warning)
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        code: code,
+        reason: reason
+      }
+    )
+
     {:stop, {:ws_closed, code, reason}, state}
   end
 
@@ -196,6 +283,7 @@ defmodule Hermes.Transport.WebSocket do
 
   def handle_info({:gun_response, pid, stream_ref, _, status, headers}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
     Logging.transport_event("ws_upgrade_rejected", %{status: status, headers: headers}, level: :error)
+
     {:stop, {:ws_upgrade_rejected, status}, state}
   end
 
@@ -206,6 +294,17 @@ defmodule Hermes.Transport.WebSocket do
 
   def handle_info({:DOWN, _ref, :process, pid, reason}, %{gun_pid: pid} = state) do
     Logging.transport_event("gun_down", %{reason: reason}, level: :error)
+
+    Telemetry.execute(
+      Telemetry.event_transport_error(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        error: :connection_down,
+        reason: reason
+      }
+    )
+
     {:stop, {:gun_down, reason}, state}
   end
 
@@ -216,16 +315,52 @@ defmodule Hermes.Transport.WebSocket do
 
   @impl GenServer
   def handle_cast(:close_connection, %{gun_pid: pid} = state) when not is_nil(pid) do
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        reason: :client_closed
+      }
+    )
+
     :ok = :gun.close(pid)
     {:stop, :normal, state}
   end
 
   def handle_cast(:close_connection, state) do
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        reason: :client_closed_before_connected
+      }
+    )
+
     {:stop, :normal, state}
   end
 
   @impl GenServer
-  def terminate(_reason, %{gun_pid: pid} = _state) when not is_nil(pid) do
+  def terminate(reason, %{gun_pid: pid} = _state) when not is_nil(pid) do
+    Telemetry.execute(
+      Telemetry.event_transport_terminate(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        reason: reason
+      }
+    )
+
+    Telemetry.execute(
+      Telemetry.event_transport_disconnect(),
+      %{system_time: System.system_time()},
+      %{
+        transport: :websocket,
+        reason: reason
+      }
+    )
+
     :gun.close(pid)
     :ok
   end
