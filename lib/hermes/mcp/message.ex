@@ -54,6 +54,7 @@ defmodule Hermes.MCP.Message do
     "level" => {:required, {:enum, @log_levels}}
   }
 
+
   @completion_prompt_ref_schema %{
     "type" => {:required, {:string, {:eq, "ref/prompt"}}},
     "name" => {:required, :string}
