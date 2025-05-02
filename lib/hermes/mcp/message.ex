@@ -9,7 +9,7 @@ defmodule Hermes.MCP.Message do
 
   # MCP message schemas
 
-  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel)
+  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete)
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
@@ -54,6 +54,27 @@ defmodule Hermes.MCP.Message do
     "level" => {:required, {:enum, @log_levels}}
   }
 
+
+  @completion_prompt_ref_schema %{
+    "type" => {:required, {:string, {:eq, "ref/prompt"}}},
+    "name" => {:required, :string}
+  }
+
+  @completion_resource_ref_schema %{
+    "type" => {:required, {:string, {:eq, "ref/resource"}}},
+    "uri" => {:required, :string}
+  }
+
+  @completion_argument_schema %{
+    "name" => {:required, :string},
+    "value" => {:required, :string}
+  }
+
+  @completion_complete_params_schema %{
+    "ref" => {:required, {:oneof, [@completion_prompt_ref_schema, @completion_resource_ref_schema]}},
+    "argument" => {:required, @completion_argument_schema}
+  }
+
   defschema :request_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" => {:required, {:enum, @request_methods}},
@@ -77,6 +98,8 @@ defmodule Hermes.MCP.Message do
   defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
 
   defp parse_request_params_by_method(%{"method" => "logging/setLevel"}), do: {:ok, @set_log_level_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "completion/complete"}), do: {:ok, @completion_complete_params_schema}
 
   defp parse_request_params_by_method(_), do: {:ok, :map}
 

@@ -354,6 +354,61 @@ defmodule Hermes.Client do
   end
 
   @doc """
+  Requests autocompletion suggestions for prompt arguments or resource URIs.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `ref` - Reference to what is being completed (required)
+      * For prompts: `%{"type" => "ref/prompt", "name" => prompt_name}`
+      * For resources: `%{"type" => "ref/resource", "uri" => resource_uri}`
+    * `argument` - The argument being completed (required)
+      * `%{"name" => arg_name, "value" => current_value}`
+    * `opts` - Additional options
+      * `:timeout` - Request timeout in milliseconds
+      * `:progress` - Progress tracking options
+        * `:token` - A unique token to track progress (string or integer)
+        * `:callback` - A function to call when progress updates are received
+
+  ## Returns
+
+  Returns `{:ok, response}` with completion suggestions if successful, or `{:error, reason}` if an error occurs.
+
+  The response result contains a "completion" object with:
+  * `values` - List of completion suggestions (maximum 100)
+  * `total` - Optional total number of matching items
+  * `hasMore` - Boolean indicating if more results are available
+
+  ## Examples
+
+      # Get completion for a prompt argument
+      ref = %{"type" => "ref/prompt", "name" => "code_review"}
+      argument = %{"name" => "language", "value" => "py"}
+      {:ok, response} = Hermes.Client.complete(client, ref, argument)
+      
+      # Access the completion values
+      values = get_in(Response.unwrap(response), ["completion", "values"])
+  """
+  @spec complete(t, map(), map(), keyword()) :: {:ok, Response.t()} | {:error, Error.t()}
+  def complete(client, ref, argument, opts \\ []) do
+    params = %{
+      "ref" => ref,
+      "argument" => argument
+    }
+
+    operation =
+      Operation.new(%{
+        method: "completion/complete",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
+  end
+
+  @doc """
   Registers a callback function to be called when log messages are received.
 
   ## Parameters

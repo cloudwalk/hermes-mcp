@@ -326,6 +326,64 @@ Each client API call accepts a `:timeout` option which overrides the default ope
 > This prevents "nested timeout" issues where a GenServer timeout would occur without 
 > the client knowing which request timed out.
 
+## Autocompletion
+
+MCP supports autocompletion for prompt arguments and resource URIs, enabling a better user experience when entering values.
+
+### Getting Completions for Prompt Arguments
+
+To get completion suggestions for a prompt argument:
+
+```elixir
+# Reference to a prompt
+ref = %{"type" => "ref/prompt", "name" => "code_review"}
+
+# Argument being completed with current partial value
+argument = %{"name" => "language", "value" => "py"}
+
+case Hermes.Client.complete(MyApp.MCPClient, ref, argument) do
+  {:ok, response} ->
+    completion = Hermes.MCP.Response.unwrap(response)["completion"]
+    
+    values = completion["values"]
+    total = completion["total"]
+    more_available = completion["hasMore"]
+    
+    IO.puts("Completion suggestions:")
+    Enum.each(values, fn value -> IO.puts("  - #{value}") end)
+    
+    if more_available do
+      IO.puts("(#{total - length(values)} more suggestions available)")
+    end
+    
+  {:error, error} ->
+    IO.puts("Error getting completions: #{inspect(error)}")
+end
+```
+
+### Getting Completions for Resource URIs
+
+To get completion suggestions for a resource URI:
+
+```elixir
+# Reference to a resource
+ref = %{"type" => "ref/resource", "uri" => "file:///path/to/"}
+
+# Argument being completed
+argument = %{"name" => "filename", "value" => "doc"}
+
+case Hermes.Client.complete(MyApp.MCPClient, ref, argument) do
+  {:ok, response} ->
+    completion = Hermes.MCP.Response.unwrap(response)["completion"]
+    
+    IO.puts("Matching filenames:")
+    Enum.each(completion["values"], fn value -> IO.puts("  - #{value}") end)
+    
+  {:error, error} ->
+    IO.puts("Error getting completions: #{inspect(error)}")
+end
+```
+
 ## Extended Capabilities
 
 To extend the client's capabilities after initialization:

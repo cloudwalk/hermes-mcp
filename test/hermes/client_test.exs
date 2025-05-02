@@ -81,7 +81,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}, "completion" => %{"complete" => true}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -439,7 +439,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"prompts" => %{}},
+          "capabilities" => %{"prompts" => %{}, "completion" => %{"complete" => true}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -509,7 +509,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "completion" => %{}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -616,7 +616,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{"subscribe" => true}, "tools" => %{}},
+          "capabilities" => %{"resources" => %{"subscribe" => true}, "tools" => %{}, "completion" => %{}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -670,7 +670,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "prompts" => %{}, "completion" => %{"complete" => true}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -815,7 +815,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}, "logging" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "logging" => %{}, "completion" => %{"complete" => true}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -851,6 +851,92 @@ defmodule Hermes.ClientTest do
       send_response(client, response)
 
       assert {:ok, %{}} = Task.await(task)
+    end
+
+    test "complete sends correct completion/complete request for prompt reference", %{client: client} do
+      ref = %{"type" => "ref/prompt", "name" => "code_review"}
+      argument = %{"name" => "language", "value" => "py"}
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "completion/complete"
+        assert decoded["params"]["ref"]["type"] == "ref/prompt"
+        assert decoded["params"]["ref"]["name"] == "code_review"
+        assert decoded["params"]["argument"]["name"] == "language"
+        assert decoded["params"]["argument"]["value"] == "py"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.complete(client, ref, argument) end)
+
+      Process.sleep(50)
+
+      assert request_id = get_request_id(client, "completion/complete")
+
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "completion" => %{
+            "values" => ["python", "pytorch", "pyside"],
+            "total" => 3,
+            "hasMore" => false
+          }
+        }
+      }
+
+      send_response(client, response)
+
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+
+      completion = Response.unwrap(response)["completion"]
+      assert is_map(completion)
+      assert completion["values"] == ["python", "pytorch", "pyside"]
+      assert completion["total"] == 3
+      assert completion["hasMore"] == false
+    end
+
+    test "complete sends correct completion/complete request for resource reference", %{client: client} do
+      ref = %{"type" => "ref/resource", "uri" => "file:///path/to/file.txt"}
+      argument = %{"name" => "encoding", "value" => "ut"}
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "completion/complete"
+        assert decoded["params"]["ref"]["type"] == "ref/resource"
+        assert decoded["params"]["ref"]["uri"] == "file:///path/to/file.txt"
+        assert decoded["params"]["argument"]["name"] == "encoding"
+        assert decoded["params"]["argument"]["value"] == "ut"
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.complete(client, ref, argument) end)
+
+      Process.sleep(50)
+
+      assert request_id = get_request_id(client, "completion/complete")
+
+      response = %{
+        "id" => request_id,
+        "jsonrpc" => "2.0",
+        "result" => %{
+          "completion" => %{
+            "values" => ["utf-8", "utf-16"],
+            "total" => 2,
+            "hasMore" => false
+          }
+        }
+      }
+
+      send_response(client, response)
+
+      assert {:ok, response} = Task.await(task)
+
+      completion = Response.unwrap(response)["completion"]
+      assert completion["values"] == ["utf-8", "utf-16"]
+      assert completion["total"] == 2
+      assert completion["hasMore"] == false
     end
 
     test "register_log_callback sets the callback", %{client: client} do
@@ -933,7 +1019,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{},
+          "capabilities" => %{"completion" => %{}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
@@ -967,7 +1053,7 @@ defmodule Hermes.ClientTest do
         "id" => request_id,
         "jsonrpc" => "2.0",
         "result" => %{
-          "capabilities" => %{"resources" => %{}, "tools" => %{}},
+          "capabilities" => %{"resources" => %{}, "tools" => %{}, "completion" => %{}},
           "serverInfo" => %{"name" => "TestServer", "version" => "1.0.0"},
           "protocolVersion" => "2024-11-05"
         }
