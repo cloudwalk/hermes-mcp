@@ -14,7 +14,7 @@ func main() {
 	s := server.NewMCPServer("Calculator", "0.1.0", server.WithLogging())
 
 	tool := mcp.NewTool("calculate",
-		mcp.WithDescription("Perform basic arithmetic oprations"),
+		mcp.WithDescription("Perform basic arithmetic operations"),
 		mcp.WithString("operation",
 			mcp.Required(),
 			mcp.Description("The operation to perform (add, subtract, multiply, divide)"),
