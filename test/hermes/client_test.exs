@@ -1,5 +1,5 @@
 defmodule Hermes.ClientTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   import Hermes.Client.Contexts
   import Hermes.Client.Fixtures
