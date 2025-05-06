@@ -74,4 +74,7 @@ defmodule Hermes.Telemetry do
 
   # Progress events
   def event_progress_update, do: [:progress, :update]
+
+  # Roots events
+  def event_client_roots, do: [:client, :roots]
 end

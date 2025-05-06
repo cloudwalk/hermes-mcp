@@ -9,7 +9,7 @@ defmodule Hermes.MCP.Message do
 
   # MCP message schemas
 
-  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete)
+  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete roots/list)
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
@@ -100,6 +100,8 @@ defmodule Hermes.MCP.Message do
 
   defp parse_request_params_by_method(%{"method" => "completion/complete"}), do: {:ok, @completion_complete_params_schema}
 
+  defp parse_request_params_by_method(%{"method" => "roots/list"}), do: {:ok, :map}
+
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
   @init_noti_params_schema :map
@@ -122,7 +124,8 @@ defmodule Hermes.MCP.Message do
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" =>
       {:required,
-       {:enum, ~w(notifications/initialized notifications/cancelled notifications/progress notifications/message)}},
+       {:enum,
+        ~w(notifications/initialized notifications/cancelled notifications/progress notifications/message notifications/roots/list_changed)}},
     "params" => {:dependent, &parse_notification_params_by_method/1}
   }
 
@@ -137,6 +140,8 @@ defmodule Hermes.MCP.Message do
 
   defp parse_notification_params_by_method(%{"method" => "notifications/message"}),
     do: {:ok, @logging_message_notif_params_schema}
+
+  defp parse_notification_params_by_method(%{"method" => "notifications/roots/list_changed"}), do: {:ok, :map}
 
   defp parse_notification_params_by_method(_), do: {:ok, :map}
 

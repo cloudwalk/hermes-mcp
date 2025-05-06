@@ -542,6 +542,89 @@ defmodule Hermes.Client do
   end
 
   @doc """
+  Adds a root directory to the client's roots list.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `uri` - The URI of the root directory (must start with "file://")
+    * `name` - Optional human-readable name for the root
+    * `opts` - Additional options
+      * `:timeout` - Request timeout in milliseconds
+
+  ## Examples
+
+      iex> Hermes.Client.add_root(client, "file:///home/user/project", "My Project")
+      :ok
+  """
+  @spec add_root(t, String.t(), String.t() | nil, opts :: Keyword.t()) :: :ok
+  def add_root(client, uri, name \\ nil, opts \\ []) when is_binary(uri) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:add_root, uri, name}, timeout)
+  end
+
+  @doc """
+  Removes a root directory from the client's roots list.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `uri` - The URI of the root directory to remove
+    * `opts` - Additional options
+      * `:timeout` - Request timeout in milliseconds
+
+  ## Examples
+
+      iex> Hermes.Client.remove_root(client, "file:///home/user/project")
+      :ok
+  """
+  @spec remove_root(t, String.t(), opts :: Keyword.t()) :: :ok
+  def remove_root(client, uri, opts \\ []) when is_binary(uri) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, {:remove_root, uri}, timeout)
+  end
+
+  @doc """
+  Gets a list of all root directories.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `opts` - Additional options
+      * `:timeout` - Request timeout in milliseconds
+
+  ## Examples
+
+      iex> Hermes.Client.list_roots(client)
+      [%{uri: "file:///home/user/project", name: "My Project"}]
+  """
+  @spec list_roots(t, opts :: Keyword.t()) :: [State.root()]
+  def list_roots(client, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, :list_roots, timeout)
+  end
+
+  @doc """
+  Clears all root directories.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `opts` - Additional options
+      * `:timeout` - Request timeout in milliseconds
+
+  ## Examples
+
+      iex> Hermes.Client.clear_roots(client)
+      :ok
+  """
+  @spec clear_roots(t, opts :: Keyword.t()) :: :ok
+  def clear_roots(client, opts \\ []) do
+    timeout = opts[:timeout] || to_timeout(second: 5)
+    GenServer.call(client, :clear_roots, timeout)
+  end
+
+  @doc """
   Closes the client connection and terminates the process.
   """
   @spec close(t) :: :ok
@@ -569,13 +652,13 @@ defmodule Hermes.Client do
     # Set up logging context
     client_name = get_in(opts, [:client_info, "name"])
 
-    Hermes.Logging.context(
+    Logging.context(
       mcp_client: opts.name,
       mcp_client_name: client_name,
       mcp_transport: opts.transport
     )
 
-    Hermes.Logging.client_event("initializing", %{
+    Logging.client_event("initializing", %{
       protocol_version: opts.protocol_version,
       capabilities: opts.capabilities
     })
@@ -597,7 +680,9 @@ defmodule Hermes.Client do
   @impl true
   def handle_call({:operation, %Operation{} = operation}, from, state) do
     method = operation.method
-    params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
+
+    params_with_token =
+      State.add_progress_token_to_params(operation.params, operation.progress_opts)
 
     with :ok <- State.validate_capability(state, method),
          {request_id, updated_state} = State.add_request_from_operation(state, operation, from),
@@ -629,33 +714,43 @@ defmodule Hermes.Client do
   end
 
   def handle_call({:register_log_callback, callback}, _from, state) do
-    updated_state = State.set_log_callback(state, callback)
-    {:reply, :ok, updated_state}
+    {:reply, :ok, State.set_log_callback(state, callback)}
   end
 
   def handle_call(:unregister_log_callback, _from, state) do
-    updated_state = State.clear_log_callback(state)
-    {:reply, :ok, updated_state}
+    {:reply, :ok, State.clear_log_callback(state)}
   end
 
   def handle_call({:register_progress_callback, token, callback}, _from, state) do
-    updated_state = State.register_progress_callback(state, token, callback)
-    {:reply, :ok, updated_state}
+    {:reply, :ok, State.register_progress_callback(state, token, callback)}
   end
 
   def handle_call({:unregister_progress_callback, token}, _from, state) do
-    updated_state = State.unregister_progress_callback(state, token)
-    {:reply, :ok, updated_state}
+    {:reply, :ok, State.unregister_progress_callback(state, token)}
   end
 
   def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
-    result =
-      with {:ok, notification} <-
-             Message.encode_progress_notification(progress_token, progress, total) do
-        send_to_transport(state.transport, notification)
-      end
+    {:reply,
+     with {:ok, notification} <-
+            Message.encode_progress_notification(progress_token, progress, total) do
+       send_to_transport(state.transport, notification)
+     end, state}
+  end
 
-    {:reply, result, state}
+  def handle_call({:add_root, uri, name}, _from, state) do
+    {:reply, :ok, State.add_root(state, uri, name), {:continue, :roots_list_changed}}
+  end
+
+  def handle_call({:remove_root, uri}, _from, state) do
+    {:reply, :ok, State.remove_root(state, uri), {:continue, :roots_list_changed}}
+  end
+
+  def handle_call(:list_roots, _from, state) do
+    {:reply, State.list_roots(state), state}
+  end
+
+  def handle_call(:clear_roots, _from, state) do
+    {:reply, :ok, State.clear_roots(state), {:continue, :roots_list_changed}}
   end
 
   def handle_call({:cancel_request, request_id, reason}, _from, state) do
@@ -683,13 +778,10 @@ defmodule Hermes.Client do
     if Enum.empty?(pending_requests) do
       {:reply, {:ok, []}, state}
     else
-      # Process all pending requests
       cancelled_requests =
         for request <- pending_requests do
-          # Send cancellation notification and ignore errors
           _ = send_cancellation(state, request.id, reason)
 
-          # Notify the original caller with error
           error =
             Error.client_error(:request_cancelled, %{
               message: "Request cancelled by client",
@@ -698,13 +790,17 @@ defmodule Hermes.Client do
 
           GenServer.reply(request.from, {:error, error})
 
-          # Return the request for the response
           request
         end
 
-      # Return with empty pending requests map and list of cancelled requests
       {:reply, {:ok, cancelled_requests}, %{state | pending_requests: %{}}}
     end
+  end
+
+  @impl true
+  def handle_continue(:roots_list_changed, state) do
+    Task.start(fn -> send_roots_list_changed_notification(state) end)
+    {:noreply, state}
   end
 
   @impl true
@@ -747,43 +843,82 @@ defmodule Hermes.Client do
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, [error]} when Message.is_error(error) ->
-        Hermes.Logging.message("incoming", "error", error["id"], error)
+        Logging.message("incoming", "error", error["id"], error)
         {:noreply, handle_error_response(error, error["id"], state)}
 
       {:ok, [response]} when Message.is_response(response) ->
-        Hermes.Logging.message("incoming", "response", response["id"], response)
+        Logging.message("incoming", "response", response["id"], response)
         {:noreply, handle_success_response(response, response["id"], state)}
 
       {:ok, [notification]} when Message.is_notification(notification) ->
-        Hermes.Logging.message("incoming", "notification", nil, notification)
+        Logging.message("incoming", "notification", nil, notification)
         {:noreply, handle_notification(notification, state)}
 
+      {:ok, [request]} when Message.is_request(request) ->
+        Logging.message("incoming", "request", request["id"], request)
+        handle_server_request(request, state)
+
       {:error, error} ->
-        Logging.client_event(
-          "decode_failed",
-          %{
-            error: error,
-            message_sample: String.slice(response_data, 0, 200)
-          },
-          level: :warning
-        )
+        Logging.client_event("decode_failed", %{error: error}, level: :warning)
 
         {:noreply, state}
     end
   rescue
     e ->
       err = Exception.format(:error, e, __STACKTRACE__)
+      Logging.client_event("response_handling_failed", %{error: err}, level: :error)
 
-      Logging.client_event(
-        "response_handling_failed",
-        %{
-          error: err,
-          response_sample: String.slice(response_data, 0, 200)
-        },
-        level: :error
+      {:noreply, state}
+  end
+
+  # Server request handling
+
+  defp handle_server_request(%{"method" => "roots/list", "id" => id}, state) do
+    roots = State.list_roots(state)
+    roots_result = %{"roots" => roots}
+    roots_count = Enum.count(roots)
+
+    with {:ok, response_data} <- Message.encode_response(%{"result" => roots_result}, id),
+         :ok <- send_to_transport(state.transport, response_data) do
+      Logging.client_event("roots_list_request", %{id: id, roots_count: roots_count})
+
+      Telemetry.execute(
+        Telemetry.event_client_roots(),
+        %{system_time: System.system_time()},
+        %{action: :list, count: roots_count, request_id: id}
       )
 
       {:noreply, state}
+    else
+      err ->
+        Logging.client_event("roots_list_error", %{id: id, error: err}, level: :error)
+
+        Telemetry.execute(
+          Telemetry.event_client_error(),
+          %{system_time: System.system_time()},
+          %{method: "roots/list", request_id: id, error: err}
+        )
+
+        {:noreply, state}
+    end
+  end
+
+  defp handle_server_request(%{"method" => "ping", "id" => id}, state) do
+    with {:ok, response_data} <- Message.encode_response(%{"result" => %{}}, id),
+         :ok <- send_to_transport(state.transport, response_data) do
+      {:noreply, state}
+    else
+      err ->
+        Logging.client_event("ping_response_error", %{id: id, error: err}, level: :error)
+
+        Telemetry.execute(
+          Telemetry.event_client_error(),
+          %{system_time: System.system_time()},
+          %{method: "ping", request_id: id, error: err}
+        )
+
+        {:noreply, state}
+    end
   end
 
   @impl true
@@ -856,8 +991,7 @@ defmodule Hermes.Client do
         Logging.client_event("unknown_error_response", %{
           id: id,
           code: error_code,
-          message: error_msg,
-          pending_ids: state.pending_requests |> Map.keys() |> Enum.join(", ")
+          message: error_msg
         })
 
         state
@@ -906,7 +1040,6 @@ defmodule Hermes.Client do
           capabilities: result["capabilities"]
         })
 
-        # Confirm to the server the handshake is complete
         :ok = send_notification(updated_state, "notifications/initialized")
 
         updated_state
@@ -916,17 +1049,7 @@ defmodule Hermes.Client do
   defp handle_success_response(%{"id" => id, "result" => result}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        result_summary =
-          case result do
-            %{} -> "fields: #{Enum.join(Map.keys(result), ", ")}"
-            _ -> "type: #{inspect(result)}"
-          end
-
-        Logging.client_event("unknown_response", %{
-          id: id,
-          result_summary: result_summary,
-          pending_ids: state.pending_requests |> Map.keys() |> Enum.join(", ")
-        })
+        Logging.client_event("unknown_response", %{id: id})
 
         state
 
@@ -934,17 +1057,7 @@ defmodule Hermes.Client do
         response = Response.from_json_rpc(%{"result" => result, "id" => id})
         elapsed_ms = Request.elapsed_time(request)
 
-        result_summary =
-          case result do
-            %{} -> "with #{map_size(result)} fields"
-            _ -> ""
-          end
-
-        Logging.client_event("success_response", %{
-          id: id,
-          method: request.method,
-          result_summary: result_summary
-        })
+        Logging.client_event("success_response", %{id: id, method: request.method})
 
         Telemetry.execute(
           Telemetry.event_client_response(),
@@ -1017,7 +1130,6 @@ defmodule Hermes.Client do
     total = Map.get(params, "total")
 
     if callback = State.get_progress_callback(state, progress_token) do
-      # Execute the callback in a separate process to avoid blocking
       Task.start(fn -> callback.(progress_token, progress, total) end)
     end
 
@@ -1029,19 +1141,16 @@ defmodule Hermes.Client do
     data = params["data"]
     logger = Map.get(params, "logger")
 
-    # Execute callback if registered
     if callback = State.get_log_callback(state) do
       Task.start(fn -> callback.(level, data, logger) end)
     end
 
-    # Log to Elixir's Logger for convenience
     log_to_logger(level, data, logger)
 
     state
   end
 
   defp log_to_logger(level, data, logger) do
-    # Map MCP log levels to Elixir Logger levels
     elixir_level =
       case level do
         level when level in ["debug"] -> :debug
@@ -1055,15 +1164,16 @@ defmodule Hermes.Client do
   end
 
   # Helper functions
+
   defp encode_request(method, params, request_id) do
     request = %{"method" => method, "params" => params}
-    Hermes.Logging.message("outgoing", "request", request_id, request)
+    Logging.message("outgoing", "request", request_id, request)
     Message.encode_request(request, request_id)
   end
 
   defp encode_notification(method, params) do
     notification = %{"method" => method, "params" => params}
-    Hermes.Logging.message("outgoing", "notification", nil, notification)
+    Logging.message("outgoing", "notification", nil, notification)
     Message.encode_notification(notification)
   end
 
@@ -1086,5 +1196,10 @@ defmodule Hermes.Client do
     with {:ok, notification_data} <- encode_notification(method, params) do
       send_to_transport(state.transport, notification_data)
     end
+  end
+
+  defp send_roots_list_changed_notification(state) do
+    Logging.client_event("sending_roots_list_changed", nil)
+    send_notification(state, "notifications/roots/list_changed")
   end
 end

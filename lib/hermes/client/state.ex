@@ -43,9 +43,12 @@ defmodule Hermes.Client.State do
   alias Hermes.Client.Request
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
+  alias Hermes.Telemetry
 
   @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
   @type log_callback :: (String.t(), term(), String.t() | nil -> any())
+
+  @type root :: %{uri: String.t(), name: String.t() | nil}
 
   @type t :: %__MODULE__{
           client_info: map(),
@@ -56,7 +59,9 @@ defmodule Hermes.Client.State do
           transport: map(),
           pending_requests: %{String.t() => Request.t()},
           progress_callbacks: %{String.t() => progress_callback()},
-          log_callback: log_callback() | nil
+          log_callback: log_callback() | nil,
+          # Use a map with URI as key for faster access
+          roots: %{String.t() => root()}
         }
 
   defstruct [
@@ -68,7 +73,8 @@ defmodule Hermes.Client.State do
     :transport,
     pending_requests: %{},
     progress_callbacks: %{},
-    log_callback: nil
+    log_callback: nil,
+    roots: %{}
   ]
 
   @doc """
@@ -508,10 +514,135 @@ defmodule Hermes.Client.State do
     end
   end
 
+  @doc """
+  Adds a root directory to the state.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `uri` - The URI of the root directory (must start with "file://")
+    * `name` - Optional human-readable name for display purposes
+
+  ## Examples
+
+      iex> updated_state = Hermes.Client.State.add_root(state, "file:///home/user/project", "My Project")
+      iex> updated_state.roots
+      [%{uri: "file:///home/user/project", name: "My Project"}]
+  """
+  @spec add_root(t(), String.t(), String.t() | nil) :: t()
+  def add_root(state, uri, name \\ nil) when is_binary(uri) do
+    if Map.has_key?(state.roots, uri) do
+      state
+    else
+      root = %{uri: uri, name: name}
+
+      Telemetry.execute(
+        Telemetry.event_client_roots(),
+        %{system_time: System.system_time()},
+        %{action: :add, uri: uri}
+      )
+
+      %{state | roots: Map.put(state.roots, uri, root)}
+    end
+  end
+
+  @doc """
+  Removes a root directory from the state.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `uri` - The URI of the root directory to remove
+
+  ## Examples
+
+      iex> updated_state = Hermes.Client.State.remove_root(state, "file:///home/user/project")
+      iex> updated_state.roots
+      []
+  """
+  @spec remove_root(t(), String.t()) :: t()
+  def remove_root(state, uri) when is_binary(uri) do
+    if Map.has_key?(state.roots, uri) do
+      Telemetry.execute(
+        Telemetry.event_client_roots(),
+        %{system_time: System.system_time()},
+        %{action: :remove, uri: uri}
+      )
+
+      %{state | roots: Map.delete(state.roots, uri)}
+    else
+      state
+    end
+  end
+
+  @doc """
+  Gets a root directory by its URI.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `uri` - The URI of the root directory to get
+
+  ## Examples
+
+      iex> Hermes.Client.State.get_root_by_uri(state, "file:///home/user/project")
+      %{uri: "file:///home/user/project", name: "My Project"}
+  """
+  @spec get_root_by_uri(t(), String.t()) :: root() | nil
+  def get_root_by_uri(state, uri) when is_binary(uri) do
+    Map.get(state.roots, uri)
+  end
+
+  @doc """
+  Lists all root directories.
+
+  ## Parameters
+
+    * `state` - The current client state
+
+  ## Examples
+
+      iex> Hermes.Client.State.list_roots(state)
+      [%{uri: "file:///home/user/project", name: "My Project"}]
+  """
+  @spec list_roots(t()) :: [root()]
+  def list_roots(state) do
+    Map.values(state.roots)
+  end
+
+  @doc """
+  Clears all root directories.
+
+  ## Parameters
+
+    * `state` - The current client state
+
+  ## Examples
+
+      iex> updated_state = Hermes.Client.State.clear_roots(state)
+      iex> updated_state.roots
+      []
+  """
+  @spec clear_roots(t()) :: t()
+  def clear_roots(state) do
+    if map_size(state.roots) > 0 do
+      Telemetry.execute(
+        Telemetry.event_client_roots(),
+        %{system_time: System.system_time()},
+        %{action: :clear, count: map_size(state.roots)}
+      )
+
+      %{state | roots: %{}}
+    else
+      state
+    end
+  end
+
   # Helper functions
 
   defp valid_capability?(_capabilities, ["ping"]), do: true
   defp valid_capability?(_capabilities, ["initialize"]), do: true
+  defp valid_capability?(_capabilities, ["roots", "list"]), do: true
 
   defp valid_capability?(capabilities, ["resources", sub]) when sub in ~w(subscribe unsubscribe) do
     if resources = Map.get(capabilities, "resources") do

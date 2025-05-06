@@ -46,8 +46,7 @@ defmodule Hermes.Logging do
     log(level, "MCP server event: #{event}", metadata)
 
     if details do
-      details_level = if level == :debug, do: :debug, else: level
-      log(details_level, "MCP event details: #{inspect(details)}", metadata)
+      log(level, "MCP event details: #{inspect(details)}", metadata)
     end
   end
 
@@ -65,8 +64,7 @@ defmodule Hermes.Logging do
     log(level, "MCP client event: #{event}", metadata)
 
     if details do
-      details_level = if level == :debug, do: :debug, else: level
-      log(details_level, "MCP event details: #{inspect(details)}", metadata)
+      log(level, "MCP event details: #{inspect(details)}", metadata)
     end
   end
 
