@@ -44,7 +44,7 @@ For development and testing, you can use the provided MCP server implementations
 just echo-server
 
 # Start the Calculator server (Go)
-# Supports both stdio and http/sse transpot
+# Supports both stdio and http/sse transport
 just calculator-server sse
 ```
 

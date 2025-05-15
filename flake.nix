@@ -1,5 +1,5 @@
 {
-  description = "Model Context Porotocol SDK for Elixir";
+  description = "Model Context Protocol SDK for Elixir";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 

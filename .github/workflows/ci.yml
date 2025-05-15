@@ -64,7 +64,7 @@ jobs:
       - name: Run Credo
         run: mix credo --strict
 
-  static-analisys:
+  static-analysis:
     runs-on: ubuntu-latest
 
     env:

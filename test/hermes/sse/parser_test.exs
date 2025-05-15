@@ -118,7 +118,7 @@ defmodule Hermes.SSE.ParserTest do
       assert res["result"] == "pong"
     end
 
-    test "handles multiple MCP events correcly" do
+    test "handles multiple MCP events correctly" do
       sse = """
       event: endpoint
       data: /messages/?session_id=123

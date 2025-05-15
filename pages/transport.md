@@ -110,7 +110,7 @@ The HTTP/SSE transport (`Hermes.Transport.SSE`) enables communication with an MC
 | `:server.base_path` | string | The SSE server base path | `"/"`|
 | `:server.sse_path` | string | The SSE server base path for starting a SSE connection | `"/sse"`|
 | `:headers` | map | Additional request headers to be sent | `%{}` |
-| `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, you can check the avaiable options on [Mint docs](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options) | System defaults |
+| `:transport_opts` | keyword | Options to be passed to the underlying HTTP Client, you can check the available options on [Mint docs](https://hexdocs.pm/mint/Mint.HTTP.html#connect/4-transport-options) | System defaults |
 | `:http_options` | keyword | Options passed directly to the HTTP Client, you can check the available options on [Finch docs](https://hexdocs.pm/finch/Finch.html#t:request_opt/0) | Current directory |
 
 ## WebSocket Transport

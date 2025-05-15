@@ -1,7 +1,7 @@
 defmodule Hermes do
   @moduledoc false
 
-  @doc "Checks if hermes should be compiled/used as standlone CLI or OTP library"
+  @doc "Checks if hermes should be compiled/used as standalone CLI or OTP library"
   def should_compile_cli? do
     Application.get_env(:hermes_mcp, :compile_cli?, false)
   end
