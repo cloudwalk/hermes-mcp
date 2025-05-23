@@ -86,26 +86,15 @@ defmodule Hermes.Logging do
     end
   end
 
-  @doc """
-  Set context for all subsequent logs in the current process.
-  """
-  def context(metadata) when is_list(metadata) do
-    Logger.metadata(metadata)
-  end
-
-  @doc """
-  Add context to existing metadata for all subsequent logs.
-  """
-  def add_context(metadata) when is_list(metadata) do
-    Logger.metadata(Keyword.merge(Logger.metadata(), metadata))
-  end
-
   # Private helpers
 
-  # Route log messages to the appropriate Logger function based on level
   defp log(level, message, metadata) when is_atom(level) do
-    log_by_level(level, message, metadata)
+    if should_log?() do
+      log_by_level(level, message, metadata)
+    end
   end
+
+  defp should_log?, do: Application.get_env(:hermes_mcp, :log, true)
 
   # Map MCP log levels to Elixir logger levels
   defp log_by_level(:debug, message, metadata), do: Logger.debug(message, metadata)
