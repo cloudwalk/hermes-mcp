@@ -1,9 +1,6 @@
-name: Release Binaries
+name: Manual Release Binaries
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
