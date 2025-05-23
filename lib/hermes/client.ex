@@ -652,7 +652,7 @@ defmodule Hermes.Client do
     # Set up logging context
     client_name = get_in(opts, [:client_info, "name"])
 
-    Logging.context(
+    Logger.metadata(
       mcp_client: opts.name,
       mcp_client_name: client_name,
       mcp_transport: opts.transport

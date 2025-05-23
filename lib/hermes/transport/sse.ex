@@ -140,7 +140,7 @@ defmodule Hermes.Transport.SSE do
 
     task =
       Task.async(fn ->
-        Logging.context(parent_metadata)
+        Logger.metadata(parent_metadata)
 
         stream =
           SSE.connect(state.sse_url, state.headers,
