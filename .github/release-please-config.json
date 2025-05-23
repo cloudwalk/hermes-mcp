@@ -20,16 +20,8 @@
     ".": {
       "release-type": "elixir",
       "extra-files": [
-        {
-          "type": "generic",
-          "path": "flake.nix",
-          "glob": false
-        },
-        {
-          "type": "generic", 
-          "path": "README.md",
-          "glob": false
-        }
+        "flake.nix",
+        "README.md"
       ]
     }
   },
