@@ -57,7 +57,7 @@ Add Hermes MCP to your dependencies in `mix.exs`:
 def deps do
   [
     # x-release-please-start-version
-    {:hermes_mcp, "~> 0.4"}
+    {:hermes_mcp, "~> 0.5"}
     # x-release-please-end
   ]
 end

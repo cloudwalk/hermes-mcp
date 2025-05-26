@@ -40,3 +40,6 @@ hermes_mcp-*.tar
 
 # Local envs
 .env.*
+
+# Nix files
+result

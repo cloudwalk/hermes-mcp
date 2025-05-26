@@ -2,7 +2,7 @@
   description = "Model Context Protocol SDK for Elixir";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     elixir-overlay.url = "github:zoedsoupe/elixir-overlay";
   };
 
@@ -22,6 +22,16 @@
         in
           f pkgs
       );
+
+    zig = pkgs:
+      pkgs.zig.overrideAttrs (old: rec {
+        version = "0.14.0";
+        src = pkgs.fetchFromGitHub {
+          inherit (old.src) owner repo;
+          rev = version;
+          hash = "sha256-VyteIp5ZRt6qNcZR68KmM7CvN2GYf8vj5hP+gHLkuVk=";
+        };
+      });
   in {
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {
@@ -32,7 +42,7 @@
           uv
           just
           go
-          zig
+          (zig pkgs)
           _7zz
           xz
         ];
@@ -43,14 +53,14 @@
       default = pkgs.stdenv.mkDerivation {
         pname = "hermes-mcp";
         # x-release-please-start-version
-        version = "0.4.1";
+        version = "0.5.0";
         # x-release-please-end
         src = ./.;
 
         buildInputs = with pkgs; [
           elixir-bin.latest
           erlang
-          zig
+          (zig pkgs)
           _7zz
           xz
           git
@@ -58,35 +68,45 @@
 
         buildPhase = ''
           export MIX_ENV=prod
+          export HERMES_MCP_COMPILE_CLI=true
           export HOME=$TMPDIR
 
-          # Get dependencies and compile
-          mix deps.get
-          mix compile
+          mix do deps.get, compile
           mix release hermes_mcp --overwrite
         '';
 
         installPhase = ''
           mkdir -p $out/bin
 
-          # Try to copy burrito output first, fallback to regular release
+          echo "=== Build output structure ==="
+          find _build -type f -name "*hermes*" 2>/dev/null || true
+
           if [ -d "_build/prod/rel/hermes_mcp/burrito_out" ]; then
+            echo "Found burrito_out directory"
             cp -r _build/prod/rel/hermes_mcp/burrito_out/* $out/bin/ || true
-          fi
-
-          if [ -d "_build/prod/rel/hermes_mcp/bin" ]; then
+          elif [ -d "_build/prod/rel/hermes_mcp/bin" ]; then
+            echo "Found standard release bin directory"
             cp -r _build/prod/rel/hermes_mcp/bin/* $out/bin/ || true
+          else
+            echo "No bin directory found, checking for other release outputs"
+            find _build/prod/rel -name "*" -type f -executable | head -5
           fi
 
-          # Make binaries executable
-          chmod +x $out/bin/* || true
+          if [ -n "$(ls -A $out/bin 2>/dev/null)" ]; then
+            chmod +x $out/bin/* || true
+            echo "=== Installed binaries ==="
+            ls -la $out/bin/
+          else
+            echo "ERROR: No binaries were installed!"
+            exit 1
+          fi
         '';
 
         meta = with pkgs.lib; {
           description = "Model Context Protocol (MCP) implementation in Elixir";
           homepage = "https://github.com/cloudwalk/hermes-mcp";
           license = licenses.mit;
-          maintainers = ["zoedsoupe"];
+          maintainers = with maintainers; [zoedsoupe];
           platforms = platforms.unix ++ platforms.darwin;
         };
       };
