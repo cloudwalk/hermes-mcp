@@ -99,7 +99,7 @@ defmodule Hermes.Server.Transport.STDIO do
 
     state = %{server: server}
 
-    Logging.context(mcp_transport: :stdio, mcp_server: server)
+    Logger.metadata(mcp_transport: :stdio, mcp_server: server)
     Logging.transport_event("starting", %{transport: :stdio, server: server})
 
     Telemetry.execute(
