@@ -7,6 +7,8 @@ defmodule Hermes.Application do
 
   @impl true
   def start(_type, _args) do
+    :logger.add_handlers(:hermes_mcp)
+
     children = [
       {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
     ]
@@ -17,7 +19,7 @@ defmodule Hermes.Application do
     {:ok, pid} = Supervisor.start_link(children, opts)
 
     if Hermes.should_compile_cli?() do
-      Hermes.CLI.main()
+      with {:module, cli} <- Code.ensure_loaded(Hermes.CLI), do: cli.main()
       {:ok, pid}
     else
       {:ok, pid}
