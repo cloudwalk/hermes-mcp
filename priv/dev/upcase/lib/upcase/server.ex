@@ -52,8 +52,7 @@ defmodule Upcase.Server do
 
   @impl true
   def handle_request(
-        %{"method" => "tools/call", "params" => %{"name" => "upcase", "arguments" => args}} =
-          _request,
+        %{"method" => "tools/call", "params" => %{"name" => "upcase", "arguments" => args}} = _request,
         state
       ) do
     case Map.get(args, "text") do

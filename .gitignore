@@ -43,6 +43,3 @@ hermes_mcp-*.tar
 
 # Nix files
 result
-
-# Elixir server specific
-/priv/dev/upcase/upcase
