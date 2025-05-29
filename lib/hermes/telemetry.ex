@@ -88,4 +88,9 @@ defmodule Hermes.Telemetry do
 
   # Roots events
   def event_client_roots, do: [:client, :roots]
+
+  # Session events (for StreamableHTTP transport)
+  def event_server_session_created, do: [:server, :session, :created]
+  def event_server_session_terminated, do: [:server, :session, :terminated]
+  def event_server_session_cleanup, do: [:server, :session, :cleanup]
 end

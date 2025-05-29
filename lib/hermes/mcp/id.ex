@@ -102,6 +102,23 @@ defmodule Hermes.MCP.ID do
   end
 
   @doc """
+  Generates a unique session ID.
+
+  Creates a standard ID with a "session_" prefix for clarity.
+  Session IDs are used to track HTTP sessions in transports.
+
+  ## Examples
+
+      iex> id = Hermes.MCP.ID.generate_session_id()
+      iex> String.starts_with?(id, "session_")
+      true
+  """
+  @spec generate_session_id() :: String.t()
+  def generate_session_id do
+    "session_" <> generate()
+  end
+
+  @doc """
   Extracts timestamp from an ID for debugging purposes.
 
   This is primarily useful for troubleshooting timing issues or
