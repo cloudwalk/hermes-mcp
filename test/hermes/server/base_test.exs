@@ -12,10 +12,13 @@ defmodule Hermes.Server.BaseTest do
   setup do
     start_supervised!({MockTransport, name: :mock_server_transport})
 
-    server =
-      start_supervised!(
-        {Base, module: TestServer, name: :test_server, transport: [layer: MockTransport, name: :mock_server_transport]}
-      )
+    server_opts = [
+      module: TestServer,
+      name: :test_server,
+      transport: [layer: MockTransport, name: :mock_server_transport]
+    ]
+
+    server = start_supervised!({Base, server_opts})
 
     MockTransport.clear_messages()
 
