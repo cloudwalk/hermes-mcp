@@ -323,6 +323,21 @@ defmodule Hermes.Server.Base do
     {:noreply, state}
   end
 
+  defp handle_decode_error(:invalid_message, state) do
+    error = Error.parse_error(%{data: %{message: "Invalid message format"}})
+
+    Logging.server_event(
+      "message_decode_error",
+      %{reason: :invalid_message, error: error},
+      level: :error
+    )
+
+    error_response = Error.to_json_rpc!(error)
+    send_to_transport(state.transport, error_response)
+
+    {:reply, {:error, error}, state}
+  end
+
   defp handle_decode_error(errors, state) when is_list(errors) do
     errors = Enum.map(errors, &Peri.Error.error_to_map/1)
     error = Error.parse_error(%{data: %{errors: errors, message: "Failed to parse message"}})

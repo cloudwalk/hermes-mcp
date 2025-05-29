@@ -102,7 +102,6 @@ defmodule Hermes.Server.BaseTest do
         }
       }
 
-      # TODO(zoedsoupe): properly handle errors
       assert {:ok, encoded} = Message.encode_error(error, 1)
       assert_raise CaseClauseError, fn -> GenServer.call(server, {:message, encoded}) end
     end

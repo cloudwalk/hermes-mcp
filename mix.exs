@@ -45,6 +45,7 @@ defmodule Hermes.MixProject do
       {:telemetry, "~> 1.2"},
       {:gun, "~> 2.2", optional: true},
       {:burrito, "~> 1.0", optional: true},
+      {:plug, "~> 1.18", optional: true},
       {:mox, "~> 1.2", only: :test},
       {:mimic, "~> 1.7", only: :test},
       {:bypass, "~> 2.1", only: :test},

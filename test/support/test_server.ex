@@ -16,7 +16,7 @@ defmodule TestServer do
   def handle_request(request, state) do
     case request["method"] do
       "tools/list" -> {:reply, "test_success", state}
-      "ping" -> {:noreply, state}
+      "ping" -> {:reply, %{}, state}
       _ -> {:error, Error.method_not_found(%{method: request["method"]}), state}
     end
   end
