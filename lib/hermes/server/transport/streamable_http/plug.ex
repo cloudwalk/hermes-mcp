@@ -289,7 +289,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
     mcp_error =
       case status do
-        400 -> Error.invalid_request(data)
         405 -> Error.method_not_found(data)
         406 -> Error.invalid_request(data)
         _ -> Error.internal_error(data)
