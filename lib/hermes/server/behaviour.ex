@@ -11,7 +11,7 @@ defmodule Hermes.Server.Behaviour do
   @type response :: map()
   @type notification :: map()
   @type mcp_error :: Hermes.MCP.Error.t()
-  @type server_info :: %{required(:name) => String.t(), required(:version) => String.t()}
+  @type server_info :: %{required(String.t()) => String.t()}
 
   @doc """
   Initializes the server state.
