@@ -18,7 +18,7 @@ defmodule Hermes.Client.Contexts do
   - client: initialized client process
   """
   def initialized_client(ctx) do
-    expect(Hermes.MockTransport, :send_message, 2, fn _, _message -> :ok end)
+    stub_with(Hermes.MockTransport, Hermes.MockTransportImpl)
 
     transport =
       if opts = ctx[:transport],
@@ -28,13 +28,11 @@ defmodule Hermes.Client.Contexts do
     client_info =
       if info = ctx[:client_info], do: info, else: %{"name" => "TestClient", "version" => "1.0.0"}
 
-    client =
-      start_supervised!(
-        {Hermes.Client, transport: transport, client_info: client_info, capabilities: ctx[:client_capabilities]},
-        restart: :temporary
-      )
+    client_opts = [transport: transport, client_info: client_info, capabilities: ctx[:client_capabilities], name: TestClient]      
 
-    allow(Hermes.MockTransport, self(), client)
+    client = start_supervised!({Hermes.Client, client_opts}, restart: :temporary)
+
+    allow(Hermes.MockTransport, self(), fn -> Process.whereis(TestClient) end)
 
     initialize_client(client)
 

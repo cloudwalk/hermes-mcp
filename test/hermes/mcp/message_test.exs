@@ -311,7 +311,7 @@ defmodule Hermes.MCP.MessageTest do
     end
 
     test "encodes a progress notification without a total" do
-      {:ok, encoded} = Message.encode_progress_notification("abc123", 50)
+      {:ok, encoded} = Message.encode_progress_notification(%{"progressToken" => "abc123", "progress" => 50})
       decoded = Jason.decode!(encoded)
 
       assert decoded["jsonrpc"] == "2.0"

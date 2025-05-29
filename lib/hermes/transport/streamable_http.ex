@@ -76,6 +76,11 @@ defmodule Hermes.Transport.StreamableHTTP do
     GenServer.cast(pid, :close_connection)
   end
 
+  @impl Transport
+  def supported_protocol_versions do
+    ["2025-03-26"]
+  end
+
   @impl GenServer
   def init(opts) do
     state = %{

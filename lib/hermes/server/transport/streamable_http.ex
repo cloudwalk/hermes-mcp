@@ -135,6 +135,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     GenServer.cast(transport, :shutdown)
   end
 
+  @impl Transport
+  def supported_protocol_versions do
+    ["2024-11-05", "2025-03-26"]
+  end
+
   @doc """
   Creates a new session for a client connection.
 

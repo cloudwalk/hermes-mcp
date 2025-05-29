@@ -95,6 +95,11 @@ defmodule Hermes.Transport.SSE do
     GenServer.cast(pid, :close_connection)
   end
 
+  @impl Transport
+  def supported_protocol_versions do
+    ["2024-11-05"]
+  end
+
   @impl GenServer
   def init(%{} = opts) do
     server_url = URI.append_path(opts.server[:base_url], opts.server[:base_path])

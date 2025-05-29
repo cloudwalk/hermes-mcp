@@ -53,6 +53,16 @@ defmodule Hermes.Server.Behaviour do
   """
   @callback server_capabilities() :: map()
 
+  @doc """
+  Returns the list of MCP protocol versions supported by this server.
+
+  ## Examples
+
+      iex> MyServer.supported_protocol_versions()
+      ["2024-11-05", "2025-03-26"]
+  """
+  @callback supported_protocol_versions() :: [String.t()]
+
   @optional_callbacks [server_capabilities: 0]
 
   @doc """

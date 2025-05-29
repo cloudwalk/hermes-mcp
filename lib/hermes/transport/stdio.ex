@@ -91,6 +91,11 @@ defmodule Hermes.Transport.STDIO do
     GenServer.cast(pid, :close_port)
   end
 
+  @impl Transport
+  def supported_protocol_versions do
+    ["2024-11-05", "2025-03-26"]
+  end
+
   @impl GenServer
   def init(%{} = opts) do
     state = Map.merge(opts, %{port: nil, ref: nil})

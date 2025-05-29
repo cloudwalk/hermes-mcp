@@ -59,6 +59,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
       Client.start_link(
         name: :sse_test,
         transport: [layer: SSE],
+        protocol_version: "2024-11-05",
         client_info: %{
           "name" => "Mix.Tasks.SSE",
           "version" => "1.0.0"

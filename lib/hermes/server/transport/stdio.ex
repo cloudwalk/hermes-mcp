@@ -89,6 +89,11 @@ defmodule Hermes.Server.Transport.STDIO do
     GenServer.cast(transport, :shutdown)
   end
 
+  @impl Transport
+  def supported_protocol_versions do
+    ["2024-11-05", "2025-03-26"]
+  end
+
   @impl GenServer
   def init(%{server: server}) do
     :ok = :io.setopts(encoding: :utf8)

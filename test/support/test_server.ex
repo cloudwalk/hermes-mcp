@@ -35,4 +35,9 @@ defmodule TestServer do
 
   @impl true
   def server_capabilities, do: %{"tools" => %{"listChanged" => true}}
+
+  @impl true
+  def supported_protocol_versions do
+    ["2024-11-05", "2025-03-26"]
+  end
 end

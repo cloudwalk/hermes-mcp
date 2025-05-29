@@ -114,6 +114,14 @@ defmodule Hermes.MCP.Message do
     "progress" => {:required, {:either, {:float, :integer}}},
     "total" => {:either, {:float, :integer}}
   }
+
+  # 2025-03-26 progress notification schema with message field
+  @progress_notif_params_schema_2025 %{
+    "progressToken" => {:required, {:either, {:string, :integer}}},
+    "progress" => {:required, {:either, {:float, :integer}}},
+    "total" => {:either, {:float, :integer}},
+    "message" => :string
+  }
   @logging_message_notif_params_schema %{
     "level" => {:required, {:enum, @log_levels}},
     "data" => {:required, :any},
@@ -169,6 +177,9 @@ defmodule Hermes.MCP.Message do
                get_schema(:response_schema),
                get_schema(:error_schema)
              ]}
+
+  # Batch schema for JSON-RPC batching (2025-03-26)
+  defschema :batch_schema, {:list, get_schema(:mcp_message_schema)}
 
   @doc """
   Determines if a JSON-RPC message is a request.
@@ -231,8 +242,21 @@ defmodule Hermes.MCP.Message do
   Returns the encoded string with a newline character appended.
   """
   def encode_request(request, id) do
-    schema = get_schema(:request_schema)
+    encode_request(request, id, get_schema(:request_schema))
+  end
 
+  @doc """
+  Encodes a request message using a custom schema.
+
+  ## Parameters
+
+    * `request` - The request map containing method and params
+    * `id` - The request ID
+    * `schema` - The Peri schema to use for validation
+
+  Returns the encoded string with a newline character appended.
+  """
+  def encode_request(request, id, schema) do
     request
     |> Map.put("jsonrpc", "2.0")
     |> Map.put("id", id)
@@ -245,8 +269,20 @@ defmodule Hermes.MCP.Message do
   Returns the encoded string with a newline character appended.
   """
   def encode_notification(notification) do
-    schema = get_schema(:notification_schema)
+    encode_notification(notification, get_schema(:notification_schema))
+  end
 
+  @doc """
+  Encodes a notification message using a custom schema.
+
+  ## Parameters
+
+    * `notification` - The notification map containing method and params
+    * `schema` - The Peri schema to use for validation
+
+  Returns the encoded string with a newline character appended.
+  """
+  def encode_notification(notification, schema) do
     notification
     |> Map.put("jsonrpc", "2.0")
     |> encode_message(schema)
@@ -257,15 +293,38 @@ defmodule Hermes.MCP.Message do
 
   ## Parameters
 
-    * `progress_token` - The token that was provided in the original request (string or integer)
-    * `progress` - The current progress value (number)
-    * `total` - Optional total value for the operation (number)
+    * `params` - Map containing progress parameters:
+      * `"progressToken"` - The token that was provided in the original request (string or integer)
+      * `"progress"` - The current progress value (number) 
+      * `"total"` - Optional total value for the operation (number)
+      * `"message"` - Optional descriptive message (string, for 2025-03-26)
+    * `params_schema` - Optional Peri schema for params validation (defaults to @progress_notif_params_schema)
 
   Returns the encoded string with a newline character appended.
   """
+  @spec encode_progress_notification(map(), term() | nil) :: {:ok, String.t()} | {:error, term()}
+  def encode_progress_notification(params, params_schema \\ @progress_notif_params_schema) when is_map(params) do
+    # Validate params against the provided schema
+    case Peri.validate(params_schema, params) do
+      {:ok, validated_params} ->
+        encode_notification(%{
+          "method" => "notifications/progress",
+          "params" => validated_params
+        })
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Legacy function for progress notifications with individual parameters.
+
+  Prefer using `encode_progress_notification/2` with a params map.
+  """
   @spec encode_progress_notification(String.t() | integer(), number(), number() | nil) ::
           {:ok, String.t()} | {:error, term()}
-  def encode_progress_notification(progress_token, progress, total \\ nil)
+  def encode_progress_notification(progress_token, progress, total)
       when (is_binary(progress_token) or is_integer(progress_token)) and is_number(progress) do
     params = %{
       "progressToken" => progress_token,
@@ -273,11 +332,7 @@ defmodule Hermes.MCP.Message do
     }
 
     params = if total, do: Map.put(params, "total", total), else: params
-
-    encode_notification(%{
-      "method" => "notifications/progress",
-      "params" => params
-    })
+    encode_progress_notification(params)
   end
 
   @doc """
@@ -286,8 +341,21 @@ defmodule Hermes.MCP.Message do
   Returns the encoded string with a newline character appended.
   """
   def encode_response(response, id) do
-    schema = get_schema(:response_schema)
+    encode_response(response, id, get_schema(:response_schema))
+  end
 
+  @doc """
+  Encodes a response message using a custom schema.
+
+  ## Parameters
+
+    * `response` - The response map containing result
+    * `id` - The response ID
+    * `schema` - The Peri schema to use for validation
+
+  Returns the encoded string with a newline character appended.
+  """
+  def encode_response(response, id, schema) do
     response
     |> Map.put("jsonrpc", "2.0")
     |> Map.put("id", id)
@@ -336,4 +404,38 @@ defmodule Hermes.MCP.Message do
 
   defp maybe_add_logger(params, nil), do: params
   defp maybe_add_logger(params, logger) when is_binary(logger), do: Map.put(params, "logger", logger)
+
+  @doc """
+  Encodes a batch of JSON-RPC messages.
+
+  This function uses Peri schema validation and always returns a JSON array.
+
+  ## Parameters
+
+    * `messages` - A list of complete JSON-RPC message maps
+    * `batch_schema` - Optional Peri schema for batch validation (defaults to :batch_schema)
+
+  Returns `{:ok, encoded_batch}` if successful, or `{:error, reason}` if validation fails.
+  """
+  @spec encode_batch([map()], term() | nil) :: {:ok, String.t()} | {:error, term()}
+  def encode_batch(messages, batch_schema \\ get_schema(:batch_schema)) when is_list(messages) do
+    case Peri.validate(batch_schema, messages) do
+      {:ok, validated_messages} ->
+        batch_json = JSON.encode!(validated_messages)
+        {:ok, batch_json <> "\n"}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  @doc """
+  Returns the progress notification parameters schema for 2025-03-26 (with message field).
+  """
+  def progress_params_schema_2025, do: @progress_notif_params_schema_2025
+
+  @doc """
+  Returns the standard progress notification parameters schema for 2024-11-05.
+  """
+  def progress_params_schema, do: @progress_notif_params_schema
 end
