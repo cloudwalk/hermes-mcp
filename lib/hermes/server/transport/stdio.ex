@@ -13,11 +13,8 @@ defmodule Hermes.Server.Transport.STDIO do
   import Peri
 
   alias Hermes.Logging
-  alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
-
-  require Message
 
   @type t :: GenServer.server()
 
@@ -120,26 +117,24 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   def handle_continue({:forward_to_server, data}, %{server: server} = state) do
-    Task.start(fn ->
-      Logging.transport_event(
-        "incoming",
-        %{transport: :stdio, message_size: byte_size(data)},
-        level: :debug
-      )
+    Logging.transport_event(
+      "incoming",
+      %{transport: :stdio, message_size: byte_size(data)},
+      level: :debug
+    )
 
-      Telemetry.execute(
-        Telemetry.event_transport_receive(),
-        %{system_time: System.system_time()},
-        %{transport: :stdio, message_size: byte_size(data)}
-      )
+    Telemetry.execute(
+      Telemetry.event_transport_receive(),
+      %{system_time: System.system_time()},
+      %{transport: :stdio, message_size: byte_size(data)}
+    )
 
-      case Message.decode(data) do
-        {:ok, [decoded]} -> handle_decoded_message(server, decoded)
-        {:error, reason} -> handle_message_error(server, data, reason)
-      end
-    end)
+    case GenServer.call(server, {:message, data}) do
+      {:ok, nil} -> nil
+      {:ok, message} -> send_message(self(), message)
+    end
 
-    {:noreply, state}
+    {:noreply, state, {:continue, :read}}
   end
 
   @impl GenServer
@@ -215,27 +210,5 @@ defmodule Hermes.Server.Transport.STDIO do
       data when is_binary(data) ->
         {:ok, data}
     end
-  end
-
-  defp handle_decoded_message(server, message) when Message.is_request(message) do
-    GenServer.cast(server, {:message, message})
-  end
-
-  defp handle_decoded_message(server, message) when Message.is_notification(message) do
-    GenServer.cast(server, {:notification, message})
-  end
-
-  defp handle_decoded_message(_server, message) do
-    Logging.transport_event("unknown_message", %{message: message}, level: :warning)
-  end
-
-  defp handle_message_error(_server, raw_message, reason) do
-    Logging.transport_event("decode_error", %{reason: reason, message: raw_message}, level: :error)
-
-    Telemetry.execute(
-      Telemetry.event_transport_error(),
-      %{system_time: System.system_time()},
-      %{transport: :stdio, reason: reason, message: raw_message}
-    )
   end
 end

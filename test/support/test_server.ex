@@ -15,27 +15,17 @@ defmodule TestServer do
   @impl true
   def handle_request(request, state) do
     case request["method"] do
-      "test" ->
-        {:reply, %{"result" => "test_success"}, state}
-
-      "noreply" ->
-        {:noreply, state}
-
-      "error" ->
-        {:error, %Error{code: -32_000, data: %{message: "Test error"}}, state}
-
-      "update_state" ->
-        {:reply, %{"result" => "updated"}, Map.put(state, :updated, true)}
-
-      _ ->
-        {:error, %Error{code: -32_601, data: %{message: "Method not found"}}, state}
+      "tools/list" -> {:reply, "test_success", state}
+      "ping" -> {:noreply, state}
+      _ -> {:error, Error.method_not_found(%{method: request["method"]}), state}
     end
   end
 
   @impl true
   def handle_notification(notification, state) do
     case notification["method"] do
-      "test_notification" -> {:noreply, Map.put(state, :notification_received, true)}
+      "notifications/cancelled" -> {:noreply, Map.put(state, :notification_received, true)}
+      "notifications/initialized" -> {:noreply, Map.put(state, :initialized_notification_received, true)}
       _ -> {:noreply, state}
     end
   end
@@ -44,5 +34,5 @@ defmodule TestServer do
   def server_info, do: %{"name" => "Test Server", "version" => "1.0.0"}
 
   @impl true
-  def server_capabilities, do: %{"test_capability" => true}
+  def server_capabilities, do: %{"tools" => %{"listChanged" => true}}
 end

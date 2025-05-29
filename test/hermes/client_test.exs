@@ -381,7 +381,7 @@ defmodule Hermes.ClientTest do
       {:error, error} = Task.await(task)
       assert error.code == -32_601
       assert error.reason == :method_not_found
-      assert error.data[:original_message] == "Method not found"
+      assert error.data[:message] == "Method not found"
     end
 
     test "handles transport error", %{client: client} do

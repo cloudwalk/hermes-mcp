@@ -16,7 +16,7 @@ defmodule Upcase.Application do
     ]
 
     children = [
-      {Hermes.Server.Transport.STDIO, server: Upcase.MCPServer},
+      {Hermes.Server.Transport.STDIO, server: Upcase.MCPServer, name: Upcase.ServerSTDIO},
       {Hermes.Server.Base, server_opts}
     ]
 

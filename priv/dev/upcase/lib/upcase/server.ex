@@ -14,10 +14,7 @@ defmodule Upcase.Server do
 
   @impl true
   def server_info do
-    %{
-      name: "Upcase MCP Server",
-      version: "1.0.0"
-    }
+    %{"name" => "Upcase MCP Server", "version" => "1.0.0"}
   end
 
   @impl true

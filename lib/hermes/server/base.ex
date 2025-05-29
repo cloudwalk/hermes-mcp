@@ -16,6 +16,8 @@ defmodule Hermes.Server.Base do
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
 
+  require Message
+
   @type t :: GenServer.server()
 
   @protocol_version "2025-03-26"
@@ -147,24 +149,16 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:message, message}, _from, state) do
-    case decode_message(message) do
-      {:ok, decoded} ->
-        handle_decoded_message(decoded, state)
+  def handle_call({:message, message}, from, state) do
+    case Message.decode(message) do
+      {:ok, [decoded]} when Message.is_request(decoded) ->
+        handle_request(decoded, state)
+
+      {:ok, [decoded]} when Message.is_notification(decoded) ->
+        handle_notification(decoded, from, state)
 
       {:error, reason} ->
-        error = Error.parse_error(%{reason: reason})
-
-        Logging.server_event(
-          "message_decode_error",
-          %{
-            reason: reason,
-            error: error
-          },
-          level: :error
-        )
-
-        {:reply, {:error, error}, state}
+        handle_decode_error(reason, state)
     end
   end
 
@@ -172,23 +166,10 @@ defmodule Hermes.Server.Base do
   def handle_call({:send_notification, method, params}, _from, state) do
     case encode_notification(method, params) do
       {:ok, notification_data} ->
-        result = send_to_transport(state.transport, notification_data)
-        {:reply, result, state}
+        {:reply, send_to_transport(state.transport, notification_data), state}
 
       error ->
         {:reply, error, state}
-    end
-  end
-
-  @impl GenServer
-  def handle_cast({:notification, notification}, state) do
-    case decode_message(notification) do
-      {:ok, decoded} ->
-        handle_decoded_notification(decoded, state)
-
-      {:error, reason} ->
-        Logging.server_event("notification_decode_error", %{reason: reason}, level: :warning)
-        {:noreply, state}
     end
   end
 
@@ -213,7 +194,7 @@ defmodule Hermes.Server.Base do
 
   # Message handling implementation
 
-  defp handle_decoded_message(%{"method" => "initialize"} = request, %{initialized: false} = state) do
+  defp handle_request(%{"method" => "initialize"} = request, %{initialized: false} = state) do
     params = request["params"] || %{}
     protocol_version = params["protocolVersion"] || state.protocol_version
 
@@ -235,10 +216,10 @@ defmodule Hermes.Server.Base do
       %{method: "initialize", status: :success}
     )
 
-    {:reply, {:ok, response}, state}
+    {:reply, encode_response(response, request["id"]), state}
   end
 
-  defp handle_decoded_message(request, %{initialized: true, mod: module} = state) do
+  defp handle_request(request, %{initialized: true, mod: module} = state) do
     request_id = request["id"]
     method = request["method"]
 
@@ -261,55 +242,39 @@ defmodule Hermes.Server.Base do
         Telemetry.execute(
           Telemetry.event_server_response(),
           %{system_time: System.system_time()},
-          %{
-            id: request_id,
-            method: method,
-            status: :success
-          }
+          %{id: request_id, method: method, status: :success}
         )
 
-        {:reply, {:ok, response}, %{state | custom_state: new_custom_state}}
+        {:reply, encode_response(response, request_id), %{state | custom_state: new_custom_state}}
 
       {:noreply, new_custom_state} ->
         Telemetry.execute(
           Telemetry.event_server_response(),
           %{system_time: System.system_time()},
-          %{
-            id: request_id,
-            method: method,
-            status: :noreply
-          }
+          %{id: request_id, method: method, status: :noreply}
         )
 
-        {:reply, :ok, %{state | custom_state: new_custom_state}}
+        {:reply, {:ok, nil}, %{state | custom_state: new_custom_state}}
 
-      {:error, error, new_custom_state} ->
+      {:error, %Error{} = error, new_custom_state} ->
         Logging.server_event(
           "request_error",
-          %{
-            id: request_id,
-            method: method,
-            error: error
-          },
+          %{id: request_id, method: method, error: error},
           level: :warning
         )
 
         Telemetry.execute(
           Telemetry.event_server_error(),
           %{system_time: System.system_time()},
-          %{
-            id: request_id,
-            method: method,
-            error: error
-          }
+          %{id: request_id, method: method, error: error}
         )
 
-        {:reply, {:error, error}, %{state | custom_state: new_custom_state}}
+        {:reply, {:ok, Error.to_json_rpc!(error)}, %{state | custom_state: new_custom_state}}
     end
   end
 
-  defp handle_decoded_message(_request, %{initialized: false} = state) do
-    error = Error.invalid_request(%{message: "Server not initialized"})
+  defp handle_request(_request, %{initialized: false} = state) do
+    error = Error.invalid_request(%{data: %{message: "Server not initialized"}})
 
     Logging.server_event(
       "request_error",
@@ -317,15 +282,17 @@ defmodule Hermes.Server.Base do
       level: :warning
     )
 
-    {:reply, {:error, error}, state}
+    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
   end
 
-  defp handle_decoded_notification(%{"method" => "notifications/initialized"}, state) do
+  defp handle_notification(%{"method" => "notifications/initialized"}, from, state) do
+    GenServer.reply(from, {:ok, nil})
     Logging.server_event("client_initialized", nil)
     {:noreply, %{state | initialized: true}}
   end
 
-  defp handle_decoded_notification(notification, %{initialized: true, mod: module} = state) do
+  defp handle_notification(notification, from, %{initialized: true, mod: module} = state) do
+    GenServer.reply(from, {:ok, nil})
     method = notification["method"]
 
     Logging.server_event("handling_notification", %{method: method})
@@ -351,19 +318,25 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  defp handle_decoded_notification(_notification, state) do
+  defp handle_notification(_notification, from, state) do
+    GenServer.reply(from, {:ok, nil})
     {:noreply, state}
   end
 
+  defp handle_decode_error(errors, state) when is_list(errors) do
+    errors = Enum.map(errors, &Peri.Error.error_to_map/1)
+    error = Error.parse_error(%{data: %{errors: errors, message: "Failed to parse message"}})
+
+    Logging.server_event(
+      "message_decode_error",
+      %{reason: errors, error: error},
+      level: :error
+    )
+
+    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
+  end
+
   # Helper functions
-
-  defp decode_message(message) when is_binary(message) do
-    Message.decode(message)
-  end
-
-  defp decode_message(message) when is_map(message) do
-    {:ok, message}
-  end
 
   defp encode_notification(method, params) do
     notification = %{"method" => method, "params" => params}
@@ -371,8 +344,15 @@ defmodule Hermes.Server.Base do
     Message.encode_notification(notification)
   end
 
+  defp encode_response(result, id) do
+    response = %{"result" => result, "id" => id}
+    Logging.message("outgoing", "response", id, response)
+    {:ok, response} = Message.encode_response(%{"result" => result}, id)
+    {:ok, response}
+  end
+
   defp send_to_transport(nil, _data) do
-    {:error, Error.transport_error(:no_transport, %{message: "No transport configured"})}
+    {:error, Error.transport_error(:no_transport, %{data: %{message: "No transport configured"}})}
   end
 
   defp send_to_transport(%{layer: layer, name: name}, data) do

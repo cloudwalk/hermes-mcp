@@ -37,11 +37,10 @@ defmodule Hermes.MCP.Error do
   ```
   """
 
-  @type t :: %__MODULE__{
-          code: integer(),
-          reason: atom(),
-          data: map()
-        }
+  alias Hermes.MCP.ID
+  alias Hermes.MCP.Message
+
+  @type t :: %__MODULE__{code: integer(), reason: atom(), data: map()}
 
   defstruct [:code, :reason, data: %{}]
 
@@ -51,6 +50,62 @@ defmodule Hermes.MCP.Error do
   @method_not_found -32_601
   @invalid_params -32_602
   @internal_error -32_603
+  @server_error -32_000
+
+  @doc """
+  Returns the JSON-RPC error code for parse errors.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.parse_error_code()
+      -32700
+  """
+  @spec parse_error_code() :: integer()
+  def parse_error_code, do: @parse_error
+
+  @doc """
+  Returns the JSON-RPC error code for invalid request errors.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.invalid_request_code()
+      -32600
+  """
+  @spec invalid_request_code() :: integer()
+  def invalid_request_code, do: @invalid_request
+
+  @doc """
+  Returns the JSON-RPC error code for method not found errors.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.method_not_found_code()
+      -32601
+  """
+  @spec method_not_found_code() :: integer()
+  def method_not_found_code, do: @method_not_found
+
+  @doc """
+  Returns the JSON-RPC error code for invalid params errors.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.invalid_params_code()
+      -32602
+  """
+  @spec invalid_params_code() :: integer()
+  def invalid_params_code, do: @invalid_params
+
+  @doc """
+  Returns the JSON-RPC error code for internal errors.
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.internal_error_code()
+      -32603
+  """
+  @spec internal_error_code() :: integer()
+  def internal_error_code, do: @internal_error
 
   @doc """
   Creates a parse error.
@@ -64,11 +119,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec parse_error(map()) :: t()
   def parse_error(data \\ %{}) do
-    %__MODULE__{
-      code: @parse_error,
-      reason: :parse_error,
-      data: data
-    }
+    %__MODULE__{code: @parse_error, reason: :parse_error, data: data}
   end
 
   @doc """
@@ -83,11 +134,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec invalid_request(map()) :: t()
   def invalid_request(data \\ %{}) do
-    %__MODULE__{
-      code: @invalid_request,
-      reason: :invalid_request,
-      data: data
-    }
+    %__MODULE__{code: @invalid_request, reason: :invalid_request, data: data}
   end
 
   @doc """
@@ -102,11 +149,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec method_not_found(map()) :: t()
   def method_not_found(data \\ %{}) do
-    %__MODULE__{
-      code: @method_not_found,
-      reason: :method_not_found,
-      data: data
-    }
+    %__MODULE__{code: @method_not_found, reason: :method_not_found, data: data}
   end
 
   @doc """
@@ -121,11 +164,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec invalid_params(map()) :: t()
   def invalid_params(data \\ %{}) do
-    %__MODULE__{
-      code: @invalid_params,
-      reason: :invalid_params,
-      data: data
-    }
+    %__MODULE__{code: @invalid_params, reason: :invalid_params, data: data}
   end
 
   @doc """
@@ -140,11 +179,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec internal_error(map()) :: t()
   def internal_error(data \\ %{}) do
-    %__MODULE__{
-      code: @internal_error,
-      reason: :internal_error,
-      data: data
-    }
+    %__MODULE__{code: @internal_error, reason: :internal_error, data: data}
   end
 
   @doc """
@@ -164,12 +199,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec transport_error(atom(), map()) :: t()
   def transport_error(reason, data \\ %{}) when is_atom(reason) do
-    %__MODULE__{
-      # Server error range
-      code: -32_000,
-      reason: reason,
-      data: Map.put(data, :type, :transport)
-    }
+    %__MODULE__{code: @server_error, reason: reason, data: Map.put(data, :type, :transport)}
   end
 
   @doc """
@@ -189,12 +219,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec client_error(atom(), map()) :: t()
   def client_error(reason, data \\ %{}) when is_atom(reason) do
-    %__MODULE__{
-      # Server error range
-      code: -32_000,
-      reason: reason,
-      data: Map.put(data, :type, :client)
-    }
+    %__MODULE__{code: @server_error, reason: reason, data: Map.put(data, :type, :client)}
   end
 
   @doc """
@@ -209,11 +234,7 @@ defmodule Hermes.MCP.Error do
   """
   @spec domain_error(map()) :: t()
   def domain_error(data) when is_map(data) do
-    %__MODULE__{
-      code: -32_000,
-      reason: :domain_error,
-      data: data
-    }
+    %__MODULE__{code: @server_error, reason: :domain_error, data: data}
   end
 
   @doc """
@@ -226,22 +247,39 @@ defmodule Hermes.MCP.Error do
   ## Examples
 
       iex> Hermes.MCP.Error.from_json_rpc(%{"code" => -32700, "message" => "Parse error"})
-      %Hermes.MCP.Error{code: -32700, reason: :parse_error, data: %{original_message: "Parse error"}}
+      %Hermes.MCP.Error{code: -32700, reason: :parse_error, data: %{message: "Parse error"}}
   """
   @spec from_json_rpc(map()) :: t()
   def from_json_rpc(%{"code" => code} = error) do
-    # Store the original message in data for debugging purposes
     message = Map.get(error, "message", "")
     data = Map.get(error, "data", %{})
-    data = if message == "", do: data, else: Map.put(data, :original_message, message)
+    data = if message == "", do: data, else: Map.put(data, :message, message)
 
     reason = reason_for_code(code)
 
-    %__MODULE__{
-      code: code,
-      reason: reason,
-      data: data
-    }
+    %__MODULE__{code: code, reason: reason, data: data}
+  end
+
+  @doc """
+  Converts from a Hermes.MCP.Error struct to a JSON-RPC error object.
+
+  ## Parameters
+
+    * `error` - `Hermes.MCP.Error.t()`
+
+  ## Examples
+
+      iex> error = %Hermes.MCP.Error{code: -32700, reason: :parse_error, data: %{message: "Parse error"}}
+      iex> result = Hermes.MCP.Error.to_json_rpc!(error)
+      iex> String.contains?(result, "Parse error")
+      true
+  """
+  @spec to_json_rpc!(t()) :: String.t()
+  def to_json_rpc!(%__MODULE__{} = error, id \\ ID.generate_error_id()) do
+    {message, data} = Map.pop(error.data, :message)
+    payload = %{"code" => error.code, "data" => data, "message" => message || ""}
+    {:ok, encoded} = Message.encode_error(%{"error" => payload}, id)
+    encoded
   end
 
   @doc """
@@ -268,6 +306,28 @@ defmodule Hermes.MCP.Error do
   defp reason_for_code(@invalid_params), do: :invalid_params
   defp reason_for_code(@internal_error), do: :internal_error
   defp reason_for_code(_), do: :server_error
+
+  @doc """
+  Returns the JSON-RPC error code for a given error reason.
+
+  ## Parameters
+
+    * `reason` - Atom representing the error reason
+
+  ## Examples
+
+      iex> Hermes.MCP.Error.code_for_reason(:parse_error)
+      -32700
+
+      iex> Hermes.MCP.Error.code_for_reason(:invalid_request)
+      -32600
+  """
+  @spec code_for_reason(atom()) :: integer()
+  def code_for_reason(:parse_error), do: @parse_error
+  def code_for_reason(:invalid_request), do: @invalid_request
+  def code_for_reason(:method_not_found), do: @method_not_found
+  def code_for_reason(:invalid_params), do: @invalid_params
+  def code_for_reason(:internal_error), do: @internal_error
 end
 
 defimpl Inspect, for: Hermes.MCP.Error do

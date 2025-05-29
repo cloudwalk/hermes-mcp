@@ -79,7 +79,7 @@ defmodule Hermes.MCP.ErrorTest do
 
       assert error.code == -32_700
       assert error.reason == :parse_error
-      assert error.data.original_message == "Parse error"
+      assert error.data.message == "Parse error"
 
       json_error = %{"code" => -32_600, "message" => "Invalid Request"}
       error = Error.from_json_rpc(json_error)
@@ -116,7 +116,7 @@ defmodule Hermes.MCP.ErrorTest do
       error = Error.from_json_rpc(json_error)
 
       assert error.data["details"] == "Something went wrong"
-      assert error.data.original_message == "Server error"
+      assert error.data.message == "Server error"
     end
   end
 

@@ -32,7 +32,7 @@ Protocol errors (JSON-RPC errors) use the standard JSON-RPC error codes with spe
 {:error, %Hermes.MCP.Error{
   code: -32601,
   reason: :method_not_found,
-  data: %{original_message: "Method not found"}
+  data: %{message: "Method not found"}
 }}
 ```
 

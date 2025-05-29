@@ -68,6 +68,23 @@ defmodule Hermes.MCP.ID do
   end
 
   @doc """
+  Generates a unique error ID.
+
+  Creates a standard ID with a "err_" prefix for clarity.
+  error IDs are used to correlate errors with their responses.
+
+  ## Examples
+
+      iex> id = Hermes.MCP.ID.generate_error_id()
+      iex> String.starts_with?(id, "err_")
+      true
+  """
+  @spec generate_error_id() :: String.t()
+  def generate_error_id do
+    "err_" <> generate()
+  end
+
+  @doc """
   Generates a unique progress token.
 
   Creates a standard request ID with a "progress_" prefix for clarity.
