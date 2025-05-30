@@ -277,8 +277,9 @@ defmodule Hermes.MCP.Error do
   @spec to_json_rpc!(t()) :: String.t()
   def to_json_rpc!(%__MODULE__{} = error, id \\ ID.generate_error_id()) do
     {message, data} = Map.pop(error.data, :message)
-    payload = %{"code" => error.code, "data" => data, "message" => message || ""}
-    {:ok, encoded} = Message.encode_error(%{"error" => payload}, id)
+    default_message = default_message_for_code(error.code)
+    error_payload = %{"code" => error.code, "data" => data, "message" => message || default_message}
+    {:ok, encoded} = Message.encode_error(%{"error" => error_payload}, id)
     encoded
   end
 
@@ -328,6 +329,14 @@ defmodule Hermes.MCP.Error do
   def code_for_reason(:method_not_found), do: @method_not_found
   def code_for_reason(:invalid_params), do: @invalid_params
   def code_for_reason(:internal_error), do: @internal_error
+
+  # Returns the default JSON-RPC error message for a given error code
+  defp default_message_for_code(@parse_error), do: "Parse error"
+  defp default_message_for_code(@invalid_request), do: "Invalid Request"
+  defp default_message_for_code(@method_not_found), do: "Method not found"
+  defp default_message_for_code(@invalid_params), do: "Invalid params"
+  defp default_message_for_code(@internal_error), do: "Internal error"
+  defp default_message_for_code(_), do: "Server error"
 end
 
 defimpl Inspect, for: Hermes.MCP.Error do

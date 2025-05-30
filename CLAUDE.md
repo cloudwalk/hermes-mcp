@@ -101,9 +101,40 @@ just calculator-server
   - `client_event/2`, `server_event/2`, `message/4` for protocol message logging
 
 ### Testing Patterns
-- **Mock Transports**: Use test support modules in `test/support/`
-- **Context Setup**: Use test contexts for consistent test environment
-- **Request/Response Testing**: Test full message flow with proper encoding/decoding
+- **MCPTest Framework**: Use `MCPTest.Case` for comprehensive MCP protocol testing
+  - Provides builders, setup functions, helpers, and domain-specific assertions
+  - Reduces test boilerplate by ~90% while maintaining flexibility
+  - Uses MockTransport (test double) instead of real transports like STDIO/HTTP
+  - No mocking library needed - MockTransport is already a test implementation
+- **Message Builders**: Use MCPTest builders for consistent message construction
+  - `init_request/1`, `ping_request/0`, `tools_list_request/1`, etc.
+  - `build_request/2`, `build_response/2`, `build_notification/2` for custom messages
+- **Setup Functions**: Use composable setup functions for test contexts
+  - `setup_client/2`, `initialize_client/2`, `initialized_client/2`
+  - `setup_server/2`, `initialize_server/2`, `initialized_server/2`
+  - `server_with_mock_transport/2` for server without initialization
+- **MCP Assertions**: Use domain-specific assertions for clear error messages
+  - `assert_mcp_response/2`, `assert_mcp_error/3`, `assert_mcp_notification/2`
+  - `assert_success/2`, `assert_resources/2`, `assert_tools/2`
+- **Usage Example**:
+  ```elixir
+  defmodule MyMCPTest do
+    use MCPTest.Case
+    
+    @tag server: true
+    test "handles initialization", %{server: server} do
+      request = init_request()
+      {:ok, encoded} = Message.encode_request(request, 1)
+      {:ok, response} = GenServer.call(server, {:message, encoded})
+      {:ok, [decoded]} = Message.decode(response)
+      
+      assert_mcp_response(decoded, %{
+        "protocolVersion" => "2025-03-26",
+        "serverInfo" => %{"name" => "Test Server", "version" => "1.0.0"}
+      })
+    end
+  end
+  ```
 
 ## Code Style Guidelines
 - **Code Comments**: Only add code comments if strictly necessary, avoid it generally

@@ -1,10 +1,10 @@
 defmodule Hermes.ClientTest do
   use ExUnit.Case, async: true
+  use Mimic
 
   import Hermes.Client.Contexts
   import Hermes.Client.Fixtures
   import Hermes.Client.Setup
-  import Mox
 
   alias Hermes.Client.Operation
   alias Hermes.MCP.Error
@@ -14,13 +14,7 @@ defmodule Hermes.ClientTest do
 
   @moduletag capture_log: true
 
-  setup :set_mox_from_context
   setup :verify_on_exit!
-
-  setup do
-    Mox.stub_with(Hermes.MockTransport, Hermes.MockTransportImpl)
-    :ok
-  end
 
   describe "start_link/1" do
     test "starts the client with proper initialization" do

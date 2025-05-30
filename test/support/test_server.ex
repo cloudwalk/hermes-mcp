@@ -15,9 +15,47 @@ defmodule TestServer do
   @impl true
   def handle_request(request, state) do
     case request["method"] do
-      "tools/list" -> {:reply, "test_success", state}
-      "ping" -> {:reply, %{}, state}
-      _ -> {:error, Error.method_not_found(%{method: request["method"]}), state}
+      "tools/list" ->
+        {:reply, %{"tools" => []}, state}
+
+      "ping" ->
+        {:reply, %{}, state}
+
+      "tools/call" ->
+        handle_tools_call(request, state)
+
+      "resources/list" ->
+        {:reply, %{"resources" => []}, state}
+
+      "resources/read" ->
+        params = request["params"] || %{}
+        {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), state}
+
+      "prompts/list" ->
+        {:reply, %{"prompts" => []}, state}
+
+      "prompts/get" ->
+        params = request["params"] || %{}
+        {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
+
+      _ ->
+        {:error, Error.method_not_found(%{method: request["method"]}), state}
+    end
+  end
+
+  defp handle_tools_call(request, state) do
+    params = request["params"] || %{}
+
+    case Map.get(params, "name") do
+      nil ->
+        {:error, Error.invalid_params(%{param: "name", message: "name parameter is required"}), state}
+
+      name ->
+        {:reply,
+         %{
+           "content" => [%{"type" => "text", "text" => "Tool '#{name}' executed successfully"}],
+           "isError" => false
+         }, state}
     end
   end
 
