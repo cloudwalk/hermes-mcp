@@ -11,9 +11,6 @@ defmodule MCPTest.Case do
         use MCPTest.Case
         use Mimic
 
-        # Explicit mocking setup
-        Mimic.copy(Hermes.MockTransport)
-        setup :verify_on_exit!
         
         test "my mcp test", %{client: client} do
           result = request_with_resources_response(client, [])
@@ -26,9 +23,6 @@ defmodule MCPTest.Case do
         use MCPTest.Case, setup: [:client, :server]
         use Mimic
 
-        # Explicit mocking setup
-        Mimic.copy(Hermes.MockTransport)
-        setup :verify_on_exit!
         
         test "integration test", %{client: client, server: server} do
           # Both client and server are available
@@ -39,11 +33,18 @@ defmodule MCPTest.Case do
   use ExUnit.CaseTemplate
 
   using opts do
-    async = Keyword.get(opts, :async, true)
+    async = Keyword.get(opts, :async, false)
 
     quote do
       use ExUnit.Case, async: unquote(async)
-      use MCPTest
+
+      import MCPTest.Assertions
+      import MCPTest.Builders
+      import MCPTest.Helpers
+      import MCPTest.Setup
+
+      alias Hermes.MCP.Error
+      alias Hermes.MCP.Message
 
       @moduletag capture_log: true
     end
@@ -58,9 +59,6 @@ defmodule MCPTest.Case do
     ctx
   end
 
-  # Setup Functions
-
-  # Tag-based setup
   defp maybe_setup_client(ctx, %{client: true}) do
     MCPTest.Setup.initialized_client(ctx)
   end

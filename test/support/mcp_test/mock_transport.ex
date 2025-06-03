@@ -10,7 +10,6 @@ defmodule MCPTest.MockTransport do
 
   For client testing with mocking libraries:
 
-      # Will be stubbed by Mox/Mimic automatically via MCPTest.Setup
       client = setup_client(transport: [layer: MCPTest.MockTransport, name: :test_transport])
       
   For server testing with message recording:
@@ -18,7 +17,6 @@ defmodule MCPTest.MockTransport do
       {:ok, transport} = MCPTest.MockTransport.start_link(name: :server_transport)
       server = setup_server(transport: [layer: MCPTest.MockTransport, name: :server_transport])
       
-      # Verify messages sent by server
       messages = MCPTest.MockTransport.get_messages(:server_transport)
   """
 
@@ -40,8 +38,6 @@ defmodule MCPTest.MockTransport do
           response: term(),
           called: boolean()
         }
-
-  # Public API
 
   @doc """
   Starts the mock transport.
@@ -131,8 +127,6 @@ defmodule MCPTest.MockTransport do
     end)
   end
 
-  # Transport Behaviour Implementation
-
   @impl true
   def send_message(transport, message) do
     GenServer.call(transport, {:send_message, message})
@@ -147,8 +141,6 @@ defmodule MCPTest.MockTransport do
   def supported_protocol_versions do
     ["2024-11-05", "2025-03-26"]
   end
-
-  # GenServer Callbacks
 
   @impl true
   def init(state) do
@@ -197,7 +189,6 @@ defmodule MCPTest.MockTransport do
     new_messages = [message | state.messages]
     new_state = %{state | messages: new_messages}
 
-    # Check expectations if in mocking mode
     response =
       case state.mode do
         :mocking -> handle_expectations(message, state.expectations)
@@ -211,8 +202,6 @@ defmodule MCPTest.MockTransport do
   def handle_call(:shutdown, _from, state) do
     {:stop, :normal, :ok, state}
   end
-
-  # Private Functions
 
   defp handle_expectations(message, expectations) do
     case Message.decode(message) do
@@ -272,8 +261,6 @@ defmodule MCPTest.MockTransport do
         true
     end)
   end
-
-  # Convenience Functions for Testing
 
   @doc """
   Asserts that a specific method was called.

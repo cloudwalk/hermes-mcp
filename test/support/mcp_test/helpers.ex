@@ -14,8 +14,6 @@ defmodule MCPTest.Helpers do
 
   @default_timeout 1000
 
-  # Request/Response Cycle Helpers
-
   @doc """
   Performs a complete MCP request/response cycle.
 
@@ -63,7 +61,7 @@ defmodule MCPTest.Helpers do
     request_response_cycle(
       client,
       "resources/list",
-      %{},
+      [],
       fn request_id ->
         resources_list_response(request_id, resources)
       end,
@@ -75,7 +73,7 @@ defmodule MCPTest.Helpers do
     request_response_cycle(
       client,
       "tools/list",
-      %{},
+      [],
       fn request_id ->
         tools_list_response(request_id, tools)
       end,
@@ -87,7 +85,7 @@ defmodule MCPTest.Helpers do
     request_response_cycle(
       client,
       "prompts/list",
-      %{},
+      [],
       fn request_id ->
         prompts_list_response(request_id, prompts)
       end,
@@ -106,7 +104,7 @@ defmodule MCPTest.Helpers do
       # ... do other setup ...
       send_response(client, tools_call_response(request_id, [...]))
   """
-  def send_request(client, method, params \\ %{}) do
+  def send_request(client, method, params \\ []) do
     task = start_async_request(client, method, params)
     Process.put(:current_request_task, task)
 
@@ -131,8 +129,6 @@ defmodule MCPTest.Helpers do
         result
     end
   end
-
-  # Message Sending Helpers
 
   @doc """
   Sends a response message to the client.
@@ -159,8 +155,6 @@ defmodule MCPTest.Helpers do
     {:ok, encoded} = Message.encode_error(error, error["id"])
     GenServer.cast(client, {:response, encoded})
   end
-
-  # Initialization Helpers
 
   @doc """
   Sends an initialize request to the client.
@@ -190,8 +184,6 @@ defmodule MCPTest.Helpers do
     :ok
   end
 
-  # Request ID Management
-
   @doc """
   Extracts the request ID for a specific method from client state.
 
@@ -217,8 +209,6 @@ defmodule MCPTest.Helpers do
     Enum.map(pending_requests, & &1.id)
   end
 
-  # Progress and Notification Helpers
-
   @doc """
   Sends a progress notification for a specific request.
   """
@@ -242,8 +232,6 @@ defmodule MCPTest.Helpers do
     notification = log_notification(level, message, logger)
     send_notification(client, notification)
   end
-
-  # Error Testing Helpers
 
   @doc """
   Sends an error response instead of a successful response.
@@ -270,8 +258,6 @@ defmodule MCPTest.Helpers do
     send_error_response(client, request_id, code, message, data)
   end
 
-  # Private Helpers
-
   defp start_async_request(client, method, params) do
     Task.async(fn ->
       case method do
@@ -285,28 +271,28 @@ defmodule MCPTest.Helpers do
           Hermes.Client.list_resources(client, params)
 
         "resources/read" ->
-          uri = params["uri"] || "test://uri"
+          uri = Keyword.get(params, :uri, "test://uri")
           Hermes.Client.read_resource(client, uri)
 
         "tools/list" ->
           Hermes.Client.list_tools(client, params)
 
         "tools/call" ->
-          name = params["name"] || "test_tool"
-          arguments = params["arguments"] || %{}
+          name = Keyword.get(params, :name, "test_tool")
+          arguments = Keyword.get(params, :arguments, %{})
           Hermes.Client.call_tool(client, name, arguments)
 
         "prompts/list" ->
           Hermes.Client.list_prompts(client, params)
 
         "prompts/get" ->
-          name = params["name"] || "test_prompt"
-          arguments = params["arguments"] || %{}
+          name = Keyword.get(params, :name, "test_prompt")
+          arguments = Keyword.get(params, :arguments, %{})
           Hermes.Client.get_prompt(client, name, arguments)
 
         "completion/complete" ->
-          ref = params["ref"] || %{}
-          argument = params["argument"] || %{}
+          ref = Keyword.get(params, :ref, %{})
+          argument = Keyword.get(params, :argument, %{})
           Hermes.Client.complete(client, ref, argument)
 
         _ ->

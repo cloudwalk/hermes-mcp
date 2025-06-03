@@ -993,6 +993,16 @@ defmodule Hermes.Client do
     )
 
     for request <- pending_requests do
+      # Reply to the pending request with an error
+      error =
+        Error.client_error(:request_cancelled, %{
+          message: "Request cancelled by client",
+          reason: "client closed"
+        })
+
+      GenServer.reply(request.from, {:error, error})
+
+      # Also send the cancellation notification
       send_notification(state, "notifications/cancelled", %{
         "requestId" => request.id,
         "reason" => "client closed"

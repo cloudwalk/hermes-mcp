@@ -43,7 +43,18 @@ defmodule MCPTest.Setup do
       setup_client(%{}, client_info: %{"name" => "MyClient"})
   """
   def setup_client(ctx, opts \\ []) do
-    client_opts = build_client_opts(ctx, opts)
+    transport =
+      case opts[:transport] || ctx[:transport] do
+        nil ->
+          transport_name = :mock_client_transport
+          start_supervised!({MCPTest.MockTransport, [name: transport_name]})
+          [layer: MCPTest.MockTransport, name: transport_name]
+
+        existing ->
+          existing
+      end
+
+    client_opts = build_client_opts(ctx, Keyword.put(opts, :transport, transport))
     client = start_supervised!({Hermes.Client, client_opts}, restart: :temporary)
 
     Map.put(ctx, :client, client)
@@ -67,7 +78,14 @@ defmodule MCPTest.Setup do
     MCPTest.Helpers.send_initialize_request(client)
 
     request_id = MCPTest.Helpers.get_request_id(client, "initialize")
-    response = init_response(request_id, opts)
+
+    merged_opts =
+      Keyword.merge(
+        Enum.to_list(Map.take(ctx, [:server_capabilities, :server_info])),
+        opts
+      )
+
+    response = init_response(request_id, merged_opts)
     MCPTest.Helpers.send_response(client, response)
 
     notification = initialized_notification()
@@ -75,8 +93,6 @@ defmodule MCPTest.Setup do
 
     ctx
   end
-
-  # Server Setup
 
   @doc """
   Sets up a server process with default configuration.
@@ -114,10 +130,8 @@ defmodule MCPTest.Setup do
     ctx
   end
 
-  # Configuration Builders
-
-  defp build_client_opts(ctx, opts) do
-    transport = opts[:transport] || ctx[:transport] || [layer: Hermes.MockTransport, name: Hermes.MockTransportImpl]
+  defp build_client_opts(_ctx, opts) do
+    transport = opts[:transport] || raise "Transport must be provided in opts"
     client_info = opts[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
     capabilities = opts[:capabilities]
     name = opts[:name] || :test_client
@@ -158,8 +172,6 @@ defmodule MCPTest.Setup do
     ]
   end
 
-  # High-level Convenience Functions
-
   @doc """
   Complete client setup with initialization.
 
@@ -167,7 +179,9 @@ defmodule MCPTest.Setup do
   with mock transport and performs MCP initialization.
   """
   def initialized_client(ctx \\ %{}, opts \\ []) do
-    initialize_client(ctx, opts)
+    ctx
+    |> setup_client(opts)
+    |> initialize_client(opts)
   end
 
   @doc """
@@ -204,8 +218,6 @@ defmodule MCPTest.Setup do
     |> initialize_client(client_opts)
     |> initialize_server(server_opts)
   end
-
-  # Test Context Helpers
 
   @doc """
   Adds custom capabilities to the test context.

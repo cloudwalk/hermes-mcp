@@ -4,78 +4,15 @@ defmodule MCPTest.Builders do
 
   Provides composable functions to build MCP messages with sensible defaults
   and optional overrides. Reduces boilerplate in test message construction.
+
+  This module focuses on high-level test message builders and uses the core
+  Hermes.MCP modules for actual encoding and error handling.
   """
+
+  alias Hermes.MCP.Error
+  alias Hermes.MCP.ID
 
   @default_protocol_version "2025-03-26"
-  @default_jsonrpc_version "2.0"
-
-  @doc """
-  Builds a basic MCP request message.
-
-  ## Examples
-
-      build_request("ping", %{})
-      build_request("initialize", %{"protocolVersion" => "2025-03-26"})
-  """
-  def build_request(method, params \\ %{}) do
-    %{
-      "method" => method,
-      "params" => params,
-      "jsonrpc" => @default_jsonrpc_version
-    }
-  end
-
-  @doc """
-  Builds a basic MCP response message.
-
-  ## Examples
-
-      build_response("request_123", %{"success" => true})
-      build_response(123, %{"resources" => []})
-  """
-  def build_response(request_id, result) do
-    %{
-      "id" => request_id,
-      "jsonrpc" => @default_jsonrpc_version,
-      "result" => result
-    }
-  end
-
-  @doc """
-  Builds a basic MCP error response.
-
-  ## Examples
-
-      build_error("request_123", -32601, "Method not found")
-      build_error(123, -32600, "Invalid Request", %{"details" => "missing params"})
-  """
-  def build_error(request_id, code, message, data \\ %{}) do
-    %{
-      "id" => request_id,
-      "jsonrpc" => @default_jsonrpc_version,
-      "error" => %{
-        "code" => code,
-        "message" => message,
-        "data" => data
-      }
-    }
-  end
-
-  @doc """
-  Builds a basic MCP notification message.
-
-  ## Examples
-
-      build_notification("notifications/initialized", %{})
-      build_notification("notifications/cancelled", %{"requestId" => "123"})
-  """
-  def build_notification(method, params \\ %{}) do
-    %{
-      "jsonrpc" => @default_jsonrpc_version,
-      "method" => method,
-      "params" => params
-    }
-  end
 
   @doc """
   Builds an initialize request with default capabilities.
@@ -91,11 +28,14 @@ defmodule MCPTest.Builders do
     client_info = opts[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
     protocol_version = opts[:protocol_version] || @default_protocol_version
 
-    build_request("initialize", %{
-      "protocolVersion" => protocol_version,
-      "capabilities" => capabilities,
-      "clientInfo" => client_info
-    })
+    %{
+      "method" => "initialize",
+      "params" => %{
+        "protocolVersion" => protocol_version,
+        "capabilities" => capabilities,
+        "clientInfo" => client_info
+      }
+    }
   end
 
   @doc """
@@ -112,18 +52,21 @@ defmodule MCPTest.Builders do
     server_info = opts[:server_info] || default_server_info()
     protocol_version = opts[:protocol_version] || @default_protocol_version
 
-    build_response(request_id, %{
-      "protocolVersion" => protocol_version,
-      "capabilities" => capabilities,
-      "serverInfo" => server_info
-    })
+    %{
+      "result" => %{
+        "protocolVersion" => protocol_version,
+        "capabilities" => capabilities,
+        "serverInfo" => server_info
+      },
+      "id" => request_id
+    }
   end
 
   @doc """
   Builds an initialized notification.
   """
   def initialized_notification do
-    build_notification("notifications/initialized", %{})
+    %{"method" => "notifications/initialized", "params" => %{}}
   end
 
   # Resource Messages
@@ -139,8 +82,9 @@ defmodule MCPTest.Builders do
   def resources_list_request(opts \\ []) do
     params = %{}
     params = if cursor = opts[:cursor], do: Map.put(params, "cursor", cursor), else: params
+    request_id = opts[:request_id] || ID.generate_request_id()
 
-    build_request("resources/list", params)
+    build_request("resources/list", params, request_id: request_id)
   end
 
   @doc """
@@ -167,10 +111,11 @@ defmodule MCPTest.Builders do
       resources_read_request("test://resource")
       resources_read_request("file://path", include_content: true)
   """
-  def resources_read_request(uri) do
+  def resources_read_request(uri, opts \\ []) do
+    request_id = opts[:request_id] || ID.generate_request_id()
     params = %{"uri" => uri}
 
-    build_request("resources/read", params)
+    build_request("resources/read", params, request_id: request_id)
   end
 
   @doc """
@@ -331,6 +276,13 @@ defmodule MCPTest.Builders do
     build_response(request_id, %{})
   end
 
+  @doc """
+  Builds an empty result response.
+  """
+  def empty_result_response(request_id) do
+    build_response(request_id, %{})
+  end
+
   # Notification Messages
 
   @doc """
@@ -368,38 +320,52 @@ defmodule MCPTest.Builders do
   # Error Builders
 
   @doc """
+  Builds a generic error response.
+
+  This is used when building custom errors in tests.
+  """
+  def error_response(request_id) do
+    method_not_found_error(request_id)
+  end
+
+  @doc """
   Builds a parse error response.
   """
   def parse_error(request_id) do
-    build_error(request_id, -32_700, "Parse error")
+    error = Error.parse_error()
+    build_error(request_id, error.code, "Parse error", error.data)
   end
 
   @doc """
   Builds an invalid request error response.
   """
   def invalid_request_error(request_id) do
-    build_error(request_id, -32_600, "Invalid Request")
+    error = Error.invalid_request()
+    build_error(request_id, error.code, "Invalid Request", error.data)
   end
 
   @doc """
   Builds a method not found error response.
   """
   def method_not_found_error(request_id) do
-    build_error(request_id, -32_601, "Method not found")
+    error = Error.method_not_found()
+    build_error(request_id, error.code, "Method not found", error.data)
   end
 
   @doc """
   Builds an invalid params error response.
   """
   def invalid_params_error(request_id) do
-    build_error(request_id, -32_602, "Invalid params")
+    error = Error.invalid_params()
+    build_error(request_id, error.code, "Invalid params", error.data)
   end
 
   @doc """
   Builds an internal error response.
   """
   def internal_error(request_id) do
-    build_error(request_id, -32_603, "Internal error")
+    error = Error.internal_error()
+    build_error(request_id, error.code, "Internal error", error.data)
   end
 
   # Private Helpers
@@ -418,6 +384,47 @@ defmodule MCPTest.Builders do
     %{
       "name" => "TestServer",
       "version" => "1.0.0"
+    }
+  end
+
+  # Generic builder helpers that return message maps (not encoded strings)
+
+  @doc false
+  def build_request(method, params, opts \\ []) do
+    request_id = opts[:request_id] || ID.generate_request_id()
+
+    %{
+      "method" => method,
+      "params" => params,
+      "id" => request_id
+    }
+  end
+
+  @doc false
+  def build_response(request_id, result) do
+    %{
+      "result" => result,
+      "id" => request_id
+    }
+  end
+
+  @doc false
+  def build_notification(method, params) do
+    %{
+      "method" => method,
+      "params" => params
+    }
+  end
+
+  @doc false
+  def build_error(request_id, code, message, data \\ %{}) do
+    %{
+      "error" => %{
+        "code" => code,
+        "message" => message,
+        "data" => data
+      },
+      "id" => request_id
     }
   end
 end
