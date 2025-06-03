@@ -14,33 +14,28 @@ defmodule TestServer do
 
   @impl true
   def handle_request(request, state) do
-    case request["method"] do
-      "tools/list" ->
-        {:reply, %{"tools" => []}, state}
+    method = request["method"]
+    handle_method(method, request, state)
+  end
 
-      "ping" ->
-        {:reply, %{}, state}
+  defp handle_method("tools/list", _request, state), do: {:reply, %{"tools" => []}, state}
+  defp handle_method("ping", _request, state), do: {:reply, %{}, state}
+  defp handle_method("tools/call", request, state), do: handle_tools_call(request, state)
+  defp handle_method("resources/list", _request, state), do: {:reply, %{"resources" => []}, state}
+  defp handle_method("prompts/list", _request, state), do: {:reply, %{"prompts" => []}, state}
 
-      "tools/call" ->
-        handle_tools_call(request, state)
+  defp handle_method("resources/read", request, state) do
+    params = request["params"] || %{}
+    {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), state}
+  end
 
-      "resources/list" ->
-        {:reply, %{"resources" => []}, state}
+  defp handle_method("prompts/get", request, state) do
+    params = request["params"] || %{}
+    {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
+  end
 
-      "resources/read" ->
-        params = request["params"] || %{}
-        {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), state}
-
-      "prompts/list" ->
-        {:reply, %{"prompts" => []}, state}
-
-      "prompts/get" ->
-        params = request["params"] || %{}
-        {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
-
-      _ ->
-        {:error, Error.method_not_found(%{method: request["method"]}), state}
-    end
+  defp handle_method(method, _request, state) do
+    {:error, Error.method_not_found(%{method: method}), state}
   end
 
   defp handle_tools_call(request, state) do

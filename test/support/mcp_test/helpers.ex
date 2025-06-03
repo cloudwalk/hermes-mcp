@@ -259,46 +259,40 @@ defmodule MCPTest.Helpers do
   end
 
   defp start_async_request(client, method, params) do
-    Task.async(fn ->
-      case method do
-        "initialize" ->
-          :ok
+    Task.async(fn -> execute_client_method(client, method, params) end)
+  end
 
-        "ping" ->
-          Hermes.Client.ping(client)
+  defp execute_client_method(client, "initialize", _params), do: :ok
+  defp execute_client_method(client, "ping", _params), do: Hermes.Client.ping(client)
+  defp execute_client_method(client, "resources/list", params), do: Hermes.Client.list_resources(client, params)
+  defp execute_client_method(client, "tools/list", params), do: Hermes.Client.list_tools(client, params)
+  defp execute_client_method(client, "prompts/list", params), do: Hermes.Client.list_prompts(client, params)
 
-        "resources/list" ->
-          Hermes.Client.list_resources(client, params)
+  defp execute_client_method(client, "resources/read", params) do
+    uri = Keyword.get(params, :uri, "test://uri")
+    Hermes.Client.read_resource(client, uri)
+  end
 
-        "resources/read" ->
-          uri = Keyword.get(params, :uri, "test://uri")
-          Hermes.Client.read_resource(client, uri)
+  defp execute_client_method(client, "tools/call", params) do
+    name = Keyword.get(params, :name, "test_tool")
+    arguments = Keyword.get(params, :arguments, %{})
+    Hermes.Client.call_tool(client, name, arguments)
+  end
 
-        "tools/list" ->
-          Hermes.Client.list_tools(client, params)
+  defp execute_client_method(client, "prompts/get", params) do
+    name = Keyword.get(params, :name, "test_prompt")
+    arguments = Keyword.get(params, :arguments, %{})
+    Hermes.Client.get_prompt(client, name, arguments)
+  end
 
-        "tools/call" ->
-          name = Keyword.get(params, :name, "test_tool")
-          arguments = Keyword.get(params, :arguments, %{})
-          Hermes.Client.call_tool(client, name, arguments)
+  defp execute_client_method(client, "completion/complete", params) do
+    ref = Keyword.get(params, :ref, %{})
+    argument = Keyword.get(params, :argument, %{})
+    Hermes.Client.complete(client, ref, argument)
+  end
 
-        "prompts/list" ->
-          Hermes.Client.list_prompts(client, params)
-
-        "prompts/get" ->
-          name = Keyword.get(params, :name, "test_prompt")
-          arguments = Keyword.get(params, :arguments, %{})
-          Hermes.Client.get_prompt(client, name, arguments)
-
-        "completion/complete" ->
-          ref = Keyword.get(params, :ref, %{})
-          argument = Keyword.get(params, :argument, %{})
-          Hermes.Client.complete(client, ref, argument)
-
-        _ ->
-          {:error, {:unsupported_method, method}}
-      end
-    end)
+  defp execute_client_method(_client, method, _params) do
+    {:error, {:unsupported_method, method}}
   end
 
   defp build_response_with_id(response_builder, request_id) when is_function(response_builder) do

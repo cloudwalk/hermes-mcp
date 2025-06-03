@@ -108,7 +108,12 @@ defmodule MCPTest.Assertions do
       assert_mcp_error(message, -32601, "Method not found")
   """
   defmacro assert_mcp_error(message, expected_code \\ nil, expected_message \\ nil, opts \\ quote(do: [])) do
-    quote bind_quoted: [message: message, expected_code: expected_code, expected_message: expected_message, opts: opts] do
+    quote bind_quoted: [
+            message: message,
+            expected_code: expected_code,
+            expected_message: expected_message,
+            opts: opts
+          ] do
       validated_message = assert_mcp_message(message)
 
       id = Map.get(validated_message, "id")
@@ -229,35 +234,7 @@ defmodule MCPTest.Assertions do
         end)
 
       opts when is_list(opts) ->
-        assert_success(result, fn resources ->
-          assert is_list(resources), "Expected resources list, got: #{inspect(resources)}"
-
-          if count = opts[:count] do
-            assert length(resources) == count,
-                   "Expected #{count} resources, got #{length(resources)}"
-          end
-
-          if contains = opts[:contains] do
-            found =
-              Enum.any?(resources, fn resource ->
-                Enum.all?(contains, fn {key, value} ->
-                  resource[key] == value
-                end)
-              end)
-
-            assert found, "Expected to find resource containing #{inspect(contains)} in #{inspect(resources)}"
-          end
-
-          if min_count = opts[:min_count] do
-            assert length(resources) >= min_count,
-                   "Expected at least #{min_count} resources, got #{length(resources)}"
-          end
-
-          if max_count = opts[:max_count] do
-            assert length(resources) <= max_count,
-                   "Expected at most #{max_count} resources, got #{length(resources)}"
-          end
-        end)
+        assert_success(result, &validate_resources_list(&1, opts))
     end
   end
 
@@ -275,25 +252,7 @@ defmodule MCPTest.Assertions do
         end)
 
       opts when is_list(opts) ->
-        assert_success(result, fn tools ->
-          assert is_list(tools), "Expected tools list, got: #{inspect(tools)}"
-
-          if count = opts[:count] do
-            assert length(tools) == count,
-                   "Expected #{count} tools, got #{length(tools)}"
-          end
-
-          if contains = opts[:contains] do
-            found =
-              Enum.any?(tools, fn tool ->
-                Enum.all?(contains, fn {key, value} ->
-                  tool[key] == value
-                end)
-              end)
-
-            assert found, "Expected to find tool containing #{inspect(contains)} in #{inspect(tools)}"
-          end
-        end)
+        assert_success(result, &validate_tools_list(&1, opts))
     end
   end
 
@@ -318,18 +277,8 @@ defmodule MCPTest.Assertions do
         assert_success(result, fn content ->
           assert is_list(content), "Expected tool call content list, got: #{inspect(content)}"
 
-          if text_contains = opts[:text_contains] do
-            text_content = extract_text_from_content(content)
-
-            assert String.contains?(text_content, text_contains),
-                   "Expected tool result to contain '#{text_contains}', got: #{text_content}"
-          end
-
-          if is_error = opts[:is_error] do
-            if is_error do
-              assert true, "Cannot verify error status from content alone - check response structure"
-            end
-          end
+          assert_text_content_if_needed(content, opts[:text_contains])
+          verify_error_status_if_needed(opts[:is_error])
         end)
     end
   end
@@ -340,6 +289,69 @@ defmodule MCPTest.Assertions do
     content
     |> Enum.filter(fn item -> item["type"] == "text" end)
     |> Enum.map_join(" ", fn item -> item["text"] end)
+  end
+
+  defp assert_contains_item(items, contains, item_type) do
+    found = Enum.any?(items, &matches_all_properties?(&1, contains))
+
+    assert found,
+           "Expected to find #{item_type} containing #{inspect(contains)} in #{inspect(items)}"
+  end
+
+  defp matches_all_properties?(item, properties) do
+    Enum.all?(properties, fn {key, value} -> item[key] == value end)
+  end
+
+  defp assert_text_content_if_needed(_content, nil), do: :ok
+
+  defp assert_text_content_if_needed(content, text_contains) do
+    text_content = extract_text_from_content(content)
+
+    assert String.contains?(text_content, text_contains),
+           "Expected tool result to contain '#{text_contains}', got: #{text_content}"
+  end
+
+  defp verify_error_status_if_needed(nil), do: :ok
+  defp verify_error_status_if_needed(false), do: :ok
+
+  defp verify_error_status_if_needed(true) do
+    assert true, "Cannot verify error status from content alone - check response structure"
+  end
+
+  defp validate_resources_list(resources, opts) do
+    assert is_list(resources), "Expected resources list, got: #{inspect(resources)}"
+
+    if count = opts[:count] do
+      assert length(resources) == count,
+             "Expected #{count} resources, got #{length(resources)}"
+    end
+
+    if contains = opts[:contains] do
+      assert_contains_item(resources, contains, "resource")
+    end
+
+    if min_count = opts[:min_count] do
+      assert length(resources) >= min_count,
+             "Expected at least #{min_count} resources, got #{length(resources)}"
+    end
+
+    if max_count = opts[:max_count] do
+      assert length(resources) <= max_count,
+             "Expected at most #{max_count} resources, got #{length(resources)}"
+    end
+  end
+
+  defp validate_tools_list(tools, opts) do
+    assert is_list(tools), "Expected tools list, got: #{inspect(tools)}"
+
+    if count = opts[:count] do
+      assert length(tools) == count,
+             "Expected #{count} tools, got #{length(tools)}"
+    end
+
+    if contains = opts[:contains] do
+      assert_contains_item(tools, contains, "tool")
+    end
   end
 
   # Initialization Assertions

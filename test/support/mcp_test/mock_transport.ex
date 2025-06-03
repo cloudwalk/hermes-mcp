@@ -269,20 +269,28 @@ defmodule MCPTest.MockTransport do
     import ExUnit.Assertions
 
     messages = find_messages(transport, method: method)
+    found = check_method_called(messages, params)
 
-    found =
-      if params do
-        Enum.any?(messages, fn message ->
-          case Message.decode(message) do
-            {:ok, [%{"params" => ^params}]} -> true
-            _ -> false
-          end
-        end)
-      else
-        length(messages) > 0
+    assert found, build_method_assert_message(method, params)
+  end
+
+  defp check_method_called(messages, nil), do: length(messages) > 0
+
+  defp check_method_called(messages, params) do
+    Enum.any?(messages, fn message ->
+      case Message.decode(message) do
+        {:ok, [%{"params" => ^params}]} -> true
+        _ -> false
       end
+    end)
+  end
 
-    assert found, "Expected method '#{method}' to be called#{if params, do: " with params #{inspect(params)}", else: ""}"
+  defp build_method_assert_message(method, nil) do
+    "Expected method '#{method}' to be called"
+  end
+
+  defp build_method_assert_message(method, params) do
+    "Expected method '#{method}' to be called with params #{inspect(params)}"
   end
 
   @doc """
