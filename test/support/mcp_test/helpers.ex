@@ -262,7 +262,7 @@ defmodule MCPTest.Helpers do
     Task.async(fn -> execute_client_method(client, method, params) end)
   end
 
-  defp execute_client_method(client, "initialize", _params), do: :ok
+  defp execute_client_method(_client, "initialize", _params), do: :ok
   defp execute_client_method(client, "ping", _params), do: Hermes.Client.ping(client)
   defp execute_client_method(client, "resources/list", params), do: Hermes.Client.list_resources(client, params)
   defp execute_client_method(client, "tools/list", params), do: Hermes.Client.list_tools(client, params)

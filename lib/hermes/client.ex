@@ -754,7 +754,11 @@ defmodule Hermes.Client do
   def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
     {:reply,
      with {:ok, notification} <-
-            Message.encode_progress_notification(progress_token, progress, total) do
+            Message.encode_progress_notification(%{
+              "progressToken" => progress_token,
+              "progress" => progress,
+              "total" => total
+            }) do
        send_to_transport(state.transport, notification)
      end, state}
   end
