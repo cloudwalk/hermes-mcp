@@ -320,8 +320,17 @@ defmodule Hermes.MCP.Message do
   @doc """
   Legacy function for progress notifications with individual parameters.
 
-  Prefer using `encode_progress_notification/2` with a params map.
+  **Deprecated**: Prefer using `encode_progress_notification/2` with a params map.
+
+  This function will be removed in a future release. Update your code to use the newer function:
+
+      encode_progress_notification(%{
+        "progressToken" => progress_token,
+        "progress" => progress,
+        "total" => total
+      })
   """
+  @deprecated "Use encode_progress_notification/2 with a params map. This function will be removed in a future release."
   @spec encode_progress_notification(String.t() | integer(), number(), number() | nil) ::
           {:ok, String.t()} | {:error, term()}
   def encode_progress_notification(progress_token, progress, total)
