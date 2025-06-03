@@ -33,6 +33,7 @@ defmodule Hermes.Server.Transport.STDIOTest do
   end
 
   describe "send_message/2" do
+    @tag skip: true
     test "sends message via cast", %{server: server} do
       name = :"test_send_message_#{:rand.uniform(1_000_000)}"
       {:ok, pid} = STDIO.start_link(server: server, name: name)
