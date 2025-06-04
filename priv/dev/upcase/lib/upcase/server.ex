@@ -8,6 +8,9 @@ defmodule Upcase.Server do
   alias Hermes.MCP.Error
 
   @impl true
+  def supported_protocol_versions, do: ["2025-03-26"]
+
+  @impl true
   def init(_args) do
     {:ok, %{}}
   end
@@ -52,7 +55,8 @@ defmodule Upcase.Server do
 
   @impl true
   def handle_request(
-        %{"method" => "tools/call", "params" => %{"name" => "upcase", "arguments" => args}} = _request,
+        %{"method" => "tools/call", "params" => %{"name" => "upcase", "arguments" => args}} =
+          _request,
         state
       ) do
     case Map.get(args, "text") do

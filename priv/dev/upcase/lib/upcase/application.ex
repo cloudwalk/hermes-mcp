@@ -1,54 +1,39 @@
 defmodule Upcase.Application do
+  # See https://hexdocs.pm/elixir/Application.html
+  # for more information on OTP Applications
   @moduledoc false
 
   use Application
 
-  alias Hermes.Server.Transport.StreamableHTTP.Supervisor, as: StreamableSupervisor
+  alias Hermes.Server.Base
+  alias Hermes.Server.Transport.StreamableHTTP
 
   @impl true
   def start(_type, _args) do
-    # STDIO server configuration
-    stdio_server_opts = [
-      module: Upcase.Server,
-      init_args: [],
-      transport: [
-        layer: Hermes.Server.Transport.STDIO,
-        name: Upcase.ServerSTDIO
-      ],
-      name: Upcase.MCPServer
+    transport = [
+      server: Upcase.MCP,
+      name: Upcase.HTTP,
+      registry: Upcase.Registry
     ]
 
-    # HTTP server configuration
-    http_server_opts = [
+    mcp_server = [
       module: Upcase.Server,
-      init_args: [],
+      protocol_version: "2025-03-26",
+      name: Upcase.MCP,
       transport: [
-        layer: Hermes.Server.Transport.StreamableHTTP,
-        name: Upcase.ServerHTTP,
-        registry: Upcase.SessionRegistry
-      ],
-      name: Upcase.MCPHTTPServer
+        layer: StreamableHTTP,
+        name: Upcase.HTTP
+      ]
     ]
 
     children = [
-      # STDIO transport and server
-      # {Hermes.Server.Transport.STDIO, server: Upcase.MCPServer, name: Upcase.ServerSTDIO},
-      # Supervisor.child_spec({Hermes.Server.Base, stdio_server_opts}, id: :stdio),
-
-      # HTTP transport supervisor
-      {StreamableSupervisor,
-       [
-         server: Upcase.MCPHTTPServer,
-         transport_name: Upcase.ServerHTTP,
-         registry_name: Upcase.SessionRegistry
-       ]},
-      # HTTP server
-      Supervisor.child_spec({Hermes.Server.Base, http_server_opts}, id: :http),
-
-      # HTTP endpoint
-      {Bandit, plug: Upcase.HTTP, scheme: :http, port: 4000}
+      {StreamableHTTP, transport},
+      {Base, mcp_server},
+      {Bandit, plug: Upcase.Router}
     ]
 
+    # See https://hexdocs.pm/elixir/Supervisor.html
+    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Upcase.Supervisor]
     Supervisor.start_link(children, opts)
   end

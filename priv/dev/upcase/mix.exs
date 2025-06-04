@@ -7,9 +7,7 @@ defmodule Upcase.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      deps: deps(),
-      escript: escript(),
-      aliases: aliases()
+      deps: deps()
     ]
   end
 
@@ -25,16 +23,8 @@ defmodule Upcase.MixProject do
   defp deps do
     [
       {:hermes_mcp, path: "../../../"},
-      {:plug, "~> 1.17"},
-      {:bandit, "~> 1.5"}
+      {:plug, "~> 1.18"},
+      {:bandit, "~> 1.6"}
     ]
-  end
-
-  defp escript do
-    [main_module: Upcase.Main]
-  end
-
-  defp aliases do
-    [assemble: ["deps.get", "compile --force", "escript.build"]]
   end
 end
