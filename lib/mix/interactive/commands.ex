@@ -20,6 +20,7 @@ defmodule Mix.Interactive.Commands do
   alias Hermes.MCP.Response
   alias Hermes.Transport.SSE
   alias Hermes.Transport.STDIO
+  alias Hermes.Transport.StreamableHTTP
   alias Mix.Interactive
   alias Mix.Interactive.State
   alias Mix.Interactive.UI
@@ -301,6 +302,17 @@ defmodule Mix.Interactive.Commands do
           transport_state = :sys.get_state(transport_pid)
           IO.puts("  #{UI.colors().info}Command:#{UI.colors().reset} #{transport_state.command}")
           print_stdio_args(transport_state)
+        end
+
+      %{layer: StreamableHTTP} ->
+        transport_pid = transport_info[:name] || StreamableHTTP
+
+        if Process.alive?(transport_pid) do
+          transport_state = :sys.get_state(transport_pid)
+          IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}")
+          if transport_state.session_id do
+            IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}")
+          end
         end
 
       _ ->

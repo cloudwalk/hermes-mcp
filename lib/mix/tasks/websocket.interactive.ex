@@ -16,6 +16,7 @@ if Code.ensure_loaded?(:gun) do
 
     alias Hermes.Client
     alias Hermes.Transport.WebSocket
+    alias Mix.Interactive.CLI
     alias Mix.Interactive.Shell
     alias Mix.Interactive.UI
 
@@ -48,7 +49,7 @@ if Code.ensure_loaded?(:gun) do
       IO.puts(header)
       IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
 
-      {:ok, _} =
+      {:ok, pid} =
         WebSocket.start_link(
           client: :websocket_test,
           server: server_options
@@ -59,7 +60,7 @@ if Code.ensure_loaded?(:gun) do
       {:ok, client} =
         Client.start_link(
           name: :websocket_test,
-          transport: [layer: WebSocket],
+          transport: [layer: WebSocket, name: pid],
           client_info: %{
             "name" => "Mix.Tasks.WebSocket",
             "version" => "1.0.0"
@@ -71,6 +72,10 @@ if Code.ensure_loaded?(:gun) do
         )
 
       IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+      
+      IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+      CLI.check_client_connection(client)
+      
       IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
       Shell.loop(client)

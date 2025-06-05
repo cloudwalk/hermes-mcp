@@ -14,6 +14,7 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
 
   alias Hermes.Client
   alias Hermes.Transport.StreamableHTTP
+  alias Mix.Interactive.CLI
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
@@ -58,6 +59,7 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
       Client.start_link(
         name: :streamable_http_test,
         transport: [layer: StreamableHTTP, name: pid],
+        protocol_version: "2025-03-26",
         client_info: %{
           "name" => "Mix.Tasks.StreamableHTTP",
           "version" => "1.0.0"
@@ -72,6 +74,10 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
       )
 
     IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+    
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    CLI.check_client_connection(client)
+    
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)

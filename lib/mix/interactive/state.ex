@@ -28,6 +28,7 @@ defmodule Mix.Interactive.State do
   alias Hermes.Client.Request
   alias Hermes.Transport.SSE
   alias Hermes.Transport.STDIO
+  alias Hermes.Transport.StreamableHTTP
   alias Mix.Interactive.UI
 
   @doc """
@@ -173,6 +174,7 @@ defmodule Mix.Interactive.State do
       case transport_layer do
         SSE -> print_sse_transport_state(transport_pid, transport_state, verbose)
         STDIO -> print_stdio_transport_state(transport_pid, transport_state, verbose)
+        StreamableHTTP -> print_streamable_http_transport_state(transport_pid, transport_state, verbose)
         _ -> print_unknown_transport_state(transport_pid, transport_state, verbose)
       end
     else
@@ -264,6 +266,40 @@ defmodule Mix.Interactive.State do
     else
       IO.puts("  #{UI.colors().warning}Status:#{UI.colors().reset} Not connected")
     end
+  end
+
+  defp print_streamable_http_transport_state(pid, state, verbose) do
+    IO.puts("\n#{UI.colors().success}Streamable HTTP Transport State (#{inspect(pid)}):#{UI.colors().reset}")
+    IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(state.mcp_url)}")
+    
+    print_streamable_http_session_status(state)
+    
+    if verbose do
+      # Print additional transport details in verbose mode
+      if map_size(state.headers || %{}) > 0 do
+        IO.puts("  #{UI.colors().info}Headers:#{UI.colors().reset}")
+        print_map(state.headers, 4)
+      end
+
+      if state.transport_opts do
+        IO.puts("  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state.transport_opts)}")
+      end
+
+      if state.http_options do
+        IO.puts("  #{UI.colors().info}HTTP Options:#{UI.colors().reset} #{inspect(state.http_options)}")
+      end
+    end
+  end
+
+  defp print_streamable_http_session_status(state) do
+    if state.session_id do
+      IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{state.session_id}")
+      IO.puts("  #{UI.colors().success}Status:#{UI.colors().reset} Connected with session")
+    else
+      IO.puts("  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)")
+    end
+    
+    IO.puts("  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}")
   end
 
   defp print_unknown_transport_state(pid, state, verbose) do

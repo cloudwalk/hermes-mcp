@@ -15,6 +15,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
 
   alias Hermes.Client
   alias Hermes.Transport.SSE
+  alias Mix.Interactive.CLI
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
@@ -47,7 +48,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     IO.puts(header)
     IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
 
-    {:ok, _} =
+    {:ok, pid} =
       SSE.start_link(
         client: :sse_test,
         server: server_options
@@ -58,7 +59,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     {:ok, client} =
       Client.start_link(
         name: :sse_test,
-        transport: [layer: SSE],
+        transport: [layer: SSE, name: pid],
         protocol_version: "2024-11-05",
         client_info: %{
           "name" => "Mix.Tasks.SSE",
@@ -71,6 +72,10 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
       )
 
     IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
+    
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    CLI.check_client_connection(client)
+    
     IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
