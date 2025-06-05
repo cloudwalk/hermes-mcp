@@ -175,8 +175,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
       {:sse, response} ->
         route_sse_response(conn, transport, session_id, response, body, session_header)
 
-      {:ok, _response} ->
-        establish_sse_for_request(conn, transport, session_id, body, session_header)
+      {:ok, response} ->
+        # Even if client accepts SSE, return JSON response for the initial request
+        conn
+        |> put_resp_content_type("application/json")
+        |> maybe_add_session_header(session_header, session_id)
+        |> send_resp(200, response)
 
       {:error, error} ->
         handle_request_error(conn, error, body)

@@ -74,14 +74,15 @@ defmodule Mix.Interactive.CLI do
     IO.puts(UI.header("HERMES MCP SSE INTERACTIVE"))
 
     children = [
-      {SSE, client: :sse_test, server: server_options},
+      # Start client first - it will hibernate waiting for transport's :initialize message
       {Client,
        name: :sse_test,
        transport: [layer: SSE],
        client_info: %{
          "name" => "Hermes.CLI.SSE",
          "version" => "1.0.0"
-       }}
+       }},
+      {SSE, client: :sse_test, server: server_options}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_all)
@@ -106,14 +107,15 @@ defmodule Mix.Interactive.CLI do
     IO.puts(UI.header("HERMES MCP WEBSOCKET INTERACTIVE"))
 
     children = [
-      {WebSocket, client: :websocket_test, server: server_options},
+      # Start client first - it will hibernate waiting for transport's :initialize message
       {Client,
        name: :websocket_test,
        transport: [layer: WebSocket],
        client_info: %{
          "name" => "Hermes.CLI.WebSocket",
          "version" => "1.0.0"
-       }}
+       }},
+      {WebSocket, client: :websocket_test, server: server_options}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_all)
@@ -179,7 +181,7 @@ defmodule Mix.Interactive.CLI do
     Shell.loop(client)
   end
 
-  def check_client_connection(client, attempt \\ 3)
+  def check_client_connection(client, attempt \\ 5)
 
   def check_client_connection(_client, attempt) when attempt <= 0 do
     IO.puts("#{UI.colors().error}✗ Server connection not established#{UI.colors().reset}")
@@ -188,7 +190,7 @@ defmodule Mix.Interactive.CLI do
   end
 
   def check_client_connection(client, attempt) do
-    :timer.sleep(500)
+    :timer.sleep(200 * attempt)
 
     if cap = Client.get_server_capabilities(client) do
       IO.puts("#{UI.colors().info}Server capabilities: #{inspect(cap, pretty: true)}#{UI.colors().reset}")

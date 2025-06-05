@@ -50,12 +50,13 @@ if Code.ensure_loaded?(:gun) do
       SupervisedShell.start(
         transport_module: WebSocket,
         transport_opts: [
+          name: WebSocket,
           client: :websocket_test,
           server: server_options
         ],
         client_opts: [
           name: :websocket_test,
-          transport: [layer: WebSocket],
+          transport: [layer: WebSocket, name: WebSocket],
           client_info: %{
             "name" => "Mix.Tasks.WebSocket",
             "version" => "1.0.0"

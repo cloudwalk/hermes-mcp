@@ -110,21 +110,16 @@ These interactive shells provide commands for listing and calling tools, explori
 
 ### Setting up a Client
 
+> [!IMPORTANT]
+> **Process Startup Order**: Always start the client process before the transport process. The client hibernates waiting for the transport's `:initialize` message, so this order prevents race conditions during initialization.
+
 ```elixir
 defmodule MyApp.Application do
   use Application
 
   def start(_type, _args) do
     children = [
-      # Start the MCP transport
-      {Hermes.Transport.STDIO, [
-        name: MyApp.MCPTransport,
-        client: MyApp.MCPClient, 
-        command: "mcp",
-        args: ["run", "path/to/server.py"]
-      ]},
-      
-      # Start the MCP client using the transport
+      # IMPORTANT: Start the client first - it will hibernate waiting for transport's :initialize message
       {Hermes.Client, [
         name: MyApp.MCPClient,
         transport: [layer: Hermes.Transport.STDIO, name: MyApp.MCPTransport],
@@ -136,6 +131,14 @@ defmodule MyApp.Application do
           "roots" => %{"listChanged" => true},
           "sampling" => %{}
         }
+      ]},
+      
+      # Start the transport after the client
+      {Hermes.Transport.STDIO, [
+        name: MyApp.MCPTransport,
+        client: MyApp.MCPClient, 
+        command: "mcp",
+        args: ["run", "path/to/server.py"]
       ]}
     ]
     

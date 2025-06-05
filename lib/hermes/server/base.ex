@@ -215,6 +215,12 @@ defmodule Hermes.Server.Base do
           handle_server_ping(decoded, state)
 
         {:ok, [decoded]} when not (Message.is_initialize(decoded) or Session.is_initialized(session)) ->
+          Logging.server_event("session_not_initialized_check", %{
+            session_id: session.id,
+            initialized: session.initialized,
+            method: decoded["method"]
+          })
+
           handle_server_not_initialized(state)
 
         {:ok, [decoded]} when Message.is_request(decoded) ->
@@ -320,8 +326,9 @@ defmodule Hermes.Server.Base do
   # Notification handling
 
   defp handle_notification(%{"method" => "notifications/initialized"}, session, state) do
-    Logging.server_event("client_initialized", nil)
+    Logging.server_event("client_initialized", %{session_id: session.id})
     :ok = Session.mark_initialized(session.name)
+    Logging.server_event("session_marked_initialized", %{session_id: session.id, initialized: true})
     {:noreply, state}
   end
 
@@ -422,9 +429,18 @@ defmodule Hermes.Server.Base do
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) do
     session = Registry.server_session(state.module, session_id)
 
-    with {:ok, _} <- SessionSupervisor.create_session(state.module, session_id) do
-      state = %{state | sessions: Map.put(sessions, session_id, session)}
-      {:ok, {Session.get(session), state}}
+    case SessionSupervisor.create_session(state.module, session_id) do
+      {:ok, _} ->
+        state = %{state | sessions: Map.put(sessions, session_id, session)}
+        {:ok, {Session.get(session), state}}
+
+      {:error, {:already_started, _}} ->
+        # Session already exists, just use it
+        state = %{state | sessions: Map.put(sessions, session_id, session)}
+        {:ok, {Session.get(session), state}}
+
+      error ->
+        error
     end
   end
 

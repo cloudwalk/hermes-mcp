@@ -58,6 +58,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     SupervisedShell.start(
       transport_module: SSE,
       transport_opts: [
+        name: SSE,
         client: :sse_test,
         server: [
           base_url: base_url,
@@ -67,7 +68,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
       ],
       client_opts: [
         name: :sse_test,
-        transport: [layer: SSE],
+        transport: [layer: SSE, name: SSE],
         protocol_version: "2024-11-05",
         client_info: %{
           "name" => "Mix.Tasks.SSE",

@@ -144,9 +144,13 @@ defmodule Hermes.Transport.StreamableHTTP do
 
     new_state = %{state | active_request: from}
 
+    # Add timeout tracking
+    start_time = System.monotonic_time(:millisecond)
+
     case send_http_request(new_state, message) do
       {:ok, response} ->
-        Logging.transport_event("got_http_response", %{status: response.status})
+        elapsed = System.monotonic_time(:millisecond) - start_time
+        Logging.transport_event("got_http_response", %{status: response.status, elapsed_ms: elapsed})
         handle_response(response, new_state)
 
       {:error, {:http_error, 404, _body}} when not is_nil(state.session_id) ->
@@ -155,6 +159,8 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:reply, {:error, :session_expired}, %{state | session_id: nil}}
 
       {:error, reason} ->
+        elapsed = System.monotonic_time(:millisecond) - start_time
+        Logging.transport_event("http_request_error", %{reason: inspect(reason), elapsed_ms: elapsed}, level: :error)
         log_error(reason)
         {:reply, {:error, reason}, state}
     end
@@ -223,7 +229,7 @@ defmodule Hermes.Transport.StreamableHTTP do
   defp send_http_request(state, message) do
     headers =
       state.headers
-      |> Map.put("accept", "application/json, text/event-stream")
+      |> Map.put("accept", "application/json")
       |> Map.put("content-type", "application/json")
       |> put_session_header(state.session_id)
 
@@ -251,6 +257,13 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   defp handle_response(%{headers: headers, body: body, status: status}, state) do
     new_state = update_session_id(state, headers)
+
+    Logging.transport_event("http_response", %{
+      status: status,
+      content_type: get_content_type(headers),
+      body_size: byte_size(body),
+      has_session: not is_nil(new_state.session_id)
+    })
 
     case {status, get_content_type(headers)} do
       {202, _} ->

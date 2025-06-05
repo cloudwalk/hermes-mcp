@@ -55,13 +55,14 @@ defmodule Mix.Tasks.Hermes.Stdio.Interactive do
     SupervisedShell.start(
       transport_module: STDIO,
       transport_opts: [
+        name: STDIO,
         command: cmd,
         args: args,
         client: :stdio_test
       ],
       client_opts: [
         name: :stdio_test,
-        transport: [layer: STDIO],
+        transport: [layer: STDIO, name: STDIO],
         client_info: %{
           "name" => "Mix.Tasks.STDIO",
           "version" => "1.0.0"

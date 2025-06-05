@@ -171,8 +171,9 @@ defmodule Mix.Interactive.SupervisedShell do
   end
 
   defp start_processes(state) do
-    with {:ok, transport_pid} <- start_transport(state),
-         {:ok, client_pid} <- start_client(state, transport_pid) do
+    # Start client first - it will hibernate waiting for transport's :initialize message
+    with {:ok, client_pid} <- start_client(state),
+         {:ok, transport_pid} <- start_transport(state) do
       Process.monitor(transport_pid)
       Process.monitor(client_pid)
 
@@ -200,16 +201,10 @@ defmodule Mix.Interactive.SupervisedShell do
     end
   end
 
-  defp start_client(%{client_opts: opts}, transport_pid) do
+  defp start_client(%{client_opts: opts}) do
     IO.puts("#{UI.colors().info}• Starting client...#{UI.colors().reset}")
 
-    client_opts =
-      Keyword.put(opts, :transport,
-        layer: opts[:transport][:layer],
-        name: transport_pid
-      )
-
-    case Client.start_link(client_opts) do
+    case Client.start_link(opts) do
       {:ok, pid} ->
         IO.puts("#{UI.colors().success}✓ Client started#{UI.colors().reset}")
         {:ok, pid}

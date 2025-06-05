@@ -47,13 +47,14 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
     SupervisedShell.start(
       transport_module: StreamableHTTP,
       transport_opts: [
+        name: StreamableHTTP,
         client: :streamable_http_test,
         base_url: base_url,
         mcp_path: mcp_path
       ],
       client_opts: [
         name: :streamable_http_test,
-        transport: [layer: StreamableHTTP],
+        transport: [layer: StreamableHTTP, name: StreamableHTTP],
         protocol_version: "2025-03-26",
         client_info: %{
           "name" => "Mix.Tasks.StreamableHTTP",
