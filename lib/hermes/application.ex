@@ -10,6 +10,7 @@ defmodule Hermes.Application do
     :logger.add_handlers(:hermes_mcp)
 
     children = [
+      Hermes.Server.Registry,
       {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
     ]
 

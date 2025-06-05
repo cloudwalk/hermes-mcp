@@ -71,7 +71,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   defschema(:parse_options, [
     {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:registry, {:required, {:custom, &Hermes.genserver_name/1}}}
+    {:registry, {{:custom, &Hermes.genserver_name/1}, {:default, :hello}}}
   ])
 
   @doc """
@@ -96,9 +96,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
   def start_link(opts) do
     opts = parse_options!(opts)
-    server_name = Keyword.fetch!(opts, :name)
+    name = Keyword.fetch!(opts, :name)
 
-    GenServer.start_link(__MODULE__, Map.new(opts), name: server_name)
+    GenServer.start_link(__MODULE__, Map.new(opts), name: name)
   end
 
   @doc """

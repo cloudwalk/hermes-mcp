@@ -16,14 +16,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
       scope "/mcp" do
         pipe_through :mcp
-        forward "/", Hermes.Server.Transport.StreamableHTTP.Plug,
-          transport: :your_transport_name
+        forward "/", to: Hermes.Server.Transport.StreamableHTTP.Plug, init_opts: [transport: :your_transport_name]
       end
 
   ## Usage in Plug Router
 
-      forward "/mcp", to: Hermes.Server.Transport.StreamableHTTP.Plug,
-        transport: :your_transport_name
+      forward "/mcp", to: Hermes.Server.Transport.StreamableHTTP.Plug, init_opts: [transport: :your_transport_name]
 
   ## Configuration Options
 
@@ -78,21 +76,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
   @impl Plug
   def call(conn, opts) do
-    # Validate origin for DNS rebinding protection
-    case validate_origin(conn) do
-      :ok ->
-        case conn.method do
-          "GET" -> handle_get(conn, opts)
-          "POST" -> handle_post(conn, opts)
-          _ -> send_error(conn, 405, "Method not allowed")
-        end
-
-      {:error, :invalid_origin} ->
-        send_error(conn, 403, "Invalid origin")
+    case conn.method do
+      "GET" -> handle_get(conn, opts)
+      "POST" -> handle_post(conn, opts)
+      _ -> send_error(conn, 405, "Method not allowed")
     end
   end
 
-  # GET handler - establishes SSE connection
   defp handle_get(conn, %{transport: transport} = opts) do
     accept_header = conn |> get_req_header("accept") |> List.first("")
 
@@ -103,17 +93,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  # POST handler - processes JSON-RPC messages
   defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
     with {:ok, session_id} <- get_session_id(conn, session_header, transport),
          {:ok, body} <- read_request_body(conn, opts) do
-      # Record activity
       StreamableHTTP.record_session_activity(transport, session_id)
-
-      # Try to decode message to extract ID for error handling, then forward raw body
       request_id = extract_request_id(body)
 
-      # Forward raw body to transport, let server handle Message.decode
       case StreamableHTTP.handle_message(transport, session_id, body) do
         {:ok, nil} ->
           conn
@@ -145,7 +130,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  # SSE connection establishment
   defp start_sse_connection(conn, transport, %{session_header: session_header}) do
     case StreamableHTTP.create_session(transport) do
       {:ok, session_id} ->
@@ -171,10 +155,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   end
 
   defp start_sse_loop(conn, transport, session_id) do
-    # Register this process as the SSE connection for the session
     StreamableHTTP.set_sse_connection(transport, session_id, self())
 
-    # Send initial keepalive
     case chunk(conn, "event: connected\ndata: {\"sessionId\":\"#{session_id}\"}\n\n") do
       {:ok, conn} ->
         schedule_keepalive()
@@ -184,9 +166,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
         cleanup_session(session_id, transport)
         conn
 
-      # In test mode, Plug.Test chunk always returns this error
       {:error, :not_chunked} ->
-        # For tests, just return the conn without entering the loop
         conn
     end
   end
@@ -239,30 +219,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     Logging.transport_event("sse_connection_closed", %{session_id: session_id})
   end
 
-  # Utility functions
-  defp validate_origin(conn) do
-    origin = conn |> get_req_header("origin") |> List.first()
-    host = conn |> get_req_header("host") |> List.first()
-
-    case {origin, host} do
-      # No origin header, allow (e.g., same-origin requests)
-      {nil, _} ->
-        :ok
-
-      {origin, host} when is_binary(origin) and is_binary(host) ->
-        origin_uri = URI.parse(origin)
-
-        if origin_uri.host == host || origin_uri.host == "localhost" || origin_uri.host == "127.0.0.1" do
-          :ok
-        else
-          {:error, :invalid_origin}
-        end
-
-      _ ->
-        {:error, :invalid_origin}
-    end
-  end
-
   defp get_session_id(conn, session_header, transport) do
     case get_req_header(conn, session_header) do
       [session_id] when is_binary(session_id) and session_id != "" ->
@@ -283,7 +239,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  # Response helpers
   defp send_error(conn, status, message) do
     data = %{data: %{message: message, http_status: status}}
 
@@ -310,14 +265,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     |> send_resp(200, encoded_error)
   end
 
-  # Extract request ID from raw body using Message.decode for proper ID handling
   defp extract_request_id(body) when is_binary(body) do
     case Message.decode(body) do
-      {:ok, [message | _]} when is_map(message) ->
-        Map.get(message, "id")
-
-      _ ->
-        nil
+      {:ok, [message | _]} when is_map(message) -> Map.get(message, "id")
+      _ -> nil
     end
   end
 end

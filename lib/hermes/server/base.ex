@@ -27,19 +27,18 @@ defmodule Hermes.Server.Base do
 
   - `:module` - The module implementing the server behavior (required)
   - `:init_args` - Arguments passed to the module's init/1 callback
-  - `:protocol_version` - The protocol version to use (defaults to latest)
   - `:name` - Optional name for registering the GenServer
   """
   @type option ::
           {:module, GenServer.name()}
-          | {:init_args, keyword}
+          | {:init_arg, keyword}
           | {:protocol_version, String.t()}
           | {:name, GenServer.name()}
           | GenServer.option()
 
   defschema(:parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:init_args, {:any, {:default, []}}},
+    {:init_arg, {:any, {:default, []}}},
     {:protocol_version, {:string, {:default, @protocol_version}}},
     {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
     {:transport,
@@ -55,7 +54,7 @@ defmodule Hermes.Server.Base do
   ## Parameters
     * `opts` - Keyword list of options:
       * `:module` - (required) The module implementing the `Hermes.Server.Behaviour`
-      * `:init_args` - Arguments to pass to the module's `init/1` callback
+      * `:init_arg` - Argument to pass to the module's `init/1` callback
       * `:protocol_version` - The protocol version to use
       * `:name` - Required name for the GenServer process
       * `:transport` - Transport configuration
@@ -111,7 +110,7 @@ defmodule Hermes.Server.Base do
 
     state = %{
       mod: module,
-      init_args: opts.init_args,
+      init_arg: opts.init_arg,
       server_info: server_info,
       capabilities: capabilities,
       protocol_version: opts.protocol_version,
@@ -138,7 +137,7 @@ defmodule Hermes.Server.Base do
       }
     )
 
-    case module.init(opts.init_args) do
+    case module.init(opts.init_arg) do
       {:ok, custom_state} ->
         {:ok, %{state | custom_state: custom_state}, :hibernate}
 

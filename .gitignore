@@ -43,3 +43,6 @@ hermes_mcp-*.tar
 
 # Nix files
 result
+
+# Claude
+/.claude/

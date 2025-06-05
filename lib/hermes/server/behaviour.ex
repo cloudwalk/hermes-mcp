@@ -6,12 +6,14 @@ defmodule Hermes.Server.Behaviour do
   implementations must provide to handle MCP protocol interactions.
   """
 
-  @type state :: term()
+  alias Hermes.Server.Frame
+
   @type request :: map()
   @type response :: map()
   @type notification :: map()
   @type mcp_error :: Hermes.MCP.Error.t()
-  @type server_info :: %{required(String.t()) => String.t()}
+  @type server_info :: map()
+  @type server_capabilities :: map()
 
   @doc """
   Initializes the server state.
@@ -19,8 +21,7 @@ defmodule Hermes.Server.Behaviour do
   This callback is invoked when the server is started and should perform
   any necessary setup, returning the initial state.
   """
-  @callback init(init_arg :: term()) ::
-              {:ok, state()} | {:error, reason :: term()}
+  @callback init(init_arg :: term()) :: {:ok, Frame.t()} | {:error, reason :: term()}
 
   @doc """
   Handles incoming requests from clients.
@@ -28,30 +29,30 @@ defmodule Hermes.Server.Behaviour do
   This callback processes client requests and returns an appropriate response,
   along with updated server state.
   """
-  @callback handle_request(request :: request(), state :: state()) ::
-              {:reply, response :: response(), new_state :: state()}
-              | {:noreply, new_state :: state()}
-              | {:error, error :: mcp_error(), new_state :: state()}
+  @callback handle_request(request :: request(), state :: Frame.t()) ::
+              {:reply, response :: response(), new_state :: Frame.t()}
+              | {:noreply, new_state :: Frame.t()}
+              | {:error, error :: mcp_error(), new_state :: Frame.t()}
 
   @doc """
   Handles incoming notifications from clients.
 
   This callback processes client notifications, which don't require responses.
   """
-  @callback handle_notification(notification :: notification(), state :: state()) ::
-              {:noreply, new_state :: state()}
-              | {:error, error :: mcp_error(), new_state :: state()}
+  @callback handle_notification(notification :: notification(), state :: Frame.t()) ::
+              {:noreply, new_state :: Frame.t()}
+              | {:error, error :: mcp_error(), new_state :: Frame.t()}
 
   @doc """
   Returns server information for initialization response.
   """
-  @callback server_info() :: server_info()
+  @callback server_info :: server_info()
 
   @doc """
   Returns server capabilities for initialization response.
   Optional callback with default implementation.
   """
-  @callback server_capabilities() :: map()
+  @callback server_capabilities :: server_capabilities()
 
   @doc """
   Returns the list of MCP protocol versions supported by this server.
@@ -62,8 +63,6 @@ defmodule Hermes.Server.Behaviour do
       ["2024-11-05", "2025-03-26"]
   """
   @callback supported_protocol_versions() :: [String.t()]
-
-  @optional_callbacks [server_capabilities: 0]
 
   @doc """
   Checks if the given module implements the Hermes.Server.Behaviour interface.

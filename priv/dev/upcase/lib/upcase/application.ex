@@ -5,30 +5,10 @@ defmodule Upcase.Application do
 
   use Application
 
-  alias Hermes.Server.Base
-  alias Hermes.Server.Transport.StreamableHTTP
-
   @impl true
   def start(_type, _args) do
-    transport = [
-      server: Upcase.MCP,
-      name: Upcase.HTTP,
-      registry: Upcase.Registry
-    ]
-
-    mcp_server = [
-      module: Upcase.Server,
-      protocol_version: "2025-03-26",
-      name: Upcase.MCP,
-      transport: [
-        layer: StreamableHTTP,
-        name: Upcase.HTTP
-      ]
-    ]
-
     children = [
-      {StreamableHTTP, transport},
-      {Base, mcp_server},
+      {Upcase.Server, transport: {:streamable_http, []}},
       {Bandit, plug: Upcase.Router}
     ]
 
