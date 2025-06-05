@@ -11,20 +11,26 @@ defmodule Hermes.Server.Session.Supervisor do
   alias Hermes.Server.Registry
   alias Hermes.Server.Session
 
+  @kind :session_supervisor
+
   @doc """
   Starts the session supervisor.
   """
-  def start_link(init_arg) do
-    DynamicSupervisor.start_link(__MODULE__, init_arg)
+  def start_link(server) when is_atom(server) do
+    name = Registry.supervisor(@kind, server)
+    DynamicSupervisor.start_link(__MODULE__, server, name: name)
   end
 
   def create_session(server, session_id) do
-    DynamicSupervisor.start_child(__MODULE__, {Session, server: server, session_id: session_id})
+    name = Registry.supervisor(@kind, server)
+    DynamicSupervisor.start_child(name, {Session, server: server, session_id: session_id})
   end
 
   def close_session(server, session_id) when is_binary(session_id) do
+    name = Registry.supervisor(@kind, server)
+
     if pid = Registry.whereis_server_session(server, session_id) do
-      DynamicSupervisor.terminate_child(__MODULE__, pid)
+      DynamicSupervisor.terminate_child(name, pid)
     else
       {:error, :not_found}
     end

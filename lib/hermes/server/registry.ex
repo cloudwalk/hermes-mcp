@@ -73,14 +73,18 @@ defmodule Hermes.Server.Registry do
   @doc """
   Returns a via tuple for naming a supervisor process.
 
+  ## Parameters
+
+  - *kind*: `:supervisor` | `:session_supervisor`
+
   ## Examples
 
       iex> Hermes.Server.Registry.supervisor(MyApp.Calculator)
       {:via, Registry, {Hermes.Server.Registry, {:supervisor, MyApp.Calculator}}}
   """
   @spec supervisor(module()) :: GenServer.name()
-  def supervisor(module) when is_atom(module) do
-    {:via, Registry, {@registry_name, {:supervisor, module}}}
+  def supervisor(kind \\ :supervisor, module) when is_atom(module) do
+    {:via, Registry, {@registry_name, {kind, module}}}
   end
 
   @doc """
@@ -145,6 +149,13 @@ defmodule Hermes.Server.Registry do
   @spec whereis_server_session(module(), String.t()) :: {:ok, pid()} | :error
   def whereis_server_session(module, session_id) when is_binary(session_id) and is_atom(module) do
     case Registry.lookup(@registry_name, {:session, module, session_id}) do
+      [{pid, _}] -> pid
+      [] -> nil
+    end
+  end
+
+  def whereis_supervisor(kind \\ :supervisor, server) when is_atom(server) do
+    case Registry.lookup(@registry_name, {kind, server}) do
       [{pid, _}] -> pid
       [] -> nil
     end

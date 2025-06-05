@@ -6,7 +6,25 @@ defmodule Hermes.Server do
   @server_capabilities ~w(prompts tools resources logging)a
   @protocol_versions ~w(2025-03-26 2024-05-11 2024-10-07)
 
+  @doc """
+  Starts a server with its supervision tree.
+
+  ## Examples
+
+      # Start with default options
+      Hermes.Server.start_link(MyServer, :ok, transport: :stdio)
+      
+      # Start with custom name
+      Hermes.Server.start_link(MyServer, %{}, 
+        transport: :stdio,
+        name: {:local, :my_server}
+      )
+  """
+  defdelegate start_link(mod, init_arg, opts), to: Hermes.Server.Supervisor
+
   defguard is_server_capability(capability) when capability in @server_capabilities
+
+  defguard is_supported_capability(capabilities, capability) when is_map_key(capabilities, capability)
 
   @doc false
   defmacro __using__(opts) do
@@ -74,22 +92,4 @@ defmodule Hermes.Server do
     |> Map.put(to_string(capability), %{})
     |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :subscribe, list_changed?)))
   end
-
-  @doc """
-  Starts a server with its supervision tree.
-
-  ## Examples
-
-      # Start with default options
-      Hermes.Server.start_link(MyServer, :ok, transport: :stdio)
-      
-      # Start with custom name
-      Hermes.Server.start_link(MyServer, %{}, 
-        transport: :stdio,
-        name: {:local, :my_server}
-      )
-  """
-  defdelegate start_link(mod, init_arg, opts), to: Hermes.Server.Supervisor
-
-  defguard is_supported_capability(capabilities, capability) when is_map_key(capabilities, capability)
 end

@@ -15,11 +15,14 @@ defmodule Hermes.Server.Session do
   - `client_capabilities`: Client capabilities received during initialization
   """
 
+  use Agent, restart: :transient
+
   alias Hermes.Server.Registry
 
   @type t :: %__MODULE__{
           protocol_version: String.t() | nil,
           initialized: boolean(),
+          name: GenServer.name() | nil,
           client_info: map() | nil,
           client_capabilities: map() | nil,
           log_level: String.t(),
@@ -30,6 +33,7 @@ defmodule Hermes.Server.Session do
     :id,
     :protocol_version,
     :log_level,
+    :name,
     initialized: false,
     client_info: nil,
     client_capabilities: nil
@@ -44,7 +48,7 @@ defmodule Hermes.Server.Session do
     session_id = Keyword.fetch!(opts, :session_id)
     name = Registry.server_session(server, session_id)
 
-    Agent.start_link(fn -> new(id: session_id) end, name: name)
+    Agent.start_link(fn -> new(id: session_id, name: name) end, name: name)
   end
 
   @doc """
@@ -56,6 +60,13 @@ defmodule Hermes.Server.Session do
   """
   @spec new(Enumerable.t()) :: t()
   def new(opts), do: struct(__MODULE__, opts)
+
+  defguard is_initialized(session) when session.initialized
+
+  @spec get(GenServer.name()) :: t
+  def get(session) do
+    Agent.get(session, & &1)
+  end
 
   @doc """
   Updates state after successful initialization handshake.
@@ -91,26 +102,6 @@ defmodule Hermes.Server.Session do
   end
 
   @doc """
-  Checks if the server is initialized.
-
-  ## Parameters
-
-    * `state` - The current server state
-
-  ## Examples
-
-      iex> Hermes.Server.Base.State.initialized?(uninitialized_state)
-      false
-      
-      iex> Hermes.Server.Base.State.initialized?(initialized_state)
-      true
-  """
-  @spec initialized?(GenServer.name()) :: boolean()
-  def initialized?(session) do
-    Agent.get(session, & &1.initialized)
-  end
-
-  @doc """
   Marks the session as initialized.
   """
   @spec mark_initialized(GenServer.name()) :: :ok
@@ -119,71 +110,11 @@ defmodule Hermes.Server.Session do
   end
 
   @doc """
-  Gets the negotiated protocol version.
-
-  ## Parameters
-
-    * `state` - The current server state
-
-  ## Examples
-
-      iex> Hermes.Server.Base.State.get_protocol_version(initialized_state)
-      "2025-03-26"
-  """
-  @spec get_protocol_version(GenServer.name()) :: String.t() | nil
-  def get_protocol_version(session) do
-    Agent.get(session, & &1.protocol_version)
-  end
-
-  @doc """
-  Gets the client information.
-
-  ## Parameters
-
-    * `state` - The current server state
-
-  ## Examples
-
-      iex> Hermes.Server.Base.State.get_client_info(initialized_state)
-      %{"name" => "ClientApp", "version" => "2.0.0"}
-  """
-  @spec get_client_info(GenServer.name()) :: map() | nil
-  def get_client_info(session) do
-    Agent.get(session, & &1.client_info)
-  end
-
-  @doc """
-  Gets the client capabilities.
-
-  ## Parameters
-
-    * `state` - The current server state
-
-  ## Examples
-
-      iex> Hermes.Server.Base.State.get_client_capabilities(initialized_state)
-      %{"roots" => %{"listChanged" => true}}
-  """
-  @spec get_client_capabilities(GenServer.name()) :: map() | nil
-  def get_client_capabilities(session) do
-    Agent.get(session, & &1.client_capabilities)
-  end
-
-  @doc """
   Updates the log level.
   """
   @spec set_log_level(GenServer.name(), String.t()) :: :ok
   def set_log_level(session, level) do
     Agent.update(session, fn state -> %{state | log_level: level} end)
-  end
-
-  @doc """
-  Gets the entire session state.
-  For debugging and testing purposes.
-  """
-  @spec get(GenServer.name()) :: t()
-  def get(session) do
-    Agent.get(session, & &1)
   end
 
   @doc """

@@ -181,6 +181,8 @@ defmodule Hermes.MCP.Message do
   # Batch schema for JSON-RPC batching (2025-03-26)
   defschema :batch_schema, {:list, get_schema(:mcp_message_schema)}
 
+  # generic guards
+
   @doc """
   Determines if a JSON-RPC message is a request.
   """
@@ -200,6 +202,12 @@ defmodule Hermes.MCP.Message do
   Determines if a JSON-RPC message is an error.
   """
   defguard is_error(data) when is_map_key(data, "error") and is_map_key(data, "id")
+
+  # request guards
+
+  defguard is_ping(data) when is_request(data) and :erlang.map_get("method", data) == "ping"
+
+  defguard is_initialize(data) when is_request(data) and :erlang.map_get("method", data) == "initialize"
 
   @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.

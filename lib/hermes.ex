@@ -15,11 +15,13 @@ defmodule Hermes do
 
   defschema :client_transport,
     layer: {:required, {:enum, @client_transports}},
-    name: {:required, {:either, {:pid, {:custom, &genserver_name/1}}}}
+    name: {:required, get_schema(:process_name)}
 
   defschema :server_transport,
     layer: {:required, {:enum, [ServerSTDIO, ServerStreamableHTTP]}},
-    name: {:required, {:either, {:pid, {:custom, &genserver_name/1}}}}
+    name: {:required, get_schema(:process_name)}
+
+  defschema :process_name, {:either, {:pid, {:custom, &genserver_name/1}}}
 
   @doc "Checks if hermes should be compiled/used as standalone CLI or OTP library"
   def should_compile_cli? do

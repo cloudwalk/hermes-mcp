@@ -23,6 +23,7 @@ defmodule Hermes.Server.Base do
 
   require Message
   require Server
+  require Session
 
   @type t :: %{
           module: module,
@@ -48,12 +49,12 @@ defmodule Hermes.Server.Base do
           | {:name, GenServer.name()}
           | GenServer.option()
 
-  defschema(:parse_options, [
+  defschema :parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:init_arg, {:required, :any}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}}
-  ])
+  ]
 
   @doc """
   Starts a new MCP server process.
@@ -134,8 +135,14 @@ defmodule Hermes.Server.Base do
 
   @impl GenServer
   def handle_call({:message, message, session_id}, _from, state) do
-    with {:ok, {session, state}} <- maybe_attach_session(session_id, state) do
+    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, state) do
       case Message.decode(message) do
+        {:ok, [decoded]} when Message.is_ping(decoded) ->
+          handle_server_ping(decoded, state)
+
+        {:ok, [decoded]} when not (Message.is_initialize(decoded) or Session.is_initialized(session)) ->
+          handle_server_not_initialized(state)
+
         {:ok, [decoded]} when Message.is_request(decoded) ->
           handle_request(decoded, session, state)
 
@@ -172,13 +179,11 @@ defmodule Hermes.Server.Base do
     :ok
   end
 
-  # Request handling
-
-  defp handle_request(%{"method" => "ping", "id" => request_id}, _session, state) do
+  defp handle_server_ping(%{"id" => request_id}, state) do
     {:reply, encode_response(%{}, request_id), state}
   end
 
-  defp handle_request(%{"method" => method}, _session, %{initialized: false} = state) when method != "initialize" do
+  defp handle_server_not_initialized(state) do
     error = Error.invalid_request(%{data: %{message: "Server not initialized"}})
 
     Logging.server_event(
@@ -190,11 +195,13 @@ defmodule Hermes.Server.Base do
     {:reply, {:ok, Error.to_json_rpc!(error)}, state}
   end
 
-  defp handle_request(%{"method" => "initialize", "params" => params} = request, session, %{initialized: false} = state) do
+  # Request handling
+
+  defp handle_request(%{"params" => params} = request, session, state) when Message.is_initialize(request) do
     %{"clientInfo" => client_info, "capabilities" => client_capabilities, "protocolVersion" => requested_version} = params
 
     protocol_version = negotiate_protocol_version(state.supported_versions, requested_version)
-    Session.update_from_initialization(session, protocol_version, client_info, client_capabilities)
+    :ok = Session.update_from_initialization(session.name, protocol_version, client_info, client_capabilities)
 
     response = %{
       "protocolVersion" => protocol_version,
@@ -217,16 +224,11 @@ defmodule Hermes.Server.Base do
     {:reply, encode_response(response, request["id"]), state}
   end
 
-  defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, _session, state)
+  defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
+    :ok = Session.set_log_level(session.name, level)
     {:reply, encode_response(%{}, request_id), %{state | log_level: level}}
-  end
-
-  defp handle_request(%{"method" => "notifications/cancelled"} = request, _session, state) do
-    # TODO(zoedsoupe): we need to actually keep track of running requests...
-    Logging.server_event("handling_notiifcation_cancellation", %{params: request["params"]})
-    {:noreply, state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => method} = request, _session, state) do
@@ -243,12 +245,19 @@ defmodule Hermes.Server.Base do
 
   # Notification handling
 
-  defp handle_notification(%{"method" => "notifications/initialized"}, _session, state) do
+  defp handle_notification(%{"method" => "notifications/initialized"}, session, state) do
     Logging.server_event("client_initialized", nil)
+    :ok = Session.mark_initialized(session.name)
     {:noreply, %{state | initialized: true}}
   end
 
-  defp handle_notification(notification, _session, %{initialized: true} = state) do
+  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, _session, state) do
+    # TODO(zoedsoupe): we need to actually keep track of running requests...
+    Logging.server_event("handling_notiifcation_cancellation", %{params: notification["params"]})
+    {:noreply, state}
+  end
+
+  defp handle_notification(notification, _session, state) do
     method = notification["method"]
 
     Logging.server_event("handling_notification", %{method: method})
@@ -331,9 +340,9 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @spec maybe_attach_session(session_id :: String.t(), t) :: {:ok, {session_name :: GenServer.name(), t}}
+  @spec maybe_attach_session(session_id :: String.t(), t) :: {:ok, {session :: Session.t(), t}}
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    {:ok, {sessions[session_id], state}}
+    {:ok, {Session.get(sessions[session_id]), state}}
   end
 
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) do
@@ -341,7 +350,7 @@ defmodule Hermes.Server.Base do
 
     with {:ok, _} <- SessionSupervisor.create_session(state.module, session_id) do
       state = %{state | sessions: Map.put(sessions, session_id, session)}
-      {:ok, {session, state}}
+      {:ok, {Session.get(session), state}}
     end
   end
 

@@ -1,47 +1,5 @@
 defmodule Hermes.Server.Transport.StreamableHTTP do
-  @moduledoc """
-  Streamable HTTP transport implementation for MCP servers.
-
-  This module implements the Streamable HTTP transport as specified in MCP 2025-03-26.
-  It does NOT start its own HTTP server - instead, it provides a Plug that can be 
-  integrated into Phoenix or other Plug-based applications.
-
-  ## Features
-
-  - Full MCP Streamable HTTP protocol support
-  - Session management with ETS
-  - Server-Sent Events (SSE) for streaming responses
-  - Automatic session expiration and cleanup
-  - Proper HTTP response handling
-
-  ## Usage
-
-  Add the transport to your MCP server configuration:
-
-      server_opts = [
-        module: YourServer,
-        name: :your_server,
-        transport: [layer: Hermes.Server.Transport.StreamableHTTP, name: :streamable_http_transport]
-      ]
-
-      {:ok, server} = Hermes.Server.Base.start_link(server_opts)
-
-  Then in your Phoenix router or Plug application:
-
-      forward "/mcp", to: Hermes.Server.Transport.StreamableHTTP.Plug,
-        init_opts: [server: :your_server]
-
-  ## Session Management
-
-  Sessions are managed automatically through ETS tables. Each session tracks:
-  - Server process reference
-  - SSE connection (if active)
-  - Last activity timestamp
-  - MCP session ID (if provided by server)
-  - Client information
-
-  Sessions automatically expire after 5 minutes of inactivity.
-  """
+  @moduledoc false
 
   @behaviour Hermes.Transport.Behaviour
 
@@ -50,8 +8,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.Server.Registry
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
+
+  require Logger
 
   @type t :: GenServer.server()
 
@@ -60,43 +21,25 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   - `:server` - The server process (required)
   - `:name` - Name for registering the GenServer (required)
-  - `:registry` - Registry process name (required)
   """
   @type option ::
           {:server, GenServer.server()}
           | {:name, GenServer.name()}
-          | {:registry, GenServer.name()}
           | GenServer.option()
 
-  defschema(:parse_options, [
-    {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
-    {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:registry, {{:custom, &Hermes.genserver_name/1}, {:default, :hello}}}
-  ])
+  defschema :parse_options, [
+    {:server, {:required, Hermes.get_schema(:process_name)}},
+    {:name, {:required, {:custom, &Hermes.genserver_name/1}}}
+  ]
 
   @doc """
-  Starts a new StreamableHTTP transport process.
-
-  ## Parameters
-    * `opts` - Options
-      * `:server` - (required) The server to forward messages to
-      * `:name` - (required) Name for the GenServer process
-      * `:registry` - (required) Registry process name
-
-  ## Examples
-
-      iex> Hermes.Server.Transport.StreamableHTTP.start_link(
-      ...>   server: my_server,
-      ...>   name: :my_transport,
-      ...>   registry: :my_registry
-      ...> )
-      {:ok, pid}
+  Starts the StreamableHTTP transport.
   """
   @impl Transport
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
   def start_link(opts) do
     opts = parse_options!(opts)
-    name = Keyword.fetch!(opts, :name)
+    {name, opts} = Keyword.pop!(opts, :name)
 
     GenServer.start_link(__MODULE__, Map.new(opts), name: name)
   end
@@ -104,8 +47,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   @doc """
   Sends a message to the client via the active SSE connection.
 
-  This function locates the appropriate session and sends the message
-  through the SSE stream.
+  This function is used for server-initiated notifications.
+  It will broadcast to all active SSE connections.
 
   ## Parameters
     * `transport` - The transport process
@@ -141,13 +84,24 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @doc """
-  Creates a new session for a client connection.
+  Registers an SSE handler process for a session.
 
-  Called by the Plug when a new client connects.
+  Called by the Plug when establishing an SSE connection.
+  The calling process becomes the SSE handler for the session.
   """
-  @spec create_session(GenServer.server()) :: {:ok, String.t()} | {:error, term()}
-  def create_session(transport) do
-    GenServer.call(transport, :create_session)
+  @spec register_sse_handler(GenServer.server(), String.t()) :: :ok | {:error, term()}
+  def register_sse_handler(transport, session_id) do
+    GenServer.call(transport, {:register_sse_handler, session_id, self()})
+  end
+
+  @doc """
+  Unregisters an SSE handler process for a session.
+
+  Called when the SSE connection is closed.
+  """
+  @spec unregister_sse_handler(GenServer.server(), String.t()) :: :ok
+  def unregister_sse_handler(transport, session_id) do
+    GenServer.cast(transport, {:unregister_sse_handler, session_id})
   end
 
   @doc """
@@ -157,60 +111,53 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   """
   @spec handle_message(GenServer.server(), String.t(), binary()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message) do
+  def handle_message(transport, session_id, message) when is_binary(message) do
     GenServer.call(transport, {:handle_message, session_id, message})
   end
 
   @doc """
-  Sets the SSE connection for a session.
+  Handles an incoming message and returns {:sse, response} if SSE handler exists.
 
-  Called by the Plug when an SSE connection is established.
+  This allows the Plug to know whether to stream the response via SSE
+  or return it as a regular HTTP response.
   """
-  @spec set_sse_connection(GenServer.server(), String.t(), pid()) :: :ok | {:error, term()}
-  def set_sse_connection(transport, session_id, sse_pid) do
-    GenServer.call(transport, {:set_sse_connection, session_id, sse_pid})
+  @spec handle_message_for_sse(GenServer.server(), String.t(), binary()) ::
+          {:ok, binary()} | {:sse, binary()} | {:error, term()}
+  def handle_message_for_sse(transport, session_id, message) when is_binary(message) do
+    GenServer.call(transport, {:handle_message_for_sse, session_id, message})
   end
 
   @doc """
-  Records activity for a session.
+  Gets the SSE handler process for a session.
 
-  Called by the Plug when a message is received.
+  Returns the pid of the process handling SSE for this session,
+  or nil if no SSE connection exists.
   """
-  @spec record_session_activity(GenServer.server(), String.t()) :: :ok | {:error, term()}
-  def record_session_activity(transport, session_id) do
-    GenServer.call(transport, {:record_session_activity, session_id})
+  @spec get_sse_handler(GenServer.server(), String.t()) :: pid() | nil
+  def get_sse_handler(transport, session_id) do
+    GenServer.call(transport, {:get_sse_handler, session_id})
   end
 
   @doc """
-  Looks up a session by ID.
+  Routes a message to a specific session's SSE handler.
 
-  Called by the Plug to validate session existence.
+  Used for targeted server notifications to specific clients.
   """
-  @spec lookup_session(GenServer.server(), String.t()) :: {:ok, map()} | {:error, term()}
-  def lookup_session(transport, session_id) do
-    GenServer.call(transport, {:lookup_session, session_id})
-  end
-
-  @doc """
-  Terminates a session.
-
-  Called by the Plug when cleaning up sessions.
-  """
-  @spec terminate_session(GenServer.server(), String.t()) :: :ok
-  def terminate_session(transport, session_id) do
-    GenServer.call(transport, {:terminate_session, session_id})
+  @spec route_to_session(GenServer.server(), String.t(), binary()) :: :ok | {:error, term()}
+  def route_to_session(transport, session_id, message) do
+    GenServer.call(transport, {:route_to_session, session_id, message})
   end
 
   # GenServer implementation
 
   @impl GenServer
-  def init(%{server: server, registry: registry}) do
+  def init(%{server: server}) do
     Process.flag(:trap_exit, true)
 
     state = %{
       server: server,
-      registry: registry,
-      current_session: nil
+      # Map of session_id => {pid, monitor_ref}
+      sse_handlers: %{}
     }
 
     Logger.metadata(mcp_transport: :streamable_http, mcp_server: server)
@@ -226,36 +173,30 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call(:create_session, _from, %{server: server, registry: registry} = state) do
-    case GenServer.call(registry, {:create_session, server}) do
-      {:ok, session_id} ->
-        {:reply, {:ok, session_id}, state}
+  def handle_call({:register_sse_handler, session_id, pid}, _from, state) do
+    # Monitor the handler process
+    ref = Process.monitor(pid)
 
-      error ->
-        {:reply, error, state}
-    end
+    # Store handler with monitor ref
+    sse_handlers = Map.put(state.sse_handlers, session_id, {pid, ref})
+
+    Logging.transport_event("sse_handler_registered", %{
+      session_id: session_id,
+      handler_pid: inspect(pid)
+    })
+
+    {:reply, :ok, %{state | sse_handlers: sse_handlers}}
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message}, _from, %{registry: registry} = state) do
-    case GenServer.call(registry, {:lookup_session, session_id}) do
-      {:ok, session_info} ->
-        GenServer.call(registry, {:record_activity, session_id})
+  def handle_call({:handle_message, session_id, message}, _from, state) do
+    case GenServer.call(Registry.whereis_server(state.server), {:message, message, session_id}) do
+      {:ok, response} ->
+        {:reply, {:ok, response}, state}
 
-        case GenServer.call(session_info.server, {:message, message}) do
-          {:ok, nil} ->
-            {:reply, {:ok, nil}, state}
-
-          {:ok, response} ->
-            {:reply, {:ok, response}, state}
-
-          {:error, reason} ->
-            Logging.transport_event("server_error", %{reason: reason}, level: :error)
-            {:reply, {:error, reason}, state}
-        end
-
-      {:error, :not_found} ->
-        {:reply, {:error, :session_not_found}, state}
+      {:error, reason} ->
+        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
+        {:reply, {:error, reason}, state}
     end
   catch
     :exit, reason ->
@@ -264,55 +205,90 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:set_sse_connection, session_id, sse_pid}, _from, %{registry: registry} = state) do
-    case GenServer.call(registry, {:set_sse_connection, session_id, sse_pid}) do
-      :ok ->
-        Process.monitor(sse_pid)
-        {:reply, :ok, state}
+  def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
+    # Check if there's an SSE handler for this session
+    has_sse_handler = Map.has_key?(state.sse_handlers, session_id)
 
-      error ->
-        {:reply, error, state}
+    # Forward to server
+    case GenServer.call(Registry.whereis_server(state.server), {:message, message, session_id}) do
+      {:ok, response} when has_sse_handler ->
+        # Return {:sse, response} to indicate SSE streaming should be used
+        {:reply, {:sse, response}, state}
+
+      {:ok, response} ->
+        # Regular HTTP response
+        {:reply, {:ok, response}, state}
+
+      {:error, reason} ->
+        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
+        {:reply, {:error, reason}, state}
+    end
+  catch
+    :exit, reason ->
+      Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
+      {:reply, {:error, :server_unavailable}, state}
+  end
+
+  @impl GenServer
+  def handle_call({:get_sse_handler, session_id}, _from, state) do
+    case Map.get(state.sse_handlers, session_id) do
+      {pid, _ref} -> {:reply, pid, state}
+      nil -> {:reply, nil, state}
     end
   end
 
   @impl GenServer
-  def handle_call({:record_session_activity, session_id}, _from, %{registry: registry} = state) do
-    result = GenServer.call(registry, {:record_activity, session_id})
-    {:reply, result, state}
-  end
+  def handle_call({:route_to_session, session_id, message}, _from, state) do
+    case Map.get(state.sse_handlers, session_id) do
+      {pid, _ref} ->
+        send(pid, {:sse_message, message})
+        {:reply, :ok, state}
 
-  @impl GenServer
-  def handle_call({:lookup_session, session_id}, _from, %{registry: registry} = state) do
-    result = GenServer.call(registry, {:lookup_session, session_id})
-    {:reply, result, state}
-  end
-
-  @impl GenServer
-  def handle_call({:terminate_session, session_id}, _from, %{registry: registry} = state) do
-    result = GenServer.call(registry, {:terminate_session, session_id})
-    {:reply, result, state}
+      nil ->
+        {:reply, {:error, :no_sse_handler}, state}
+    end
   end
 
   @impl GenServer
   def handle_call({:send_message, message}, _from, state) do
-    Logging.transport_event(
-      "send_message_fallback",
-      %{
-        message_size: byte_size(message)
-      },
-      level: :warning
-    )
+    # For notifications, we need to send to all active SSE handlers
+    # This is called by Base server for server-initiated notifications
+    Logging.transport_event("broadcast_notification", %{
+      message_size: byte_size(message),
+      active_handlers: map_size(state.sse_handlers)
+    })
 
-    {:reply, {:error, :no_active_session}, state}
+    # Send to all active SSE handlers
+    for {_session_id, {pid, _ref}} <- state.sse_handlers do
+      send(pid, {:sse_message, message})
+    end
+
+    {:reply, :ok, state}
   end
 
   @impl GenServer
-  def handle_cast(:shutdown, %{registry: registry} = state) do
-    Logging.transport_event("shutdown", "Transport shutting down", level: :info)
+  def handle_cast({:unregister_sse_handler, session_id}, state) do
+    sse_handlers =
+      case Map.get(state.sse_handlers, session_id) do
+        {_pid, ref} ->
+          Process.demonitor(ref, [:flush])
+          Map.delete(state.sse_handlers, session_id)
 
-    registry
-    |> GenServer.call(:list_sessions)
-    |> Enum.each(&GenServer.call(registry, {:terminate_session, &1}))
+        nil ->
+          state.sse_handlers
+      end
+
+    {:noreply, %{state | sse_handlers: sse_handlers}}
+  end
+
+  @impl GenServer
+  def handle_cast(:shutdown, state) do
+    Logging.transport_event("shutdown", %{transport: :streamable_http}, level: :info)
+
+    # Notify all SSE handlers to close
+    for {_session_id, {pid, _ref}} <- state.sse_handlers do
+      send(pid, :close_sse)
+    end
 
     Telemetry.execute(
       Telemetry.event_transport_disconnect(),
@@ -324,22 +300,18 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, _ref, :process, pid, reason}, %{registry: registry} = state) do
-    Logging.transport_event("sse_process_down", %{pid: pid, reason: reason})
+  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+    # Find and remove the handler that went down
+    sse_handlers =
+      state.sse_handlers
+      |> Enum.reject(fn {_session_id, {handler_pid, monitor_ref}} ->
+        handler_pid == pid and monitor_ref == ref
+      end)
+      |> Map.new()
 
-    registry
-    |> GenServer.call(:list_sessions)
-    |> Enum.each(fn session_id ->
-      case GenServer.call(registry, {:lookup_session, session_id}) do
-        {:ok, %{sse_pid: ^pid}} ->
-          GenServer.call(registry, {:terminate_session, session_id})
+    Logging.transport_event("sse_handler_down", %{handler_pid: inspect(pid)})
 
-        _ ->
-          :ok
-      end
-    end)
-
-    {:noreply, state}
+    {:noreply, %{state | sse_handlers: sse_handlers}}
   end
 
   @impl GenServer
