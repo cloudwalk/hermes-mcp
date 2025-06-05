@@ -284,43 +284,54 @@ defmodule Mix.Interactive.Commands do
 
   defp print_connection_error_context(state) do
     transport_info = state.transport
-
-    case transport_info do
-      %{layer: SSE} ->
-        transport_pid = transport_info[:name] || SSE
-
-        if Process.alive?(transport_pid) do
-          transport_state = :sys.get_state(transport_pid)
-          IO.puts("  #{UI.colors().info}Server URL:#{UI.colors().reset} #{transport_state[:server_url]}")
-          IO.puts("  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{transport_state[:sse_url]}")
-        end
-
-      %{layer: STDIO} ->
-        transport_pid = transport_info[:name] || STDIO
-
-        if Process.alive?(transport_pid) do
-          transport_state = :sys.get_state(transport_pid)
-          IO.puts("  #{UI.colors().info}Command:#{UI.colors().reset} #{transport_state.command}")
-          print_stdio_args(transport_state)
-        end
-
-      %{layer: StreamableHTTP} ->
-        transport_pid = transport_info[:name] || StreamableHTTP
-
-        if Process.alive?(transport_pid) do
-          transport_state = :sys.get_state(transport_pid)
-          IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}")
-
-          if transport_state.session_id do
-            IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}")
-          end
-        end
-
-      _ ->
-        IO.puts("  #{UI.colors().info}Transport:#{UI.colors().reset} #{inspect(transport_info)}")
-    end
-
+    print_transport_details(transport_info)
     IO.puts("  #{UI.colors().info}Client Info:#{UI.colors().reset} #{inspect(state.client_info)}")
+  end
+
+  defp print_transport_details(%{layer: SSE} = transport_info) do
+    transport_pid = transport_info[:name] || SSE
+    print_sse_details(transport_pid)
+  end
+
+  defp print_transport_details(%{layer: STDIO} = transport_info) do
+    transport_pid = transport_info[:name] || STDIO
+    print_stdio_details(transport_pid)
+  end
+
+  defp print_transport_details(%{layer: StreamableHTTP} = transport_info) do
+    transport_pid = transport_info[:name] || StreamableHTTP
+    print_streamable_http_details(transport_pid)
+  end
+
+  defp print_transport_details(transport_info) do
+    IO.puts("  #{UI.colors().info}Transport:#{UI.colors().reset} #{inspect(transport_info)}")
+  end
+
+  defp print_sse_details(transport_pid) do
+    if Process.alive?(transport_pid) do
+      transport_state = :sys.get_state(transport_pid)
+      IO.puts("  #{UI.colors().info}Server URL:#{UI.colors().reset} #{transport_state[:server_url]}")
+      IO.puts("  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{transport_state[:sse_url]}")
+    end
+  end
+
+  defp print_stdio_details(transport_pid) do
+    if Process.alive?(transport_pid) do
+      transport_state = :sys.get_state(transport_pid)
+      IO.puts("  #{UI.colors().info}Command:#{UI.colors().reset} #{transport_state.command}")
+      print_stdio_args(transport_state)
+    end
+  end
+
+  defp print_streamable_http_details(transport_pid) do
+    if Process.alive?(transport_pid) do
+      transport_state = :sys.get_state(transport_pid)
+      IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}")
+
+      if transport_state.session_id do
+        IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}")
+      end
+    end
   end
 
   defp print_timeout_error_context(state) do
