@@ -1,6 +1,26 @@
 defmodule Hermes do
   @moduledoc false
 
+  import Peri
+
+  alias Hermes.Server.Transport.STDIO, as: ServerSTDIO
+  alias Hermes.Server.Transport.StreamableHTTP, as: ServerStreamableHTTP
+  alias Hermes.Transport.SSE, as: ClientSSE
+  alias Hermes.Transport.STDIO, as: ClientSTDIO
+  alias Hermes.Transport.StreamableHTTP, as: ClientStreamableHTTP
+
+  @client_transports if Mix.env() == :test,
+                       do: [ClientSTDIO, ClientSSE, ClientStreamableHTTP, MCPTest.MockTransport],
+                       else: [ClientSTDIO, ClientSSE, ClientStreamableHTTP]
+
+  defschema :client_transport,
+    layer: {:required, {:enum, @client_transports}},
+    name: {:required, {:either, {:pid, {:custom, &genserver_name/1}}}}
+
+  defschema :server_transport,
+    layer: {:required, {:enum, [ServerSTDIO, ServerStreamableHTTP]}},
+    name: {:required, {:either, {:pid, {:custom, &genserver_name/1}}}}
+
   @doc "Checks if hermes should be compiled/used as standalone CLI or OTP library"
   def should_compile_cli? do
     Code.ensure_loaded?(Burrito) and Application.get_env(:hermes_mcp, :compile_cli?, false)

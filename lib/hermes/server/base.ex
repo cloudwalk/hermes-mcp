@@ -8,19 +8,19 @@ defmodule Hermes.Server.Base do
 
   use GenServer
 
+  import Hermes.Server.Base.State
   import Hermes.Server.Behaviour, only: [impl_by?: 1]
   import Peri
 
   alias Hermes.Logging
   alias Hermes.MCP.Error
   alias Hermes.MCP.Message
+  alias Hermes.Server.Frame
   alias Hermes.Telemetry
 
   require Message
 
   @type t :: GenServer.server()
-
-  @protocol_version "2025-03-26"
 
   @typedoc """
   MCP server options
@@ -32,20 +32,14 @@ defmodule Hermes.Server.Base do
   @type option ::
           {:module, GenServer.name()}
           | {:init_arg, keyword}
-          | {:protocol_version, String.t()}
           | {:name, GenServer.name()}
           | GenServer.option()
 
   defschema(:parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:init_arg, {:any, {:default, []}}},
-    {:protocol_version, {:string, {:default, @protocol_version}}},
-    {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
-    {:transport,
-     [
-       layer: {:required, :atom},
-       name: {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}
-     ]}
+    {:init_arg, {:required, :any}},
+    {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
+    {:transport, {:required, {:custom, &Hermes.server_transport/1}}}
   ])
 
   @doc """
@@ -100,48 +94,35 @@ defmodule Hermes.Server.Base do
     end
 
     server_info = module.server_info()
+    capabilities = module.server_capabilities()
+    protocol_versions = module.supported_protocol_versions()
 
-    capabilities =
-      if function_exported?(module, :server_capabilities, 0) do
-        module.server_capabilities()
-      else
-        %{}
-      end
+    state =
+      new(%{
+        module: module,
+        server_info: server_info,
+        capabilities: capabilities,
+        supported_versions: protocol_versions,
+        transport: Map.new(opts.transport)
+      })
 
-    state = %{
-      mod: module,
-      init_arg: opts.init_arg,
-      server_info: server_info,
-      capabilities: capabilities,
-      protocol_version: opts.protocol_version,
-      transport: Map.new(opts.transport),
-      custom_state: nil,
-      initialized: false
-    }
-
-    Logging.server_event("starting", %{
-      module: module,
-      server_info: server_info,
-      capabilities: capabilities,
-      protocol_version: opts.protocol_version
-    })
+    Logging.server_event("starting", %{module: module, server_info: server_info, capabilities: capabilities})
 
     Telemetry.execute(
       Telemetry.event_server_init(),
       %{system_time: System.system_time()},
-      %{
-        module: module,
-        server_info: server_info,
-        capabilities: capabilities,
-        protocol_version: opts.protocol_version
-      }
+      %{module: module, server_info: server_info, capabilities: capabilities}
     )
 
-    case module.init(opts.init_arg) do
-      {:ok, custom_state} ->
-        {:ok, %{state | custom_state: custom_state}, :hibernate}
+    case module.init(opts.init_arg, Frame.new()) do
+      {:ok, %Frame{} = frame} ->
+        state = put_frame(state, frame)
+        {:ok, state, :hibernate}
 
-      {:error, reason} ->
+      :ignore ->
+        :ignore
+
+      {:stop, reason} ->
         Logging.server_event("starting_failed", %{reason: reason}, level: :error)
         {:stop, reason}
     end
@@ -173,29 +154,41 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def terminate(reason, state) do
-    Logging.server_event("terminating", %{
-      reason: reason,
-      server_info: state.server_info
-    })
+  def terminate(reason, %{server_info: server_info}) do
+    Logging.server_event("terminating", %{reason: reason, server_info: server_info})
 
     Telemetry.execute(
       Telemetry.event_server_terminate(),
       %{system_time: System.system_time()},
-      %{
-        reason: reason,
-        server_info: state.server_info
-      }
+      %{reason: reason, server_info: server_info}
     )
 
     :ok
   end
 
-  # Message handling implementation
+  # Request handling
+
+  defp handle_request(%{"method" => "ping", "id" => request_id}, state) do
+    {:reply, encode_response(%{}, request_id), state}
+  end
+
+  defp handle_request(%{"method" => method}, %{initialized: false} = state) when method != "initialize" do
+    error = Error.invalid_request(%{data: %{message: "Server not initialized"}})
+
+    Logging.server_event(
+      "request_error",
+      %{error: error, reason: "not_initialized"},
+      level: :warning
+    )
+
+    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
+  end
 
   defp handle_request(%{"method" => "initialize"} = request, %{initialized: false} = state) do
-    params = request["params"] || %{}
-    protocol_version = params["protocolVersion"] || state.protocol_version
+    params = request["params"]
+    requested_version = params["protocolVersion"]
+    protocol_version = negotiate_protocol_version(state, requested_version)
+    state = update_from_initialization(state, params)
 
     response = %{
       "protocolVersion" => protocol_version,
@@ -218,44 +211,47 @@ defmodule Hermes.Server.Base do
     {:reply, encode_response(response, request["id"]), state}
   end
 
-  defp handle_request(request, %{initialized: true, mod: module} = state) do
-    request_id = request["id"]
-    method = request["method"]
+  defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, state)
+       when is_supported_capability(state, "logging") do
+    level = request["params"]["level"]
+    {:reply, encode_response(%{}, request_id), %{state | log_level: level}}
+  end
 
-    Logging.server_event("handling_request", %{
-      id: request_id,
-      method: method
-    })
+  defp handle_request(%{"method" => "notifications/cancelled"} = request, state) do
+    # TODO(zoedsoupe): we need to actually keep track of running requests...
+    Logging.server_event("handling_notiifcation_cancellation", %{params: request["params"]})
+    {:noreply, state}
+  end
+
+  defp handle_request(%{"id" => request_id, "method" => method} = request, %{module: module} = state) do
+    Logging.server_event("handling_request", %{id: request_id, method: method})
 
     Telemetry.execute(
       Telemetry.event_server_request(),
       %{system_time: System.system_time()},
-      %{
-        id: request_id,
-        method: method
-      }
+      %{id: request_id, method: method}
     )
 
-    case module.handle_request(request, state.custom_state) do
-      {:reply, response, new_custom_state} ->
+    case module.handle_request(request, state.frame) do
+      {:reply, response, %Frame{} = frame} ->
         Telemetry.execute(
           Telemetry.event_server_response(),
           %{system_time: System.system_time()},
           %{id: request_id, method: method, status: :success}
         )
 
-        {:reply, encode_response(response, request_id), %{state | custom_state: new_custom_state}}
+        {:reply, encode_response(response, request_id), put_frame(state, frame)}
 
-      {:noreply, new_custom_state} ->
+      {:noreply, %Frame{} = frame} ->
         Telemetry.execute(
           Telemetry.event_server_response(),
           %{system_time: System.system_time()},
           %{id: request_id, method: method, status: :noreply}
         )
 
-        {:reply, {:ok, nil}, %{state | custom_state: new_custom_state}}
+        {:reply, {:ok, nil}, put_frame(state, frame)}
 
-      {:error, %Error{} = error, new_custom_state} ->
+      {:error, %Error{} = error, %Frame{} = frame} ->
         Logging.server_event(
           "request_error",
           %{id: request_id, method: method, error: error},
@@ -268,21 +264,11 @@ defmodule Hermes.Server.Base do
           %{id: request_id, method: method, error: error}
         )
 
-        {:reply, {:ok, Error.to_json_rpc!(error)}, %{state | custom_state: new_custom_state}}
+        {:reply, {:ok, Error.to_json_rpc!(error, request_id)}, put_frame(state, frame)}
     end
   end
 
-  defp handle_request(_request, %{initialized: false} = state) do
-    error = Error.invalid_request(%{data: %{message: "Server not initialized"}})
-
-    Logging.server_event(
-      "request_error",
-      %{error: error, reason: "not_initialized"},
-      level: :warning
-    )
-
-    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
-  end
+  # Notification handling
 
   defp handle_notification(%{"method" => "notifications/initialized"}, from, state) do
     GenServer.reply(from, {:ok, nil})
@@ -290,7 +276,7 @@ defmodule Hermes.Server.Base do
     {:noreply, %{state | initialized: true}}
   end
 
-  defp handle_notification(notification, from, %{initialized: true, mod: module} = state) do
+  defp handle_notification(notification, from, %{initialized: true, module: module} = state) do
     GenServer.reply(from, {:ok, nil})
     method = notification["method"]
 
@@ -302,25 +288,22 @@ defmodule Hermes.Server.Base do
       %{method: method}
     )
 
-    case module.handle_notification(notification, state.custom_state) do
-      {:noreply, new_custom_state} ->
-        {:noreply, %{state | custom_state: new_custom_state}}
+    case module.handle_notification(notification, state.frame) do
+      {:noreply, %Frame{} = frame} ->
+        {:noreply, put_frame(state, frame)}
 
-      {:error, _error, new_custom_state} ->
+      {:error, _error, %Frame{} = frame} ->
         Logging.server_event(
           "notification_handler_error",
           %{method: method},
           level: :warning
         )
 
-        {:noreply, %{state | custom_state: new_custom_state}}
+        {:noreply, put_frame(state, frame)}
     end
   end
 
-  defp handle_notification(_notification, from, state) do
-    GenServer.reply(from, {:ok, nil})
-    {:noreply, state}
-  end
+  # Helper functions
 
   defp handle_decode_error(:invalid_message, state) do
     error = Error.parse_error(%{data: %{message: "Invalid message format"}})
@@ -349,8 +332,6 @@ defmodule Hermes.Server.Base do
 
     {:reply, {:ok, Error.to_json_rpc!(error)}, state}
   end
-
-  # Helper functions
 
   defp encode_notification(method, params) do
     notification = %{"method" => method, "params" => params}

@@ -1,18 +1,16 @@
 defmodule Hermes.Server.Frame do
   @moduledoc "Like LiveView Socket or Plug.Conn"
 
-  alias Hermes.Server.Transport.STDIO
-  alias Hermes.Server.Transport.StreamableHTTP
-
-  @type transport_t :: %{name: GenServer.name(), layer: StreamableHTTP | STDIO}
-
   @type t :: %__MODULE__{
           assigns: Enumerable.t(),
-          transport: transport_t,
           initialized: boolean
         }
 
-  defstruct assigns: %{}, transport: %{}, initialized: false
+  defstruct assigns: %{}, initialized: false
+
+  @spec new :: t
+  @spec new(assigns :: Enumerable.t()) :: t
+  def new(assigns \\ %{}), do: struct(__MODULE__, assigns: assigns)
 
   @spec assign(t, Enumerable.t()) :: t
   @spec assign(t, key :: atom, value :: any) :: t

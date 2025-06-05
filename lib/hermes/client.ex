@@ -98,11 +98,7 @@ defmodule Hermes.Client do
 
   defschema(:parse_options, [
     {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
-    {:transport,
-     [
-       layer: {:required, :atom},
-       name: {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}
-     ]},
+    {:transport, {:required, {:custom, &Hermes.client_transport/1}}},
     {:client_info, {:required, :map}},
     {:capabilities, {:map, {:default, @default_client_capabilities}}},
     {:protocol_version, {:string, {:default, @default_protocol_version}}}

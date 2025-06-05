@@ -21,7 +21,7 @@ defmodule Hermes.Server.Behaviour do
   This callback is invoked when the server is started and should perform
   any necessary setup, returning the initial state.
   """
-  @callback init(init_arg :: term()) :: {:ok, Frame.t()} | {:error, reason :: term()}
+  @callback init(init_arg :: term(), Frame.t()) :: {:ok, Frame.t()} | :ignore | {:stop, reason :: term()}
 
   @doc """
   Handles incoming requests from clients.

@@ -12,8 +12,8 @@ defmodule Upcase.Server do
   end
 
   @impl true
-  def init(:ok) do
-    {:ok, %{}}
+  def init(:ok, frame) do
+    {:ok, frame}
   end
 
   @impl true
