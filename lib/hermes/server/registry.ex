@@ -45,6 +45,19 @@ defmodule Hermes.Server.Registry do
   end
 
   @doc """
+  Returns a via tuple for naming a server session process.
+
+  ## Examples
+
+      iex> Hermes.Server.Registry.server_session(Calculator, "session_123")
+      {:via, Registry, {Hermes.Server.Registry, {:session, Calculator, "session_123"}}}
+  """
+  @spec server_session(module(), String.t()) :: GenServer.name()
+  def server_session(server, id) when is_binary(id) do
+    {:via, Registry, {@registry_name, {:session, server, id}}}
+  end
+
+  @doc """
   Returns a via tuple for naming a transport process.
 
   ## Examples
@@ -105,36 +118,20 @@ defmodule Hermes.Server.Registry do
   end
 
   @doc """
-  Returns a via tuple for naming a session-specific server process.
-
-  This is used when creating server processes per session (e.g., for StreamableHTTP).
+  Lists all server sessions for a given module.
 
   ## Examples
 
-      iex> Hermes.Server.Registry.session_server("session-abc123", MyApp.Calculator)
-      {:via, Registry, {Hermes.Server.Registry, {:session_server, "session-abc123", MyApp.Calculator}}}
-  """
-  @spec session_server(String.t(), module()) :: GenServer.name()
-  def session_server(session_id, module) when is_binary(session_id) and is_atom(module) do
-    {:via, Registry, {@registry_name, {:session_server, session_id, module}}}
-  end
-
-  @doc """
-  Lists all session servers for a given module.
-
-  ## Examples
-
-      iex> Hermes.Server.Registry.list_session_servers(MyApp.Calculator)
+      iex> Hermes.Server.Registry.list_server_sessions(MyApp.Calculator)
       ["session-abc123", "session-def456"]
   """
-  @spec list_session_servers(module()) :: [String.t()]
-  def list_session_servers(module) when is_atom(module) do
+  @spec list_server_sessions(module()) :: [String.t()]
+  def list_server_sessions(module) when is_atom(module) do
     @registry_name
     |> Registry.select([
-      {{:"$1", :_, :_}, [{:andalso, {:==, {:element, 1, :"$1"}, :session_server}, {:==, {:element, 3, :"$1"}, module}}],
-       [:"$1"]}
+      {{:"$1", :_, :_}, [{:andalso, {:==, {:element, 1, :"$1"}, :session}, {:==, {:element, 2, :"$1"}, module}}], [:"$1"]}
     ])
-    |> Enum.map(fn {:session_server, session_id, ^module} -> session_id end)
+    |> Enum.map(fn {:session, ^module, id} -> id end)
   end
 
   @doc """
@@ -142,14 +139,14 @@ defmodule Hermes.Server.Registry do
 
   ## Examples
 
-      iex> Hermes.Server.Registry.whereis_session_server("session-abc123", MyApp.Calculator)
+      iex> Hermes.Server.Registry.whereis_server_session("session-abc123", MyApp.Calculator)
       {:ok, #PID<0.125.0>}
   """
-  @spec whereis_session_server(String.t(), module()) :: {:ok, pid()} | :error
-  def whereis_session_server(session_id, module) when is_binary(session_id) and is_atom(module) do
-    case Registry.lookup(@registry_name, {:session_server, session_id, module}) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> :error
+  @spec whereis_server_session(module(), String.t()) :: {:ok, pid()} | :error
+  def whereis_server_session(module, session_id) when is_binary(session_id) and is_atom(module) do
+    case Registry.lookup(@registry_name, {:session, module, session_id}) do
+      [{pid, _}] -> pid
+      [] -> nil
     end
   end
 
@@ -183,8 +180,8 @@ defmodule Hermes.Server.Registry do
   @spec whereis_server(module()) :: {:ok, pid()} | :error
   def whereis_server(module) when is_atom(module) do
     case Registry.lookup(@registry_name, {:server, module}) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> :error
+      [{pid, _}] -> pid
+      [] -> nil
     end
   end
 
@@ -199,8 +196,8 @@ defmodule Hermes.Server.Registry do
   @spec whereis_transport(module(), atom()) :: {:ok, pid()} | :error
   def whereis_transport(module, type) when is_atom(module) and is_atom(type) do
     case Registry.lookup(@registry_name, {:transport, module, type}) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> :error
+      [{pid, _}] -> pid
+      [] -> nil
     end
   end
 end

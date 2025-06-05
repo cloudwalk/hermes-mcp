@@ -27,7 +27,6 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
     # Start required applications without requiring a project
     Application.ensure_all_started([:hermes_mcp, :peri])
 
-    # Parse arguments and set log level
     {parsed, _} =
       OptionParser.parse!(args,
         strict: @switches,
@@ -46,7 +45,7 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
     IO.puts(header)
     IO.puts("#{UI.colors().info}Connecting to Streamable HTTP server at: #{server_url}#{UI.colors().reset}\n")
 
-    {:ok, _} =
+    {:ok, pid} =
       StreamableHTTP.start_link(
         client: :streamable_http_test,
         base_url: base_url,
@@ -58,7 +57,7 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
     {:ok, client} =
       Client.start_link(
         name: :streamable_http_test,
-        transport: [layer: StreamableHTTP],
+        transport: [layer: StreamableHTTP, name: pid],
         client_info: %{
           "name" => "Mix.Tasks.StreamableHTTP",
           "version" => "1.0.0"

@@ -1,370 +1,196 @@
 defmodule Hermes.Server.Session do
   @moduledoc """
-  Session management for MCP servers.
+  Manages state for the Hermes MCP server base implementation.
 
-  This module provides session management capabilities for MCP servers, allowing
-  multiple concurrent client connections to be tracked and managed. It follows
-  the Elixir/OTP pattern where each session corresponds to a server process.
+  This module provides a structured representation of server state during the MCP lifecycle,
+  including initialization status, protocol negotiation, and server capabilities.
 
-  ## Architecture
+  ## State Structure
 
-  Sessions are lightweight records that map session IDs to server and transport
-  processes. The actual client state (client_info, capabilities, etc.) remains
-  in the `Hermes.Server.Base.State` of each server process.
-
-  ## Session Structure
-
-  ```elixir
-  %{
-    id: "session-123",
-    server: MyApp.Calculator,           # Server module name
-    transport: {:streamable_http, ref}, # Transport type and reference
-    created_at: DateTime.t(),
-    last_activity: DateTime.t(),
-    metadata: %{}                       # Optional session metadata
-  }
-  ```
-
-  ## Usage
-
-  ```elixir
-  # Register a new session
-  {:ok, session_id} = Hermes.Server.Session.register(
-    server: MyApp.Calculator,
-    transport: {:streamable_http, "transport-ref"}
-  )
-
-  # Look up a session
-  {:ok, session} = Hermes.Server.Session.get(session_id)
-
-  # Send notification to a specific session
-  Hermes.Server.Session.send_notification(session_id, "ping", %{})
-
-  # List all sessions
-  sessions = Hermes.Server.Session.list()
-  ```
+  Each server state includes:
+  - `protocol_version`: Negotiated MCP protocol version
+  - `frame`: Server frame (similar to LiveView socket)
+  - `initialized`: Whether the server has completed initialization
+  - `client_info`: Client information received during initialization
+  - `client_capabilities`: Client capabilities received during initialization
   """
 
-  use GenServer
+  alias Hermes.Server.Registry
 
-  import Peri
-
-  alias Hermes.MCP.ID
-  alias Hermes.Server.Registry, as: ServerRegistry
-
-  @type session_id :: String.t()
-  @type server_name :: module() | GenServer.name()
-  @type transport_type :: :stdio | :streamable_http | :sse | atom()
-  @type transport_ref :: String.t() | atom() | pid()
-
-  @type session :: %{
-          id: session_id(),
-          server: server_name(),
-          transport: {transport_type(), transport_ref()},
-          created_at: DateTime.t(),
-          last_activity: DateTime.t(),
-          metadata: map()
+  @type t :: %__MODULE__{
+          protocol_version: String.t() | nil,
+          initialized: boolean(),
+          client_info: map() | nil,
+          client_capabilities: map() | nil,
+          log_level: String.t(),
+          id: String.t() | nil
         }
 
-  @type storage_backend :: module()
-
-  @session_expiry_ms to_timeout(minute: 5)
-  @cleanup_interval_ms to_timeout(minute: 1)
-
-  defschema(:parse_options, [
-    {:storage, {:required, :atom}},
-    {:storage_opts, :keyword},
-    {:expiry_ms, {:oneof, [:pos_integer, nil]}},
-    {:cleanup_interval_ms, :pos_integer}
-  ])
-
-  # Client API
+  defstruct [
+    :id,
+    :protocol_version,
+    :log_level,
+    initialized: false,
+    client_info: nil,
+    client_capabilities: nil
+  ]
 
   @doc """
-  Starts the session manager.
-
-  ## Options
-
-    * `:storage` - Storage backend module (defaults to `Hermes.Server.Session.Storage.ETS`)
-    * `:storage_opts` - Options passed to storage backend
-    * `:expiry_ms` - Session expiry in milliseconds (defaults to 5 minutes)
-    * `:cleanup_interval_ms` - Cleanup interval in milliseconds (defaults to 1 minute)
+  Starts a new session agent with initial state.
   """
+  @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
-    opts = Keyword.put_new(opts, :storage, Hermes.Server.Session.Storage.ETS)
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+    server = Keyword.fetch!(opts, :server)
+    session_id = Keyword.fetch!(opts, :session_id)
+    name = Registry.server_session(server, session_id)
+
+    Agent.start_link(fn -> new(id: session_id) end, name: name)
   end
 
   @doc """
-  Registers a new session.
+  Creates a new server state with the given options.
 
-  ## Options
+  ## Parameters
 
-    * `:server` - Server module or name (required)
-    * `:transport` - Transport tuple `{type, ref}` (required)
-    * `:metadata` - Optional metadata map
+    * `opts` - Map containing the initialization options
+  """
+  @spec new(Enumerable.t()) :: t()
+  def new(opts), do: struct(__MODULE__, opts)
+
+  @doc """
+  Updates state after successful initialization handshake.
+
+  This function:
+  1. Sets the negotiated protocol version
+  2. Stores client information and capabilities
+  3. Marks the server as initialized
+
+  ## Parameters
+
+    * `state` - The current server state
+    * `protocol_version` - The negotiated protocol version
+    * `client_info` - Client information from the initialize request
+    * `client_capabilities` - Client capabilities from the initialize request
 
   ## Examples
 
-      iex> Hermes.Server.Session.register(
-      ...>   server: MyApp.Calculator,
-      ...>   transport: {:streamable_http, "transport-123"}
-      ...> )
-      {:ok, "session-abc123"}
+      iex> client_info = %{"name" => "hello", "version" => "1.0.0"}
+      iex> capabilities = %{"sampling" => %{}}
+      iex> params = %{"protocolVersion" => "2025-03-26", "capabilities" => capabilities, "clientInfo" => client_info}
+      iex> updated_state = Hermes.Server.Base.State.update_from_initialization(state, params)
+      iex> updated_state.initialized
+      true
+      iex> updated_state.protocol_version
+      "2025-03-26"
   """
-  @spec register(keyword()) :: {:ok, session_id()} | {:error, term()}
-  def register(opts) do
-    GenServer.call(__MODULE__, {:register, opts})
+  @spec update_from_initialization(GenServer.name(), String.t(), map, map) :: :ok
+  def update_from_initialization(session, negotiated_version, client_info, capabilities) do
+    Agent.update(session, fn state ->
+      %{state | protocol_version: negotiated_version, client_info: client_info, client_capabilities: capabilities}
+    end)
   end
 
   @doc """
-  Looks up a session by ID.
+  Checks if the server is initialized.
+
+  ## Parameters
+
+    * `state` - The current server state
 
   ## Examples
 
-      iex> Hermes.Server.Session.get("session-abc123")
-      {:ok, %{id: "session-abc123", server: MyApp.Calculator, ...}}
-
-      iex> Hermes.Server.Session.get("unknown")
-      {:error, :not_found}
+      iex> Hermes.Server.Base.State.initialized?(uninitialized_state)
+      false
+      
+      iex> Hermes.Server.Base.State.initialized?(initialized_state)
+      true
   """
-  @spec get(session_id()) :: {:ok, session()} | {:error, :not_found}
-  def get(session_id) do
-    GenServer.call(__MODULE__, {:get, session_id})
+  @spec initialized?(GenServer.name()) :: boolean()
+  def initialized?(session) do
+    Agent.get(session, & &1.initialized)
   end
 
   @doc """
-  Lists all active sessions.
-
-  ## Options
-
-    * `:server` - Filter by server module
-    * `:transport_type` - Filter by transport type
-    * `:limit` - Maximum number of results
-    * `:offset` - Pagination offset
-
-  ## Examples
-
-      iex> Hermes.Server.Session.list()
-      [%{id: "session-1", ...}, %{id: "session-2", ...}]
-
-      iex> Hermes.Server.Session.list(server: MyApp.Calculator)
-      [%{id: "session-1", server: MyApp.Calculator, ...}]
+  Marks the session as initialized.
   """
-  @spec list(keyword()) :: [session()]
-  def list(opts \\ []) do
-    GenServer.call(__MODULE__, {:list, opts})
+  @spec mark_initialized(GenServer.name()) :: :ok
+  def mark_initialized(session) do
+    Agent.update(session, fn state -> %{state | initialized: true} end)
   end
 
   @doc """
-  Updates session metadata.
+  Gets the negotiated protocol version.
+
+  ## Parameters
+
+    * `state` - The current server state
 
   ## Examples
 
-      iex> Hermes.Server.Session.update("session-123", %{user_id: 42})
-      {:ok, %{id: "session-123", metadata: %{user_id: 42}, ...}}
+      iex> Hermes.Server.Base.State.get_protocol_version(initialized_state)
+      "2025-03-26"
   """
-  @spec update(session_id(), map()) :: {:ok, session()} | {:error, :not_found}
-  def update(session_id, updates) do
-    GenServer.call(__MODULE__, {:update, session_id, updates})
+  @spec get_protocol_version(GenServer.name()) :: String.t() | nil
+  def get_protocol_version(session) do
+    Agent.get(session, & &1.protocol_version)
   end
 
   @doc """
-  Unregisters a session.
+  Gets the client information.
+
+  ## Parameters
+
+    * `state` - The current server state
 
   ## Examples
 
-      iex> Hermes.Server.Session.unregister("session-123")
-      :ok
+      iex> Hermes.Server.Base.State.get_client_info(initialized_state)
+      %{"name" => "ClientApp", "version" => "2.0.0"}
   """
-  @spec unregister(session_id()) :: :ok | {:error, :not_found}
-  def unregister(session_id) do
-    GenServer.call(__MODULE__, {:unregister, session_id})
+  @spec get_client_info(GenServer.name()) :: map() | nil
+  def get_client_info(session) do
+    Agent.get(session, & &1.client_info)
   end
 
   @doc """
-  Sends a notification to a specific session.
+  Gets the client capabilities.
 
-  This is a convenience function that looks up the session's server
-  and sends the notification through it.
+  ## Parameters
+
+    * `state` - The current server state
 
   ## Examples
 
-      iex> Hermes.Server.Session.send_notification("session-123", "ping", %{})
-      :ok
+      iex> Hermes.Server.Base.State.get_client_capabilities(initialized_state)
+      %{"roots" => %{"listChanged" => true}}
   """
-  @spec send_notification(session_id(), String.t(), map()) :: :ok | {:error, term()}
-  def send_notification(session_id, method, params \\ %{}) do
-    with {:ok, session} <- get(session_id) do
-      server_name = get_server_name(session.server)
-      Hermes.Server.Base.send_notification(server_name, method, params)
-    end
+  @spec get_client_capabilities(GenServer.name()) :: map() | nil
+  def get_client_capabilities(session) do
+    Agent.get(session, & &1.client_capabilities)
   end
 
   @doc """
-  Finds sessions by server.
-
-  ## Examples
-
-      iex> Hermes.Server.Session.find_by_server(MyApp.Calculator)
-      [%{id: "session-1", server: MyApp.Calculator, ...}]
+  Updates the log level.
   """
-  @spec find_by_server(server_name()) :: [session()]
-  def find_by_server(server) do
-    list(server: server)
+  @spec set_log_level(GenServer.name(), String.t()) :: :ok
+  def set_log_level(session, level) do
+    Agent.update(session, fn state -> %{state | log_level: level} end)
   end
 
   @doc """
-  Finds sessions by transport type.
-
-  ## Examples
-
-      iex> Hermes.Server.Session.find_by_transport(:streamable_http)
-      [%{id: "session-1", transport: {:streamable_http, _}, ...}]
+  Gets the entire session state.
+  For debugging and testing purposes.
   """
-  @spec find_by_transport(transport_type()) :: [session()]
-  def find_by_transport(transport_type) do
-    list(transport_type: transport_type)
+  @spec get(GenServer.name()) :: t()
+  def get(session) do
+    Agent.get(session, & &1)
   end
 
   @doc """
-  Updates the last activity timestamp for a session.
-
-  ## Examples
-
-      iex> Hermes.Server.Session.touch("session-123")
-      :ok
+  Checks if a session exists.
   """
-  @spec touch(session_id()) :: :ok | {:error, :not_found}
-  def touch(session_id) do
-    GenServer.call(__MODULE__, {:touch, session_id})
+  @spec exists?(module(), String.t()) :: boolean()
+  def exists?(server, session_id) do
+    not is_nil(Registry.whereis_server_session(server, session_id))
   end
-
-  # Server callbacks
-
-  @impl GenServer
-  def init(opts) do
-    opts = parse_options!(opts)
-
-    storage_module = opts[:storage]
-    storage_opts = opts[:storage_opts] || []
-    expiry_ms = opts[:expiry_ms] || @session_expiry_ms
-    cleanup_interval_ms = opts[:cleanup_interval_ms] || @cleanup_interval_ms
-
-    case storage_module.init(storage_opts) do
-      {:ok, storage_state} ->
-        state = %{
-          storage: storage_module,
-          storage_state: storage_state,
-          expiry_ms: expiry_ms
-        }
-
-        # Schedule periodic cleanup
-        if expiry_ms do
-          Process.send_after(self(), :cleanup, cleanup_interval_ms)
-        end
-
-        {:ok, state}
-
-      {:error, reason} ->
-        {:stop, {:storage_init_failed, reason}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:register, opts}, _from, state) do
-    session_id = ID.generate_session_id()
-
-    session_data = %{
-      id: session_id,
-      server: Keyword.fetch!(opts, :server),
-      transport: Keyword.fetch!(opts, :transport),
-      created_at: DateTime.utc_now(),
-      last_activity: DateTime.utc_now(),
-      metadata: Keyword.get(opts, :metadata, %{})
-    }
-
-    case state.storage.register(state.storage_state, session_id, session_data) do
-      {:ok, new_storage_state} ->
-        {:reply, {:ok, session_id}, %{state | storage_state: new_storage_state}}
-
-      {:error, reason, new_storage_state} ->
-        {:reply, {:error, reason}, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:get, session_id}, _from, state) do
-    case state.storage.lookup(state.storage_state, session_id) do
-      {:ok, session, new_storage_state} ->
-        {:reply, {:ok, session}, %{state | storage_state: new_storage_state}}
-
-      {:error, :session_not_found, new_storage_state} ->
-        {:reply, {:error, :not_found}, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:list, opts}, _from, state) do
-    case state.storage.list(state.storage_state, opts) do
-      {:ok, sessions, new_storage_state} ->
-        {:reply, sessions, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:update, session_id, updates}, _from, state) do
-    updates = Map.put(updates, :last_activity, DateTime.utc_now())
-
-    case state.storage.update(state.storage_state, session_id, updates) do
-      {:ok, session, new_storage_state} ->
-        {:reply, {:ok, session}, %{state | storage_state: new_storage_state}}
-
-      {:error, :session_not_found, new_storage_state} ->
-        {:reply, {:error, :not_found}, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:unregister, session_id}, _from, state) do
-    case state.storage.unregister(state.storage_state, session_id) do
-      {:ok, new_storage_state} ->
-        {:reply, :ok, %{state | storage_state: new_storage_state}}
-
-      {:error, :session_not_found, new_storage_state} ->
-        {:reply, {:error, :not_found}, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:touch, session_id}, _from, state) do
-    case state.storage.touch(state.storage_state, session_id) do
-      {:ok, new_storage_state} ->
-        {:reply, :ok, %{state | storage_state: new_storage_state}}
-
-      {:error, :session_not_found, new_storage_state} ->
-        {:reply, {:error, :not_found}, %{state | storage_state: new_storage_state}}
-    end
-  end
-
-  @impl GenServer
-  def handle_info(:cleanup, state) do
-    if state.expiry_ms do
-      case state.storage.expire_inactive(state.storage_state, state.expiry_ms) do
-        {:ok, _count, new_storage_state} ->
-          Process.send_after(self(), :cleanup, @cleanup_interval_ms)
-          {:noreply, %{state | storage_state: new_storage_state}}
-      end
-    else
-      {:noreply, state}
-    end
-  end
-
-  # Private functions
-
-  defp get_server_name(module) when is_atom(module) do
-    ServerRegistry.server(module)
-  end
-
-  defp get_server_name(name), do: name
 end

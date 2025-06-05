@@ -90,4 +90,6 @@ defmodule Hermes.Server do
       )
   """
   defdelegate start_link(mod, init_arg, opts), to: Hermes.Server.Supervisor
+
+  defguard is_supported_capability(capabilities, capability) when is_map_key(capabilities, capability)
 end
