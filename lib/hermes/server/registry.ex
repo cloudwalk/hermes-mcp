@@ -105,6 +105,55 @@ defmodule Hermes.Server.Registry do
   end
 
   @doc """
+  Returns a via tuple for naming a session-specific server process.
+
+  This is used when creating server processes per session (e.g., for StreamableHTTP).
+
+  ## Examples
+
+      iex> Hermes.Server.Registry.session_server("session-abc123", MyApp.Calculator)
+      {:via, Registry, {Hermes.Server.Registry, {:session_server, "session-abc123", MyApp.Calculator}}}
+  """
+  @spec session_server(String.t(), module()) :: GenServer.name()
+  def session_server(session_id, module) when is_binary(session_id) and is_atom(module) do
+    {:via, Registry, {@registry_name, {:session_server, session_id, module}}}
+  end
+
+  @doc """
+  Lists all session servers for a given module.
+
+  ## Examples
+
+      iex> Hermes.Server.Registry.list_session_servers(MyApp.Calculator)
+      ["session-abc123", "session-def456"]
+  """
+  @spec list_session_servers(module()) :: [String.t()]
+  def list_session_servers(module) when is_atom(module) do
+    @registry_name
+    |> Registry.select([
+      {{:"$1", :_, :_}, [{:andalso, {:==, {:element, 1, :"$1"}, :session_server}, {:==, {:element, 3, :"$1"}, module}}],
+       [:"$1"]}
+    ])
+    |> Enum.map(fn {:session_server, session_id, ^module} -> session_id end)
+  end
+
+  @doc """
+  Gets the PID of a session-specific server.
+
+  ## Examples
+
+      iex> Hermes.Server.Registry.whereis_session_server("session-abc123", MyApp.Calculator)
+      {:ok, #PID<0.125.0>}
+  """
+  @spec whereis_session_server(String.t(), module()) :: {:ok, pid()} | :error
+  def whereis_session_server(session_id, module) when is_binary(session_id) and is_atom(module) do
+    case Registry.lookup(@registry_name, {:session_server, session_id, module}) do
+      [{pid, _}] -> {:ok, pid}
+      [] -> :error
+    end
+  end
+
+  @doc """
   Checks if a server is registered.
 
   ## Examples
