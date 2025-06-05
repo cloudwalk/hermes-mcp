@@ -268,6 +268,29 @@ defmodule Hermes.MCP.Message do
   defguard is_initialize(data) when is_request(data) and :erlang.map_get("method", data) == "initialize"
 
   @doc """
+  Guard to check if a message is part of the initialization lifecycle.
+
+  This includes both the initialize request and the notifications/initialized notification.
+
+  ## Examples
+
+      iex> init_request = %{"jsonrpc" => "2.0", "method" => "initialize", "id" => 1, "params" => %{}}
+      iex> is_initialize_lifecycle(init_request)
+      true
+
+      iex> init_notification = %{"jsonrpc" => "2.0", "method" => "notifications/initialized"}
+      iex> is_initialize_lifecycle(init_notification)
+      true
+
+      iex> other_message = %{"jsonrpc" => "2.0", "method" => "tools/list", "id" => 2}
+      iex> is_initialize_lifecycle(other_message)
+      false
+  """
+  defguard is_initialize_lifecycle(data)
+           when (is_request(data) and :erlang.map_get("method", data) == "initialize") or
+                  (is_notification(data) and :erlang.map_get("method", data) == "notifications/initialized")
+
+  @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.
 
   Returns either:

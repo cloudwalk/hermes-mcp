@@ -208,13 +208,13 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:message, message, session_id}, _from, state) do
+  def handle_call({:request, decoded, session_id}, _from, state) when is_map(decoded) do
     with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, state) do
-      case Message.decode(message) do
-        {:ok, [decoded]} when Message.is_ping(decoded) ->
+      cond do
+        Message.is_ping(decoded) ->
           handle_server_ping(decoded, state)
 
-        {:ok, [decoded]} when not (Message.is_initialize(decoded) or Session.is_initialized(session)) ->
+        not (Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session)) ->
           Logging.server_event("session_not_initialized_check", %{
             session_id: session.id,
             initialized: session.initialized,
@@ -223,14 +223,12 @@ defmodule Hermes.Server.Base do
 
           handle_server_not_initialized(state)
 
-        {:ok, [decoded]} when Message.is_request(decoded) ->
+        Message.is_request(decoded) ->
           handle_request(decoded, session, state)
 
-        {:ok, [decoded]} when Message.is_notification(decoded) ->
-          handle_notification(decoded, session, state)
-
-        {:error, reason} ->
-          handle_decode_error(reason, state)
+        true ->
+          error = Error.invalid_request(%{data: %{message: "Expected request but got different message type"}})
+          {:reply, {:error, error}, state}
       end
     end
   end
@@ -243,6 +241,23 @@ defmodule Hermes.Server.Base do
 
       error ->
         {:reply, error, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_cast({:notification, decoded, session_id}, state) when is_map(decoded) do
+    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, state) do
+      if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
+        handle_notification(decoded, session, state)
+      else
+        Logging.server_event("session_not_initialized_check", %{
+          session_id: session.id,
+          initialized: session.initialized,
+          method: decoded["method"]
+        })
+
+        {:noreply, state}
+      end
     end
   end
 
@@ -450,34 +465,6 @@ defmodule Hermes.Server.Base do
     else
       latest
     end
-  end
-
-  defp handle_decode_error(:invalid_message, state) do
-    error = Error.parse_error(%{data: %{message: "Invalid message format"}})
-
-    Logging.server_event(
-      "message_decode_error",
-      %{reason: :invalid_message, error: error},
-      level: :error
-    )
-
-    error_response = Error.to_json_rpc!(error)
-    send_to_transport(state.transport, error_response)
-
-    {:reply, {:error, error}, state}
-  end
-
-  defp handle_decode_error(errors, state) when is_list(errors) do
-    errors = Enum.map(errors, &Peri.Error.error_to_map/1)
-    error = Error.parse_error(%{data: %{errors: errors, message: "Failed to parse message"}})
-
-    Logging.server_event(
-      "message_decode_error",
-      %{reason: errors, error: error},
-      level: :error
-    )
-
-    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
   end
 
   defp encode_notification(method, params) do

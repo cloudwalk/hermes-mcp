@@ -8,11 +8,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.MCP.Message
   alias Hermes.Server.Registry
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
-  require Logger
+  require Message
 
   @type t :: GenServer.server()
 
@@ -174,10 +175,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:register_sse_handler, session_id, pid}, _from, state) do
-    # Monitor the handler process
     ref = Process.monitor(pid)
 
-    # Store handler with monitor ref
     sse_handlers = Map.put(state.sse_handlers, session_id, {pid, ref})
 
     Logging.transport_event("sse_handler_registered", %{
@@ -190,43 +189,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:handle_message, session_id, message}, _from, state) do
-    case GenServer.call(Registry.whereis_server(state.server), {:message, message, session_id}) do
-      {:ok, response} ->
-        {:reply, {:ok, response}, state}
-
-      {:error, reason} ->
-        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
-        {:reply, {:error, reason}, state}
-    end
-  catch
-    :exit, reason ->
-      Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
-      {:reply, {:error, :server_unavailable}, state}
+    handle_decoded_message(message, session_id, state, false)
   end
 
   @impl GenServer
   def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
-    # Check if there's an SSE handler for this session
-    has_sse_handler = Map.has_key?(state.sse_handlers, session_id)
-
-    # Forward to server
-    case GenServer.call(Registry.whereis_server(state.server), {:message, message, session_id}) do
-      {:ok, response} when has_sse_handler ->
-        # Return {:sse, response} to indicate SSE streaming should be used
-        {:reply, {:sse, response}, state}
-
-      {:ok, response} ->
-        # Regular HTTP response
-        {:reply, {:ok, response}, state}
-
-      {:error, reason} ->
-        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
-        {:reply, {:error, reason}, state}
-    end
-  catch
-    :exit, reason ->
-      Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
-      {:reply, {:error, :server_unavailable}, state}
+    handle_decoded_message(message, session_id, state, Map.has_key?(state.sse_handlers, session_id))
   end
 
   @impl GenServer
@@ -251,19 +219,55 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:send_message, message}, _from, state) do
-    # For notifications, we need to send to all active SSE handlers
-    # This is called by Base server for server-initiated notifications
     Logging.transport_event("broadcast_notification", %{
       message_size: byte_size(message),
       active_handlers: map_size(state.sse_handlers)
     })
 
-    # Send to all active SSE handlers
     for {_session_id, {pid, _ref}} <- state.sse_handlers do
       send(pid, {:sse_message, message})
     end
 
     {:reply, :ok, state}
+  end
+
+  defp handle_decoded_message(message, session_id, state, has_sse_handler) do
+    server = Registry.whereis_server(state.server)
+
+    case Message.decode(message) do
+      {:ok, [decoded]} ->
+        route_message(server, decoded, session_id, state, has_sse_handler)
+
+      {:error, reason} ->
+        {:reply, {:error, reason}, state}
+    end
+  end
+
+  defp route_message(server, decoded, session_id, state, has_sse_handler) do
+    if Message.is_notification(decoded) do
+      GenServer.cast(server, {:notification, decoded, session_id})
+      {:reply, {:ok, nil}, state}
+    else
+      call_server_with_request(server, decoded, session_id, state, has_sse_handler)
+    end
+  end
+
+  defp call_server_with_request(server, decoded, session_id, state, has_sse_handler) do
+    case GenServer.call(server, {:request, decoded, session_id}) do
+      {:ok, response} when has_sse_handler ->
+        {:reply, {:sse, response}, state}
+
+      {:ok, response} ->
+        {:reply, {:ok, response}, state}
+
+      {:error, reason} ->
+        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
+        {:reply, {:error, reason}, state}
+    end
+  catch
+    :exit, reason ->
+      Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
+      {:reply, {:error, :server_unavailable}, state}
   end
 
   @impl GenServer
@@ -285,7 +289,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_cast(:shutdown, state) do
     Logging.transport_event("shutdown", %{transport: :streamable_http}, level: :info)
 
-    # Notify all SSE handlers to close
     for {_session_id, {pid, _ref}} <- state.sse_handlers do
       send(pid, :close_sse)
     end
@@ -301,7 +304,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
-    # Find and remove the handler that went down
     sse_handlers =
       state.sse_handlers
       |> Enum.reject(fn {_session_id, {handler_pid, monitor_ref}} ->

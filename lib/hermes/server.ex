@@ -116,6 +116,10 @@ defmodule Hermes.Server do
 
       import Hermes.Server.Frame
 
+      alias Hermes.MCP.Message
+
+      require Message
+
       def child_spec(opts) do
         %{
           id: __MODULE__,
