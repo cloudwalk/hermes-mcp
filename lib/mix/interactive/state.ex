@@ -271,9 +271,9 @@ defmodule Mix.Interactive.State do
   defp print_streamable_http_transport_state(pid, state, verbose) do
     IO.puts("\n#{UI.colors().success}Streamable HTTP Transport State (#{inspect(pid)}):#{UI.colors().reset}")
     IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(state.mcp_url)}")
-    
+
     print_streamable_http_session_status(state)
-    
+
     if verbose do
       # Print additional transport details in verbose mode
       if map_size(state.headers || %{}) > 0 do
@@ -298,7 +298,7 @@ defmodule Mix.Interactive.State do
     else
       IO.puts("  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)")
     end
-    
+
     IO.puts("  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}")
   end
 

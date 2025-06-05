@@ -14,10 +14,8 @@ if Code.ensure_loaded?(:gun) do
 
     use Mix.Task
 
-    alias Hermes.Client
     alias Hermes.Transport.WebSocket
-    alias Mix.Interactive.CLI
-    alias Mix.Interactive.Shell
+    alias Mix.Interactive.SupervisedShell
     alias Mix.Interactive.UI
 
     @switches [
@@ -49,18 +47,15 @@ if Code.ensure_loaded?(:gun) do
       IO.puts(header)
       IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
 
-      {:ok, pid} =
-        WebSocket.start_link(
+      SupervisedShell.start(
+        transport_module: WebSocket,
+        transport_opts: [
           client: :websocket_test,
           server: server_options
-        )
-
-      IO.puts("#{UI.colors().success}✓ WebSocket transport started#{UI.colors().reset}")
-
-      {:ok, client} =
-        Client.start_link(
+        ],
+        client_opts: [
           name: :websocket_test,
-          transport: [layer: WebSocket, name: pid],
+          transport: [layer: WebSocket],
           client_info: %{
             "name" => "Mix.Tasks.WebSocket",
             "version" => "1.0.0"
@@ -69,16 +64,8 @@ if Code.ensure_loaded?(:gun) do
             "tools" => %{},
             "sampling" => %{}
           }
-        )
-
-      IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
-      
-      IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
-      CLI.check_client_connection(client)
-      
-      IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
-
-      Shell.loop(client)
+        ]
+      )
     end
 
     # Helper functions

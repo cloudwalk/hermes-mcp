@@ -310,6 +310,7 @@ defmodule Mix.Interactive.Commands do
         if Process.alive?(transport_pid) do
           transport_state = :sys.get_state(transport_pid)
           IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}")
+
           if transport_state.session_id do
             IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}")
           end

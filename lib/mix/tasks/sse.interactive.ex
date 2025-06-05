@@ -13,10 +13,8 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
 
   use Mix.Task
 
-  alias Hermes.Client
   alias Hermes.Transport.SSE
-  alias Mix.Interactive.CLI
-  alias Mix.Interactive.Shell
+  alias Mix.Interactive.SupervisedShell
   alias Mix.Interactive.UI
 
   @switches [
@@ -41,25 +39,35 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     log_level = get_log_level(verbose_count)
     configure_logger(log_level)
 
-    server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
-    server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
+    base_url = parsed[:base_url] || "http://localhost:8000"
+    base_path = parsed[:base_path] || "/"
+    sse_path = parsed[:sse_path] || "/sse"
+
+    if base_url == "" do
+      IO.puts("#{UI.colors().error}Error: --base-url cannot be empty#{UI.colors().reset}")
+      IO.puts("Please provide a valid URL, e.g., --base-url=http://localhost:8000")
+      System.halt(1)
+    end
+
+    server_url = base_url |> URI.merge(base_path) |> URI.to_string()
 
     header = UI.header("HERMES MCP SSE INTERACTIVE")
     IO.puts(header)
     IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
 
-    {:ok, pid} =
-      SSE.start_link(
+    SupervisedShell.start(
+      transport_module: SSE,
+      transport_opts: [
         client: :sse_test,
-        server: server_options
-      )
-
-    IO.puts("#{UI.colors().success}✓ SSE transport started#{UI.colors().reset}")
-
-    {:ok, client} =
-      Client.start_link(
+        server: [
+          base_url: base_url,
+          base_path: base_path,
+          sse_path: sse_path
+        ]
+      ],
+      client_opts: [
         name: :sse_test,
-        transport: [layer: SSE, name: pid],
+        transport: [layer: SSE],
         protocol_version: "2024-11-05",
         client_info: %{
           "name" => "Mix.Tasks.SSE",
@@ -69,16 +77,8 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
           "tools" => %{},
           "sampling" => %{}
         }
-      )
-
-    IO.puts("#{UI.colors().success}✓ Client connected successfully#{UI.colors().reset}")
-    
-    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
-    CLI.check_client_connection(client)
-    
-    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
-
-    Shell.loop(client)
+      ]
+    )
   end
 
   # Helper functions
