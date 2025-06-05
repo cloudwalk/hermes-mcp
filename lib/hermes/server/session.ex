@@ -61,8 +61,33 @@ defmodule Hermes.Server.Session do
   @spec new(Enumerable.t()) :: t()
   def new(opts), do: struct(__MODULE__, opts)
 
+  @doc """
+  Guard to check if a session has been initialized.
+
+  ## Examples
+
+      iex> session = %Session{initialized: true}
+      iex> is_initialized(session)
+      true
+  """
   defguard is_initialized(session) when session.initialized
 
+  @doc """
+  Retrieves the current state of a session.
+
+  ## Parameters
+
+    * `session` - The session agent name or PID
+
+  ## Returns
+
+  The current session state as a `%Session{}` struct.
+
+  ## Examples
+
+      iex> session_state = Session.get(session_name)
+      %Session{initialized: true, protocol_version: "2025-03-26"}
+  """
   @spec get(GenServer.name()) :: t
   def get(session) do
     Agent.get(session, & &1)

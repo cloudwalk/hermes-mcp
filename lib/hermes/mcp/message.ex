@@ -184,29 +184,87 @@ defmodule Hermes.MCP.Message do
   # generic guards
 
   @doc """
-  Determines if a JSON-RPC message is a request.
+  Guard to determine if a JSON-RPC message is a request.
+
+  A message is considered a request if it contains both "method" and "id" fields.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "method" => "ping", "id" => 1}
+      iex> is_request(message)
+      true
+
+      iex> notification = %{"jsonrpc" => "2.0", "method" => "notification"}
+      iex> is_request(notification)
+      false
   """
   defguard is_request(data) when is_map_key(data, "method") and is_map_key(data, "id")
 
   @doc """
-  Determines if a JSON-RPC message is a notification.
+  Guard to determine if a JSON-RPC message is a notification.
+
+  A message is considered a notification if it contains a "method" field but no "id" field.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "method" => "notification"}
+      iex> is_notification(message)
+      true
+
+      iex> request = %{"jsonrpc" => "2.0", "method" => "ping", "id" => 1}
+      iex> is_notification(request)
+      false
   """
   defguard is_notification(data) when is_map_key(data, "method") and not is_map_key(data, "id")
 
   @doc """
-  Determines if a JSON-RPC message is a response.
+  Guard to determine if a JSON-RPC message is a response.
+
+  A message is considered a response if it contains both "result" and "id" fields.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "result" => %{}, "id" => 1}
+      iex> is_response(message)
+      true
   """
   defguard is_response(data) when is_map_key(data, "result") and is_map_key(data, "id")
 
   @doc """
-  Determines if a JSON-RPC message is an error.
+  Guard to determine if a JSON-RPC message is an error.
+
+  A message is considered an error if it contains both "error" and "id" fields.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "error" => %{"code" => -32600}, "id" => 1}
+      iex> is_error(message)
+      true
   """
   defguard is_error(data) when is_map_key(data, "error") and is_map_key(data, "id")
 
   # request guards
 
+  @doc """
+  Guard to check if a request is a ping request.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "method" => "ping", "id" => 1}
+      iex> is_ping(message)
+      true
+  """
   defguard is_ping(data) when is_request(data) and :erlang.map_get("method", data) == "ping"
 
+  @doc """
+  Guard to check if a request is an initialize request.
+
+  ## Examples
+
+      iex> message = %{"jsonrpc" => "2.0", "method" => "initialize", "id" => 1, "params" => %{}}
+      iex> is_initialize(message)
+      true
+  """
   defguard is_initialize(data) when is_request(data) and :erlang.map_get("method", data) == "initialize"
 
   @doc """

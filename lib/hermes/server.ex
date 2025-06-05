@@ -1,5 +1,54 @@
 defmodule Hermes.Server do
-  @moduledoc "high level mcp server implementation"
+  @moduledoc """
+  High-level MCP server implementation.
+
+  This module provides the main API for implementing MCP (Model Context Protocol) servers.
+  It includes macros and functions to simplify server creation with standardized capabilities,
+  protocol version support, and supervision tree setup.
+
+  ## Usage
+
+      defmodule MyServer do
+        use Hermes.Server,
+          name: "My MCP Server",
+          version: "1.0.0",
+          capabilities: [:tools, :resources, :logging]
+
+        @impl Hermes.Server.Behaviour
+        def init(_arg, frame) do
+          {:ok, frame}
+        end
+
+        @impl Hermes.Server.Behaviour
+        def handle_request(%{"method" => "tools/list"}, frame) do
+          {:reply, %{"tools" => []}, frame}
+        end
+
+        @impl Hermes.Server.Behaviour
+        def handle_notification(_notification, frame) do
+          {:noreply, frame}
+        end
+      end
+
+  ## Server Capabilities
+
+  The following capabilities are supported:
+  - `:prompts` - Server can provide prompt templates
+  - `:tools` - Server can execute tools/functions
+  - `:resources` - Server can provide resources (files, data, etc.)
+  - `:logging` - Server supports log level configuration
+
+  Capabilities can be configured with options:
+  - `subscribe?: boolean` - Whether the capability supports subscriptions (resources only)
+  - `list_changed?: boolean` - Whether the capability emits list change notifications
+
+  ## Protocol Versions
+
+  By default, servers support the following protocol versions:
+  - "2025-03-26" - Latest protocol version
+  - "2024-10-07" - Previous stable version
+  - "2024-05-11" - Legacy version for backward compatibility
+  """
 
   alias Hermes.Server.ConfigurationError
 
@@ -22,8 +71,28 @@ defmodule Hermes.Server do
   """
   defdelegate start_link(mod, init_arg, opts), to: Hermes.Server.Supervisor
 
+  @doc """
+  Guard to check if a capability is valid.
+
+  ## Examples
+
+      iex> is_server_capability(:tools)
+      true
+
+      iex> is_server_capability(:invalid)
+      false
+  """
   defguard is_server_capability(capability) when capability in @server_capabilities
 
+  @doc """
+  Guard to check if a capability is supported by the server.
+
+  ## Examples
+
+      iex> capabilities = %{"tools" => %{}}
+      iex> is_supported_capability(capabilities, "tools")
+      true
+  """
   defguard is_supported_capability(capabilities, capability) when is_map_key(capabilities, capability)
 
   @doc false

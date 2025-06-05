@@ -1,5 +1,32 @@
 defmodule Hermes.Server.Supervisor do
-  @moduledoc false
+  @moduledoc """
+  Supervisor for MCP server processes.
+
+  This supervisor manages the lifecycle of an MCP server, including:
+  - The Base server process that handles MCP protocol
+  - The transport layer (STDIO, StreamableHTTP, or SSE)
+  - Session supervisors for StreamableHTTP transport
+
+  The supervision strategy is `:one_for_all`, meaning if any child
+  process crashes, all processes are restarted to maintain consistency.
+
+  ## Supervision Tree
+
+  For STDIO transport:
+  ```
+  Supervisor
+  ├── Base Server
+  └── STDIO Transport
+  ```
+
+  For StreamableHTTP transport:
+  ```
+  Supervisor
+  ├── Session.Supervisor
+  ├── Base Server
+  └── StreamableHTTP Transport
+  ```
+  """
 
   use Supervisor, restart: :permanent
 
@@ -17,6 +44,27 @@ defmodule Hermes.Server.Supervisor do
 
   @type start_option :: {:transport, transport} | {:name, Supervisor.name()}
 
+  @doc """
+  Starts the server supervisor.
+
+  ## Parameters
+
+    * `server` - The module implementing `Hermes.Server.Behaviour`
+    * `init_arg` - Argument passed to the server's `init/1` callback
+    * `opts` - Options including:
+      * `:transport` - Transport configuration (required)
+      * `:name` - Supervisor name (optional, defaults to registered name)
+
+  ## Examples
+
+      # Start with STDIO transport
+      Hermes.Server.Supervisor.start_link(MyServer, [], transport: :stdio)
+
+      # Start with StreamableHTTP transport
+      Hermes.Server.Supervisor.start_link(MyServer, [],
+        transport: {:streamable_http, port: 8080}
+      )
+  """
   @spec start_link(server :: module, init_arg :: term, list(start_option)) :: Supervisor.on_start()
   def start_link(server, init_arg, opts) when is_atom(server) do
     name = opts[:name] || Registry.supervisor(server)

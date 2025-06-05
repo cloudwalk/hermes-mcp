@@ -3,7 +3,51 @@ defmodule Hermes.Server.Base do
   Base implementation of an MCP server.
 
   This module provides the core functionality for handling MCP messages,
-  without any higher-level abstractions.
+  managing the protocol lifecycle, and coordinating with transport layers.
+  It implements the JSON-RPC message handling, session management, and
+  protocol negotiation required by the MCP specification.
+
+  ## Architecture
+
+  The Base server acts as the central message processor in the server stack:
+  - Receives messages from transport layers (STDIO, StreamableHTTP)
+  - Manages protocol initialization and version negotiation
+  - Delegates business logic to the implementation module
+  - Maintains session state via Session agents
+  - Handles errors and protocol violations
+
+  ## Session Management
+
+  For transports that support multiple sessions (like StreamableHTTP), the Base
+  server maintains a registry of Session agents. Each session tracks:
+  - Protocol version negotiated with that client
+  - Client information and capabilities
+  - Initialization state
+  - Log level preferences
+
+  ## Message Flow
+
+  1. Transport receives raw message from client
+  2. Transport calls Base with `{:message, data, session_id}`
+  3. Base decodes and validates the message
+  4. Base retrieves or creates session state
+  5. Base delegates to implementation module callbacks
+  6. Base encodes response and sends back through transport
+
+  ## Example Implementation
+
+      defmodule MyServer do
+        use Hermes.Server
+
+        def server_info do
+          %{"name" => "My MCP Server", "version" => "1.0.0"}
+        end
+
+        def handle_request(%{"method" => "my_method"} = request, frame) do
+          result = process_request(request["params"])
+          {:reply, result, frame}
+        end
+      end
   """
 
   use GenServer
@@ -62,17 +106,27 @@ defmodule Hermes.Server.Base do
   ## Parameters
     * `opts` - Keyword list of options:
       * `:module` - (required) The module implementing the `Hermes.Server.Behaviour`
-      * `:init_arg` - Argument to pass to the module's `init/1` callback
-      * `:protocol_version` - The protocol version to use
-      * `:name` - Required name for the GenServer process
-      * `:transport` - Transport configuration
-        * `:layer` - The transport layer to be used (e.g. Hermes.Server.Transport.STDIO or Hermes.Server.Transport.StreamableHTTP)
-        * `:name` - Optional transport layer process name for customization
+      * `:init_arg` - Argument to pass to the module's `init/2` callback
+      * `:name` - (required) Name for the GenServer process
+      * `:transport` - (required) Transport configuration
+        * `:layer` - The transport module (e.g., `Hermes.Server.Transport.STDIO`)
+        * `:name` - The registered name of the transport process
 
   ## Examples
 
-      iex> Hermes.Server.Base.start_link(module: MyServer, name: MyServer)
-      {:ok, pid}
+      # Start with explicit transport configuration
+      Hermes.Server.Base.start_link(
+        module: MyServer,
+        init_arg: [],
+        name: {:via, Registry, {MyRegistry, :my_server}},
+        transport: [
+          layer: Hermes.Server.Transport.STDIO,
+          name: {:via, Registry, {MyRegistry, :my_transport}}
+        ]
+      )
+
+      # Typical usage through Hermes.Server.Supervisor
+      Hermes.Server.Supervisor.start_link(MyServer, [], transport: :stdio)
   """
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
   def start_link(opts) do
@@ -85,16 +139,36 @@ defmodule Hermes.Server.Base do
   @doc """
   Sends a notification to the client.
 
+  Notifications are fire-and-forget messages that don't expect a response.
+  This function is useful for server-initiated communication like progress
+  updates or status changes.
+
   ## Parameters
-    * `server` - The server process
-    * `method` - The notification method
-    * `params` - Optional parameters for the notification
+    * `server` - The server process name or PID
+    * `method` - The notification method (e.g., "notifications/message")
+    * `params` - Optional parameters for the notification (defaults to `%{}`)
 
   ## Returns
     * `:ok` if notification was sent successfully
-    * `{:error, reason}` otherwise
+    * `{:error, reason}` if transport fails
+
+  ## Examples
+
+      # Send a log message notification
+      Hermes.Server.Base.send_notification(
+        server,
+        "notifications/message",
+        %{"level" => "info", "data" => "Processing started"}
+      )
+
+      # Send a custom notification
+      Hermes.Server.Base.send_notification(
+        server,
+        "custom/status_changed",
+        %{"status" => "active"}
+      )
   """
-  @spec send_notification(t(), String.t(), map()) :: :ok | {:error, term()}
+  @spec send_notification(GenServer.name(), String.t(), map()) :: :ok | {:error, term()}
   def send_notification(server, method, params \\ %{}) do
     GenServer.call(server, {:send_notification, method, params})
   end
@@ -228,7 +302,7 @@ defmodule Hermes.Server.Base do
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
     :ok = Session.set_log_level(session.name, level)
-    {:reply, encode_response(%{}, request_id), %{state | log_level: level}}
+    {:reply, encode_response(%{}, request_id), state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => method} = request, _session, state) do
@@ -248,7 +322,7 @@ defmodule Hermes.Server.Base do
   defp handle_notification(%{"method" => "notifications/initialized"}, session, state) do
     Logging.server_event("client_initialized", nil)
     :ok = Session.mark_initialized(session.name)
-    {:noreply, %{state | initialized: true}}
+    {:noreply, state}
   end
 
   defp handle_notification(%{"method" => "notifications/cancelled"} = notification, _session, state) do
