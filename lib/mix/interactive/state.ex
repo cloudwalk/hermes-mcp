@@ -281,7 +281,7 @@ defmodule Mix.Interactive.State do
         print_map(state.headers, 4)
       end
 
-      if state.transport_opts do
+      if state.transport_opts != [] do
         IO.puts("  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state.transport_opts)}")
       end
 
