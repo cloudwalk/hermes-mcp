@@ -8,8 +8,12 @@ defmodule TestServer do
   alias Hermes.MCP.Error
   alias Hermes.Server.Frame
 
+  def start_link(opts) do
+    Hermes.Server.start_link(__MODULE__, :ok, opts)
+  end
+
   @impl true
-  def init(_, %Frame{} = frame) do
+  def init(:ok, %Frame{} = frame) do
     {:ok, frame}
   end
 

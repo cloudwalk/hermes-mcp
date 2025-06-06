@@ -42,6 +42,7 @@ defmodule MCPTest.Case do
       import MCPTest.Builders
       import MCPTest.Helpers
       import MCPTest.Setup
+      import MCPTest.StreamableHTTPHelpers
 
       alias Hermes.MCP.Error
       alias Hermes.MCP.Message
