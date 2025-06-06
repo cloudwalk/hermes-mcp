@@ -110,9 +110,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), binary()) ::
+  @spec handle_message(GenServer.server(), String.t(), map()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message) when is_binary(message) do
+  def handle_message(transport, session_id, message) when is_map(message) do
     GenServer.call(transport, {:handle_message, session_id, message})
   end
 
@@ -122,9 +122,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   This allows the Plug to know whether to stream the response via SSE
   or return it as a regular HTTP response.
   """
-  @spec handle_message_for_sse(GenServer.server(), String.t(), binary()) ::
+  @spec handle_message_for_sse(GenServer.server(), String.t(), map()) ::
           {:ok, binary()} | {:sse, binary()} | {:error, term()}
-  def handle_message_for_sse(transport, session_id, message) when is_binary(message) do
+  def handle_message_for_sse(transport, session_id, message) when is_map(message) do
     GenServer.call(transport, {:handle_message_for_sse, session_id, message})
   end
 
@@ -189,12 +189,27 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:handle_message, session_id, message}, _from, state) do
-    handle_decoded_message(message, session_id, state, false)
+    server = Registry.whereis_server(state.server)
+
+    if Message.is_notification(message) do
+      GenServer.cast(server, {:notification, message, session_id})
+      {:reply, {:ok, nil}, state}
+    else
+      {:reply, forward_request_to_server(server, message, session_id), state}
+    end
   end
 
   @impl GenServer
   def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
-    handle_decoded_message(message, session_id, state, Map.has_key?(state.sse_handlers, session_id))
+    server = Registry.whereis_server(state.server)
+
+    if Message.is_notification(message) do
+      GenServer.cast(server, {:notification, message, session_id})
+      {:reply, {:ok, nil}, state}
+    else
+      sse_handler? = Map.has_key?(state.sse_handlers, session_id)
+      {:reply, forward_request_to_server(server, message, session_id, sse_handler?), state}
+    end
   end
 
   @impl GenServer
@@ -231,43 +246,22 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:reply, :ok, state}
   end
 
-  defp handle_decoded_message(message, session_id, state, has_sse_handler) do
-    server = Registry.whereis_server(state.server)
-
-    case Message.decode(message) do
-      {:ok, [decoded]} ->
-        route_message(server, decoded, session_id, state, has_sse_handler)
-
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
-  defp route_message(server, decoded, session_id, state, has_sse_handler) do
-    if Message.is_notification(decoded) do
-      GenServer.cast(server, {:notification, decoded, session_id})
-      {:reply, {:ok, nil}, state}
-    else
-      call_server_with_request(server, decoded, session_id, state, has_sse_handler)
-    end
-  end
-
-  defp call_server_with_request(server, decoded, session_id, state, has_sse_handler) do
-    case GenServer.call(server, {:request, decoded, session_id}) do
+  defp forward_request_to_server(server, message, session_id, has_sse_handler \\ false) do
+    case GenServer.call(server, {:request, message, session_id}) do
       {:ok, response} when has_sse_handler ->
-        {:reply, {:sse, response}, state}
+        {:sse, response}
 
       {:ok, response} ->
-        {:reply, {:ok, response}, state}
+        {:ok, response}
 
       {:error, reason} ->
         Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
-        {:reply, {:error, reason}, state}
+        {:error, reason}
     end
   catch
     :exit, reason ->
       Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
-      {:reply, {:error, :server_unavailable}, state}
+      {:error, :server_unavailable}
   end
 
   @impl GenServer

@@ -113,8 +113,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   # POST request handler - processes MCP messages
 
   defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
-    with {:ok, body} <- read_request_body(conn, opts),
-         {:ok, messages} <- parse_messages(body) do
+    with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
+         {:ok, messages} <- maybe_parse_messages(body) do
       session_id = determine_session_id(conn, session_header, messages)
 
       if Enum.any?(messages, &Message.is_request/1) do
@@ -286,11 +286,27 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     get_or_create_session_id(conn, session_header)
   end
 
-  defp parse_messages(body) do
+  defp maybe_parse_messages(body) when is_binary(body) do
     case Message.decode(body) do
       {:ok, messages} -> {:ok, messages}
       {:error, _} -> {:error, :invalid_json}
     end
+  end
+
+  defp maybe_parse_messages(body) when is_map(body) do
+    case Message.validate_message(body) do
+      {:ok, message} -> {:ok, [message]}
+      {:error, _} -> {:error, :invalid_json}
+    end
+  end
+
+  defp maybe_parse_messages(body) when is_list(body) do
+    Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, messages} ->
+      case maybe_parse_messages(msg) do
+        {:ok, parsed} -> {:cont, {:ok, messages ++ parsed}}
+        err -> {:halt, err}
+      end
+    end)
   end
 
   defp maybe_add_session_header(conn, session_header, session_id) do
@@ -301,12 +317,14 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp read_request_body(conn, %{timeout: timeout}) do
+  defp maybe_read_request_body(%{body_params: %Plug.Conn.Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
     case Plug.Conn.read_body(conn, read_timeout: timeout) do
-      {:ok, body, _conn} -> {:ok, body}
+      {:ok, body, conn} -> {:ok, body, conn}
       {:error, reason} -> {:error, reason}
     end
   end
+
+  defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
 
   defp send_error(conn, status, message) do
     data = %{data: %{message: message, http_status: status}}
