@@ -15,3 +15,7 @@ build-upcase-server:
 [working-directory: 'priv/dev/upcase']
 upcase-server transport="stdio": build-upcase-server
     ./upcase
+
+[working-directory: 'priv/dev/ascii']
+ascii-server:
+    iex -S mix phx.server
