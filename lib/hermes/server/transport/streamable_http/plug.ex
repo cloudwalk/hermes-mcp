@@ -352,10 +352,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     |> send_resp(400, encoded_error)
   end
 
-  defp extract_request_id(body) when is_binary(body) do
-    case Message.decode(body) do
-      {:ok, [message | _]} when is_map(message) -> Map.get(message, "id")
-      _ -> nil
-    end
-  end
+  defp extract_request_id(%{"id" => request_id}), do: request_id
+  defp extract_request_id(request) when is_map(request), do: nil
 end
