@@ -114,7 +114,7 @@ defmodule Hermes.Server do
     quote do
       @behaviour Hermes.Server.Behaviour
 
-      import Hermes.Server.Frame
+      import Hermes.Server.Frame, only: [assign: 2, assign: 3, assign_new: 3]
 
       alias Hermes.MCP.Message
 

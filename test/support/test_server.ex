@@ -3,74 +3,64 @@ defmodule TestServer do
   Test implementation of the Server.Behaviour for testing.
   """
 
-  @behaviour Hermes.Server.Behaviour
+  use Hermes.Server, name: "Test Server", version: "1.0.0", capabilities: [:tools]
 
   alias Hermes.MCP.Error
+  alias Hermes.Server.Frame
 
   @impl true
-  def init(_) do
-    {:ok, %{}}
+  def init(_, %Frame{} = frame) do
+    {:ok, frame}
   end
 
   @impl true
-  def handle_request(request, state) do
+  def handle_request(request, frame) do
     method = request["method"]
-    handle_method(method, request, state)
+    handle_method(method, request, frame)
   end
 
-  defp handle_method("tools/list", _request, state), do: {:reply, %{"tools" => []}, state}
-  defp handle_method("ping", _request, state), do: {:reply, %{}, state}
-  defp handle_method("tools/call", request, state), do: handle_tools_call(request, state)
-  defp handle_method("resources/list", _request, state), do: {:reply, %{"resources" => []}, state}
-  defp handle_method("prompts/list", _request, state), do: {:reply, %{"prompts" => []}, state}
+  defp handle_method("tools/list", _request, frame), do: {:reply, %{"tools" => []}, frame}
+  defp handle_method("ping", _request, frame), do: {:reply, %{}, frame}
+  defp handle_method("tools/call", request, frame), do: handle_tools_call(request, frame)
+  defp handle_method("resources/list", _request, frame), do: {:reply, %{"resources" => []}, frame}
+  defp handle_method("prompts/list", _request, frame), do: {:reply, %{"prompts" => []}, frame}
 
-  defp handle_method("resources/read", request, state) do
+  defp handle_method("resources/read", request, frame) do
     params = request["params"] || %{}
-    {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), state}
+    {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), frame}
   end
 
-  defp handle_method("prompts/get", request, state) do
+  defp handle_method("prompts/get", request, frame) do
     params = request["params"] || %{}
-    {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
+    {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), frame}
   end
 
-  defp handle_method(method, _request, state) do
-    {:error, Error.method_not_found(%{method: method}), state}
+  defp handle_method(method, _request, frame) do
+    {:error, Error.method_not_found(%{method: method}), frame}
   end
 
-  defp handle_tools_call(request, state) do
+  defp handle_tools_call(request, frame) do
     params = request["params"] || %{}
 
     case Map.get(params, "name") do
       nil ->
-        {:error, Error.invalid_params(%{param: "name", message: "name parameter is required"}), state}
+        {:error, Error.invalid_params(%{param: "name", message: "name parameter is required"}), frame}
 
       name ->
         {:reply,
          %{
            "content" => [%{"type" => "text", "text" => "Tool '#{name}' executed successfully"}],
            "isError" => false
-         }, state}
+         }, frame}
     end
   end
 
   @impl true
-  def handle_notification(notification, state) do
+  def handle_notification(notification, frame) do
     case notification["method"] do
-      "notifications/cancelled" -> {:noreply, Map.put(state, :notification_received, true)}
-      "notifications/initialized" -> {:noreply, Map.put(state, :initialized_notification_received, true)}
-      _ -> {:noreply, state}
+      "notifications/cancelled" -> {:noreply, Map.put(frame, :notification_received, true)}
+      "notifications/initialized" -> {:noreply, Map.put(frame, :initialized_notification_received, true)}
+      _ -> {:noreply, frame}
     end
-  end
-
-  @impl true
-  def server_info, do: %{"name" => "Test Server", "version" => "1.0.0"}
-
-  @impl true
-  def server_capabilities, do: %{"tools" => %{"listChanged" => true}}
-
-  @impl true
-  def supported_protocol_versions do
-    ["2024-11-05", "2025-03-26"]
   end
 end

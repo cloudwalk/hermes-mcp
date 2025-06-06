@@ -13,12 +13,16 @@ defmodule Hermes do
                        do: [ClientSTDIO, ClientSSE, ClientStreamableHTTP, MCPTest.MockTransport],
                        else: [ClientSTDIO, ClientSSE, ClientStreamableHTTP]
 
+  @server_transports if Mix.env() == :test,
+                       do: [ServerSTDIO, ServerStreamableHTTP, MCPTest.MockTransport],
+                       else: [ServerSTDIO, ServerStreamableHTTP]
+
   defschema :client_transport,
     layer: {:required, {:enum, @client_transports}},
     name: {:required, get_schema(:process_name)}
 
   defschema :server_transport,
-    layer: {:required, {:enum, [ServerSTDIO, ServerStreamableHTTP]}},
+    layer: {:required, {:enum, @server_transports}},
     name: {:required, get_schema(:process_name)}
 
   defschema :process_name, {:either, {:pid, {:custom, &genserver_name/1}}}
