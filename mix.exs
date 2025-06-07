@@ -108,6 +108,9 @@ defmodule Hermes.MixProject do
         "pages/installation.md",
         "pages/transport.md",
         "pages/client_usage.md",
+        "pages/server_quickstart.md",
+        "pages/server_components.md",
+        "pages/server_transport.md",
         "pages/message_handling.md",
         "pages/rfc.md",
         "pages/progress_tracking.md",
@@ -123,22 +126,33 @@ defmodule Hermes.MixProject do
         "LICENSE"
       ],
       groups_for_extras: [
-        Guides: [
+        "Getting Started": [
           "pages/home.md",
-          "pages/installation.md",
-          "pages/transport.md",
+          "pages/installation.md"
+        ],
+        "Client Development": [
           "pages/client_usage.md",
+          "pages/transport.md"
+        ],
+        "Server Development": [
+          "pages/server_quickstart.md",
+          "pages/server_components.md",
+          "pages/server_transport.md"
+        ],
+        "Core Concepts": [
           "pages/message_handling.md",
           "pages/error_handling.md",
           "pages/progress_tracking.md",
-          "pages/logging.md",
+          "pages/logging.md"
+        ],
+        Tools: [
           "pages/cli_usage.md"
         ],
         References: [
           "pages/rfc.md",
           "pages/server_implementation_rfc.md",
-          "ROADMAP.md",
-          "pages/protocol_upgrade_2025_03_26.md"
+          "pages/protocol_upgrade_2025_03_26.md",
+          "ROADMAP.md"
         ]
       ]
     ]

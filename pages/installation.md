@@ -1,30 +1,28 @@
-# Installation & Setup
+# Installation
 
-Setting up Hermes MCP for your Elixir project involves a few straightforward steps.
+Add Hermes MCP to your Elixir project.
 
-## Adding the Dependency
+## Add Dependency
 
-Add Hermes MCP to your dependencies in `mix.exs`:
+In `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.4"}
+    {:hermes_mcp, "~> 0.5"} # x-release-please-version
   ]
 end
 ```
 
-Then run:
+Then:
 
 ```shell
 mix deps.get
 ```
 
-## Supervision Tree Integration
+## Client Setup
 
-Hermes MCP is designed to be integrated into your application's supervision tree. This provides robust lifecycle management and automatic recovery in case of failures.
-
-### Basic Integration Example (stdio)
+Add to your supervision tree:
 
 ```elixir
 defmodule MyApp.Application do
@@ -32,36 +30,26 @@ defmodule MyApp.Application do
 
   def start(_type, _args) do
     children = [
-      # Start the MCP transport
+      # Transport layer
       {Hermes.Transport.STDIO, [
         name: MyApp.MCPTransport,
         client: MyApp.MCPClient,
-        command: "mcp",
-        args: ["run", "path/to/server.py"],
-        env: %{"HOME" => "/Users/my-user"}
+        command: "python",
+        args: ["-m", "mcp.server", "my_server.py"]
       ]},
 
-      # Start the MCP client using the transport
+      # MCP client
       {Hermes.Client, [
         name: MyApp.MCPClient,
         transport: [
-          # layer is required
           layer: Hermes.Transport.STDIO,
-          # you can give a custom name
           name: MyApp.MCPTransport
         ],
         client_info: %{
           "name" => "MyApp",
           "version" => "1.0.0"
-        },
-        capabilities: %{
-          "roots" => %{"listChanged" => true},
-          "sampling" => %{}
         }
       ]}
-
-      # Your other application services
-      # ...
     ]
 
     opts = [strategy: :one_for_all, name: MyApp.Supervisor]
@@ -70,19 +58,23 @@ defmodule MyApp.Application do
 end
 ```
 
-## Configuration Options
+## Server Setup
 
-### Client Configuration
+For MCP servers, see [Server Quick Start](server_quickstart.md).
 
-The `Hermes.Client` accepts the following options:
+## Client Options
 
 | Option | Type | Description | Default |
 |--------|------|-------------|---------|
-| `:name` | atom | Registration name for the client process | `__MODULE__` |
-| `:transport` | enumerable | The transport options | Required |
-| `:transport.layer` | module | The transport layer, currently only `Hermes.Transport.STDIO` or `Hermes.Transport.SSE` | Required |
-| `:transport.name` | [GenServer.server](https://hexdocs.pm/elixir/GenServer.html#t:server/0) | An optional custom transport process name | The transport module |
-| `:client_info` | map | Information about the client | Required |
-| `:capabilities` | map | Client capabilities to advertise | `%{"roots" => %{"listChanged" => true}, "sampling" => %{}}` |
-| `:protocol_version` | string | Protocol version to use | `"2024-11-05"` |
-| `:request_timeout` | integer | Default timeout for requests in milliseconds | 30s |
+| `:name` | atom | Process name | Required |
+| `:transport` | keyword | Transport config | Required |
+| `:client_info` | map | Client metadata | Required |
+| `:capabilities` | map | Client capabilities | `%{}` |
+| `:protocol_version` | string | MCP version | `"2025-03-26"` |
+| `:request_timeout` | integer | Timeout (ms) | `30_000` |
+
+## Next Steps
+
+- [Client Usage](client_usage.md) - Using the client
+- [Transport Layer](transport.md) - Transport details
+- [Server Development](server_quickstart.md) - Build servers

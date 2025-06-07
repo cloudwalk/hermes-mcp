@@ -1,158 +1,139 @@
-# Interactive CLI Usage
+# Interactive CLI
 
-Hermes MCP provides interactive command-line interfaces that allow you to directly interact with MCP servers. These CLI tools are useful for:
+Test and debug MCP servers with Hermes interactive CLI.
 
-- Testing and debugging MCP servers
-- Exploring available tools and resources
-- Rapid prototyping and development
-- Diagnostic purposes
+## Available CLIs
 
-## Available CLI Tools
+- **STDIO Interactive** - For local subprocess servers
+- **StreamableHTTP Interactive** - For HTTP/SSE servers  
+- **WebSocket Interactive** - For WebSocket servers
+- **SSE Interactive** - For legacy SSE servers
 
-Hermes provides two built-in interactive CLIs:
+## Quick Start
 
-1. **SSE Interactive**: For connecting to HTTP/SSE MCP servers
-2. **STDIO Interactive**: For connecting to STDIO-based MCP servers
-
-## Starting the CLI
-
-### SSE Interactive
-
-The SSE interactive CLI connects to HTTP-based MCP servers using Server-Sent Events (SSE).
+### STDIO Server
 
 ```shell
-mix hermes.sse.interactive --base-url=https://your-mcp-server.com
+mix hermes.stdio.interactive --command=python --args=-m,mcp.server,my_server.py
 ```
 
-### STDIO Interactive
-
-The STDIO interactive CLI connects to subprocess-based MCP servers using standard input/output.
+### HTTP Server
 
 ```shell
-mix hermes.stdio.interactive --command=path/to/server --args=arg1,arg2
+mix hermes.streamable_http.interactive --base-url=http://localhost:8080
 ```
 
-## Command-Line Options
+### WebSocket Server
 
-Both CLIs support the following common options:
+```shell
+mix hermes.websocket.interactive --base-url=ws://localhost:8081
+```
+
+## Common Options
 
 | Option | Description |
 |--------|-------------|
-| `-h, --help` | Show help message and exit |
-| `-v` | Set log level (accumulating flag) |
-|      | No flag: `:error` level (default) |
-|      | `-v`: `:warning` level |
-|      | `-vv`: `:info` level |
-|      | `-vvv`: `:debug` level |
+| `-h, --help` | Show help |
+| `-v` | Increase verbosity (can stack: `-vvv`) |
 
-### SSE Transport Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--base-url URL` | Base URL for SSE server | http://localhost:8000 |
-| `--base-path PATH` | Base path for the SSE server | / |
-| `--sse-path PATH` | Path for SSE endpoint | /sse |
-
-### STDIO Transport Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-c, --command CMD` | Command to execute | mcp |
-| `--args ARGS` | Comma-separated arguments for the command | run,priv/dev/echo/index.py |
+Verbosity levels:
+- No flag: Errors only
+- `-v`: + Warnings
+- `-vv`: + Info
+- `-vvv`: + Debug
 
 ## Interactive Commands
 
-Once connected, the CLI provides an interactive shell with several commands:
-
 | Command | Description |
 |---------|-------------|
-| `help` | Show list of available commands |
-| `ping` | Send a ping to the server to check connection health |
-| `list_tools` | List available server tools |
-| `call_tool` | Call a server tool with arguments |
-| `list_prompts` | List available server prompts |
-| `get_prompt` | Get a server prompt |
-| `list_resources` | List available server resources |
-| `read_resource` | Read a server resource |
-| `show_state` | Show internal state of client and transport |
-| `initialize` | Retry server connection initialization |
-| `clear` | Clear the screen |
-| `exit` | Exit the interactive session |
-
-### Using the `show_state` Command
-
-The `show_state` command provides detailed information about the internal state of both the client and transport processes. This is particularly useful for debugging connection issues.
-
-```
-mcp> show_state
-```
-
-This will display:
-- Client state information (protocol version, client info, server capabilities, etc.)
-- Transport state (connection details, status)
-- Pending requests (if any)
-
-For more detailed error information, use the `--verbose` flag when starting the CLI or set the `HERMES_VERBOSE=1` environment variable.
+| `help` | Show available commands |
+| `ping` | Check server connection |
+| `list_tools` | List available tools |
+| `call_tool` | Call a tool |
+| `list_prompts` | List prompts |
+| `get_prompt` | Get prompt messages |
+| `list_resources` | List resources |
+| `read_resource` | Read resource content |
+| `show_state` | Debug state info |
+| `clear` | Clear screen |
+| `exit` | Exit CLI |
 
 ## Examples
 
-### Connecting to a Local SSE Server
+### Test Local Server
 
 ```shell
-mix hermes.sse.interactive
-```
+# Start interactive session
+mix hermes.stdio.interactive --command=./my-server
 
-### Connecting to a Remote SSE Server
-
-```shell
-mix hermes.sse.interactive --base-url=https://remote-server.example.com --verbose
-```
-
-### Running a Local MCP Server with STDIO
-
-```shell
-mix hermes.stdio.interactive --command=./my-mcp-server --args=arg1,arg2
-```
-
-### Checking Server Connection
-
-```
+# In the CLI
 mcp> ping
-# Shows if the server is responding with a pong
-```
+pong
 
-### Calling a Tool
-
-```
 mcp> list_tools
-# Lists available tools
+Available tools:
+- calculator: Perform calculations
+- file_reader: Read files
 
 mcp> call_tool
 Tool name: calculator
-Tool arguments (JSON): {"operation": "+", "a": 1, "b": 2}
-# Returns: 3
+Tool arguments (JSON): {"operation": "add", "a": 5, "b": 3}
+Result: 8
 ```
 
-### Advanced Debugging
+### Debug Connection
 
 ```shell
-# Basic error-only logging (default)
-mix hermes.sse.interactive
+# Verbose mode
+mix hermes.streamable_http.interactive -vvv --base-url=http://api.example.com
 
-# Warning-level logging
-mix hermes.sse.interactive -v
-
-# Info-level logging
-mix hermes.sse.interactive -vv
-
-# Debug-level (most verbose) logging
-mix hermes.sse.interactive -vvv
+mcp> show_state
+Client State:
+  Protocol: 2025-03-26
+  Initialized: true
+  Capabilities: %{"tools" => %{}}
+  
+Transport State:
+  Type: StreamableHTTP
+  URL: http://api.example.com
+  Connected: true
 ```
 
-The verbosity level controls which log messages are displayed:
-- Default (no flags): Only errors are shown
-- `-v`: Errors and warnings are shown
-- `-vv`: Errors, warnings, and info messages are shown
-- `-vvv`: All messages including debug details are shown
+### Test Tool Execution
 
-Use the `show_state` command to see detailed internal state information, or examine extended error information when initialization fails.
+```
+mcp> list_tools
+mcp> call_tool
+Tool name: search
+Tool arguments (JSON): {"query": "elixir"}
+```
+
+## Transport-Specific Options
+
+### STDIO
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--command` | Command to run | `mcp` |
+| `--args` | Comma-separated args | none |
+
+### StreamableHTTP
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--base-url` | Server URL | `http://localhost:8080` |
+| `--base-path` | Base path | `/` |
+
+### WebSocket
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--base-url` | WebSocket URL | `ws://localhost:8081` |
+| `--ws-path` | WebSocket path | `/ws` |
+
+## Tips
+
+1. Use `-vvv` for debugging connection issues
+2. `show_state` reveals internal state
+3. JSON arguments must be valid JSON
+4. Exit with `exit` or Ctrl+C
