@@ -112,12 +112,8 @@ defmodule Hermes.Server.Session do
 
       iex> client_info = %{"name" => "hello", "version" => "1.0.0"}
       iex> capabilities = %{"sampling" => %{}}
-      iex> params = %{"protocolVersion" => "2025-03-26", "capabilities" => capabilities, "clientInfo" => client_info}
-      iex> updated_state = Hermes.Server.Base.State.update_from_initialization(state, params)
-      iex> updated_state.initialized
-      true
-      iex> updated_state.protocol_version
-      "2025-03-26"
+      iex> Hermes.Server.Session.update_from_initialization(session, "2025-03-26", client_info, capabilities)
+      :ok
   """
   @spec update_from_initialization(GenServer.name(), String.t(), map, map) :: :ok
   def update_from_initialization(session, negotiated_version, client_info, capabilities) do

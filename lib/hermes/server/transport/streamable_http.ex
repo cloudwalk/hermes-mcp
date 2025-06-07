@@ -1,5 +1,59 @@
 defmodule Hermes.Server.Transport.StreamableHTTP do
-  @moduledoc false
+  @moduledoc """
+  StreamableHTTP transport implementation for MCP servers.
+
+  This module provides an HTTP-based transport layer that supports multiple
+  concurrent client sessions through Server-Sent Events (SSE). It enables
+  web-based MCP clients to communicate with the server using standard HTTP
+  protocols.
+
+  ## Architecture
+
+  The StreamableHTTP transport consists of three main components:
+
+  1. **Transport Process** (this module) - Manages SSE connections and routes
+     messages between clients and the server
+  2. **Plug Module** (`Hermes.Server.Transport.StreamableHTTP.Plug`) - Handles
+     HTTP endpoints for SSE connections and message submission
+  3. **Supervisor** (`Hermes.Server.Transport.StreamableHTTP.Supervisor`) -
+     Manages the Plug.Cowboy server lifecycle
+
+  ## Features
+
+  - Multiple concurrent client sessions
+  - Server-Sent Events for real-time server-to-client communication
+  - HTTP POST endpoint for client-to-server messages
+  - Automatic session cleanup on disconnect
+  - Integration with Phoenix/Plug applications
+
+  ## Usage
+
+  StreamableHTTP is typically started through the server supervisor:
+
+      Hermes.Server.start_link(MyServer, [],
+        transport: :streamable_http,
+        streamable_http: [port: 4000]
+      )
+
+  For integration with existing Phoenix/Plug applications:
+
+      # In your router
+      forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug,
+        server: MyApp.MCPServer
+
+  ## Message Flow
+
+  1. Client connects to `/sse` endpoint, receives a session ID
+  2. Client sends messages via POST to `/messages` with session ID header
+  3. Server responses are pushed through the SSE connection
+  4. Connection closes on client disconnect or server shutdown
+
+  ## Configuration
+
+  - `:port` - HTTP server port (default: 4000)
+  - `:server` - The MCP server process to connect to
+  - `:name` - Process registration name
+  """
 
   @behaviour Hermes.Transport.Behaviour
 

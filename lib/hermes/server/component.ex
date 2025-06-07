@@ -212,6 +212,22 @@ defmodule Hermes.Server.Component do
 
   @doc """
   Extracts the description from a component module's moduledoc.
+
+  ## Parameters
+    * `module` - The component module atom
+
+  ## Returns
+    * The module's `@moduledoc` content as a string
+    * Empty string if no moduledoc is defined
+
+  ## Examples
+
+      iex> defmodule MyTool do
+      ...>   @moduledoc "A helpful tool"
+      ...>   use Hermes.Server.Component, type: :tool
+      ...> end
+      iex> Hermes.Server.Component.get_description(MyTool)
+      "A helpful tool"
   """
   def get_description(module) when is_atom(module) do
     if function_exported?(module, :__description__, 0) do
@@ -223,6 +239,22 @@ defmodule Hermes.Server.Component do
 
   @doc """
   Gets the component type (:tool, :prompt, or :resource).
+
+  ## Parameters
+    * `module` - The component module atom
+
+  ## Returns
+    * `:tool` - If the module is a tool component
+    * `:prompt` - If the module is a prompt component
+    * `:resource` - If the module is a resource component
+
+  ## Examples
+
+      iex> defmodule MyTool do
+      ...>   use Hermes.Server.Component, type: :tool
+      ...> end
+      iex> Hermes.Server.Component.get_type(MyTool)
+      :tool
   """
   def get_type(module) when is_atom(module) do
     module.__mcp_component_type__()
@@ -230,6 +262,27 @@ defmodule Hermes.Server.Component do
 
   @doc """
   Checks if a module is a valid component.
+
+  ## Parameters
+    * `module` - The module atom to check
+
+  ## Returns
+    * `true` if the module uses `Hermes.Server.Component`
+    * `false` otherwise
+
+  ## Examples
+
+      iex> defmodule MyTool do
+      ...>   use Hermes.Server.Component, type: :tool
+      ...> end
+      iex> Hermes.Server.Component.component?(MyTool)
+      true
+
+      iex> defmodule NotAComponent do
+      ...>   def hello, do: :world
+      ...> end
+      iex> Hermes.Server.Component.component?(NotAComponent)
+      false
   """
   def component?(module) when is_atom(module) do
     not is_nil(get_type(module))

@@ -77,7 +77,7 @@ defmodule Hermes.Server.Base do
           supported_versions: list(String.t()),
           transport: [layer: module, name: GenServer.name()],
           init_arg: term,
-          sessions: %{required(String.t()) => GenServer.name()}
+          sessions: %{required(String.t()) => {GenServer.name(), reference()}}
         }
 
   @typedoc """
@@ -262,33 +262,30 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
-    # Find which session_id corresponds to this pid
-    session_id =
-      Enum.find_value(state.sessions, fn {id, name} ->
-        case Registry.whereis_server_session(state.module, id) do
-          ^pid -> id
-          _ -> nil
-        end
+  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+    session_entry =
+      Enum.find(state.sessions, fn
+        {_id, {_name, ^ref}} -> true
+        _ -> false
       end)
 
-    if session_id do
-      Logging.server_event("session_terminated", %{session_id: session_id, reason: reason})
+    case session_entry do
+      {session_id, _} ->
+        Logging.server_event("session_terminated", %{session_id: session_id, reason: reason})
 
-      # Remove session from map
-      sessions = Map.delete(state.sessions, session_id)
+        sessions = Map.delete(state.sessions, session_id)
 
-      # Clear session data from frame only if this was the current session
-      frame =
-        if state.frame.private[:session_id] == session_id do
-          Frame.clear_session(state.frame)
-        else
-          state.frame
-        end
+        frame =
+          if state.frame.private[:session_id] == session_id do
+            Frame.clear_session(state.frame)
+          else
+            state.frame
+          end
 
-      {:noreply, %{state | sessions: sessions, frame: frame}}
-    else
-      {:noreply, state}
+        {:noreply, %{state | sessions: sessions, frame: frame}}
+
+      nil ->
+        {:noreply, state}
     end
   end
 
@@ -479,7 +476,8 @@ defmodule Hermes.Server.Base do
 
   @spec maybe_attach_session(session_id :: String.t(), t) :: {:ok, {session :: Session.t(), t}}
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    session = Session.get(sessions[session_id])
+    {session_name, _ref} = sessions[session_id]
+    session = Session.get(session_name)
     frame = populate_frame_private(state.frame, session)
     {:ok, {session, %{state | frame: frame}}}
   end
@@ -490,16 +488,16 @@ defmodule Hermes.Server.Base do
     case SessionSupervisor.create_session(state.module, session_id) do
       {:ok, pid} ->
         # Monitor the session process
-        Process.monitor(pid)
-        state = %{state | sessions: Map.put(sessions, session_id, session_name)}
+        ref = Process.monitor(pid)
+        state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)
         frame = populate_frame_private(state.frame, session)
         {:ok, {session, %{state | frame: frame}}}
 
       {:error, {:already_started, pid}} ->
         # Session already exists, monitor it if not already
-        Process.monitor(pid)
-        state = %{state | sessions: Map.put(sessions, session_id, session_name)}
+        ref = Process.monitor(pid)
+        state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)
         frame = populate_frame_private(state.frame, session)
         {:ok, {session, %{state | frame: frame}}}

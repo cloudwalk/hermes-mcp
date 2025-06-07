@@ -22,7 +22,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
       scope "/mcp" do
         pipe_through :mcp
-        forward "/", to: Hermes.Server.Transport.StreamableHTTP.Plug, init_opts: [server: :your_server_name]
+        forward "/", to: Hermes.Server.Transport.StreamableHTTP.Plug, server: :your_server_name
       end
 
   ## Usage in Plug Router
