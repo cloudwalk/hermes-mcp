@@ -344,7 +344,7 @@ defmodule Hermes.Server.Base do
     Logging.server_event("client_initialized", %{session_id: session.id})
     :ok = Session.mark_initialized(session.name)
     Logging.server_event("session_marked_initialized", %{session_id: session.id, initialized: true})
-    {:noreply, state}
+    {:noreply, %{state | frame: %{state.frame | initialized: true}}}
   end
 
   defp handle_notification(%{"method" => "notifications/cancelled"} = notification, _session, state) do

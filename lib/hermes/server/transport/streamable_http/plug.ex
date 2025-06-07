@@ -114,13 +114,14 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
   defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
     with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
-         {:ok, messages} <- maybe_parse_messages(body) do
+         {:ok, [messages]} <- maybe_parse_messages(body) do
       session_id = determine_session_id(conn, session_header, messages)
 
-      if Enum.any?(messages, &Message.is_request/1) do
-        handle_request_with_possible_sse(conn, transport, session_id, body, session_header)
+      # if Enum.any?(messages, &Message.is_request/1) do
+      if Message.is_request(messages) do
+        handle_request_with_possible_sse(conn, transport, session_id, messages, session_header)
       else
-        case StreamableHTTP.handle_message(transport, session_id, body) do
+        case StreamableHTTP.handle_message(transport, session_id, messages) do
           {:ok, _} ->
             conn
             |> put_resp_content_type("application/json")
@@ -188,15 +189,14 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   end
 
   defp handle_json_request(conn, transport, session_id, body, session_header) do
-    case StreamableHTTP.handle_message(transport, session_id, body) do
-      {:ok, response} when is_binary(response) ->
-        conn
-        |> put_resp_content_type("application/json")
-        |> maybe_add_session_header(session_header, session_id)
-        |> send_resp(200, response)
-
-      {:error, error} ->
-        handle_request_error(conn, error, body)
+    with {:ok, [messages]} <- maybe_parse_messages(body),
+         {:ok, response} <- StreamableHTTP.handle_message(transport, session_id, messages) do
+      conn
+      |> put_resp_content_type("application/json")
+      |> maybe_add_session_header(session_header, session_id)
+      |> send_resp(200, response)
+    else
+      {:error, error} -> handle_request_error(conn, error, body)
     end
   end
 
@@ -351,6 +351,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     |> put_resp_content_type("application/json")
     |> send_resp(400, encoded_error)
   end
+
+  defp extract_request_id(%{"id" => request_id}), do: request_id
+  defp extract_request_id(request) when is_map(request), do: nil
 
   defp extract_request_id(body) when is_binary(body) do
     case Message.decode(body) do

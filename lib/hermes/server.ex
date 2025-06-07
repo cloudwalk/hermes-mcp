@@ -50,6 +50,9 @@ defmodule Hermes.Server do
   - "2024-05-11" - Legacy version for backward compatibility
   """
 
+  alias Hermes.MCP.Error
+  alias Hermes.Server.Component
+  alias Hermes.Server.Component.Schema
   alias Hermes.Server.ConfigurationError
 
   @server_capabilities ~w(prompts tools resources logging)a
@@ -114,11 +117,13 @@ defmodule Hermes.Server do
     quote do
       @behaviour Hermes.Server.Behaviour
 
+      import Hermes.Server, only: [component: 1, component: 2]
       import Hermes.Server.Frame
 
-      alias Hermes.MCP.Message
+      require Hermes.MCP.Message
 
-      require Message
+      Module.register_attribute(__MODULE__, :components, accumulate: true)
+      @before_compile Hermes.Server
 
       def child_spec(opts) do
         %{
@@ -140,7 +145,10 @@ defmodule Hermes.Server do
       @impl Hermes.Server.Behaviour
       def supported_protocol_versions, do: unquote(protocol_versions)
 
-      defoverridable server_info: 0, server_capabilities: 0, supported_protocol_versions: 0, child_spec: 1
+      defoverridable server_info: 0,
+                     server_capabilities: 0,
+                     supported_protocol_versions: 0,
+                     child_spec: 1
     end
   end
 
@@ -164,5 +172,184 @@ defmodule Hermes.Server do
     capabilities
     |> Map.put(to_string(capability), %{})
     |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :subscribe, list_changed?)))
+  end
+
+  @doc """
+  Registers a component (tool, prompt, or resource) with the server.
+
+  ## Examples
+
+      # Register with auto-derived name
+      component MyServer.Tools.Calculator
+      
+      # Register with custom name
+      component MyServer.Tools.FileManager, name: "files"
+  """
+  defmacro component(module, opts \\ []) do
+    quote bind_quoted: [module: module, opts: opts] do
+      if not Component.component?(module) do
+        raise CompileError,
+          description:
+            "Module #{to_string(module)} is not a valid component. " <>
+              "Use `use Hermes.Server.Component, type: :tool/:prompt/:resource`"
+      end
+
+      @components {Component.get_type(module), opts[:name] || Hermes.Server.__derive_component_name__(module), module}
+    end
+  end
+
+  @doc false
+  def __derive_component_name__(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+  end
+
+  @doc false
+  defmacro __before_compile__(env) do
+    components = Module.get_attribute(env.module, :components, [])
+
+    tools = for {:tool, name, mod} <- components, do: {name, mod}
+    prompts = for {:prompt, name, mod} <- components, do: {name, mod}
+    resources = for {:resource, name, mod} <- components, do: {name, mod}
+
+    quote do
+      def __components__(:tool), do: unquote(Macro.escape(tools))
+      def __components__(:prompt), do: unquote(Macro.escape(prompts))
+      def __components__(:resource), do: unquote(Macro.escape(resources))
+      def __components__(_), do: []
+
+      @impl Hermes.Server.Behaviour
+      def handle_request(request, frame) do
+        Hermes.Server.__default_handle_request__(request, frame, __MODULE__)
+      end
+
+      defoverridable handle_request: 2
+    end
+  end
+
+  @doc false
+  def __default_handle_request__(%{"method" => "tools/list"}, frame, server_module) do
+    {:reply,
+     %{
+       "tools" =>
+         for {name, module} <- server_module.__components__(:tool) do
+           %{
+             "name" => name,
+             "description" => Component.get_description(module),
+             "inputSchema" => module.input_schema()
+           }
+         end
+     }, frame}
+  end
+
+  def __default_handle_request__(%{"method" => "tools/call", "params" => params}, frame, server_module) do
+    with %{"name" => tool_name, "arguments" => args} <- params,
+         {_name, module} <- find_component(server_module.__components__(:tool), tool_name) do
+      call_tool(module, args, frame)
+    else
+      nil ->
+        {:error, Error.invalid_params(%{message: "Tool not found: #{params["name"]}"}), frame}
+
+      {:error, reason} ->
+        {:error, Error.invalid_params(reason), frame}
+
+      {:error, reason, new_frame} ->
+        {:error, Error.invalid_params(reason), new_frame}
+    end
+  end
+
+  def __default_handle_request__(%{"method" => "prompts/list"}, frame, server_module) do
+    {:reply,
+     %{
+       "prompts" =>
+         for {name, module} <- server_module.__components__(:prompt) do
+           %{
+             "name" => name,
+             "description" => Component.get_description(module),
+             "arguments" => module.arguments()
+           }
+         end
+     }, frame}
+  end
+
+  def __default_handle_request__(%{"method" => "prompts/get", "params" => params}, frame, server_module) do
+    with %{"name" => prompt_name, "arguments" => args} <- params,
+         {_name, module} <- find_component(server_module.__components__(:prompt), prompt_name) do
+      get_prompt_messages(module, args, frame)
+    else
+      nil ->
+        {:error, Error.invalid_params(%{message: "Prompt not found: #{params["name"]}"}), frame}
+
+      {:error, reason} ->
+        {:error, Error.invalid_params(reason), frame}
+
+      {:error, reason, new_frame} ->
+        {:error, Error.invalid_params(reason), new_frame}
+    end
+  end
+
+  def __default_handle_request__(%{"method" => "resources/list"}, frame, server_module) do
+    {:reply,
+     %{
+       "resources" =>
+         for {_name, module} <- server_module.__components__(:resource) do
+           %{
+             "uri" => module.uri(),
+             "name" => Component.get_description(module),
+             "mimeType" => module.mime_type()
+           }
+         end
+     }, frame}
+  end
+
+  def __default_handle_request__(%{"method" => "resources/read", "params" => params}, frame, server_module) do
+    with %{"uri" => uri} <- params,
+         module when not is_nil(module) <- find_resource_by_uri(server_module.__components__(:resource), uri) do
+      read_resource(module, params, frame)
+    else
+      nil ->
+        {:error, Error.invalid_params(%{message: "Resource not found: #{params["uri"]}"}), frame}
+
+      {:error, reason} ->
+        {:error, Error.invalid_params(reason), frame}
+
+      {:error, reason, new_frame} ->
+        {:error, Error.invalid_params(reason), new_frame}
+    end
+  end
+
+  def __default_handle_request__(_request, frame, _server_module) do
+    {:error, Error.method_not_found(), frame}
+  end
+
+  defp find_component(components, name) do
+    Enum.find(components, fn {n, _} -> n == name end)
+  end
+
+  defp find_resource_by_uri(components, uri) do
+    case Enum.find(components, fn {_name, module} -> module.uri() == uri end) do
+      {_name, module} -> module
+      nil -> nil
+    end
+  end
+
+  defp call_tool(module, args, frame) do
+    case module.mcp_schema(args) do
+      {:ok, args} -> module.execute(args, frame)
+      {:error, errors} -> {:error, Error.invalid_request(%{message: Schema.format_errors(errors)}), frame}
+    end
+  end
+
+  defp get_prompt_messages(module, args, frame) do
+    case module.mcp_schema(args) do
+      {:ok, args} -> module.get_messages(args, frame)
+      {:error, errors} -> {:error, Error.invalid_request(%{message: Schema.format_errors(errors)}), frame}
+    end
+  end
+
+  defp read_resource(module, params, frame) do
+    module.read(params, frame)
   end
 end

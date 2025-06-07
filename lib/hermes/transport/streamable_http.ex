@@ -144,13 +144,9 @@ defmodule Hermes.Transport.StreamableHTTP do
 
     new_state = %{state | active_request: from}
 
-    # Add timeout tracking
-    start_time = System.monotonic_time(:millisecond)
-
     case send_http_request(new_state, message) do
       {:ok, response} ->
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        Logging.transport_event("got_http_response", %{status: response.status, elapsed_ms: elapsed})
+        Logging.transport_event("got_http_response", %{status: response.status})
         handle_response(response, new_state)
 
       {:error, {:http_error, 404, _body}} when not is_nil(state.session_id) ->
@@ -159,8 +155,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:reply, {:error, :session_expired}, %{state | session_id: nil}}
 
       {:error, reason} ->
-        elapsed = System.monotonic_time(:millisecond) - start_time
-        Logging.transport_event("http_request_error", %{reason: inspect(reason), elapsed_ms: elapsed}, level: :error)
+        Logging.transport_event("http_request_error", %{reason: inspect(reason)}, level: :error)
         log_error(reason)
         {:reply, {:error, reason}, state}
     end

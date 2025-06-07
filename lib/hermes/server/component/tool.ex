@@ -62,20 +62,6 @@ defmodule Hermes.Server.Component.Tool do
   @type schema :: map()
 
   @doc """
-  Returns the unique name of the tool.
-
-  This name is used by clients to invoke the tool.
-  """
-  @callback name() :: String.t()
-
-  @doc """
-  Returns a human-readable description of the tool.
-
-  This should clearly explain what the tool does and when to use it.
-  """
-  @callback description() :: String.t()
-
-  @doc """
   Returns the JSON Schema for the tool's input parameters.
 
   This schema is used to validate client requests and generate documentation.
@@ -115,8 +101,7 @@ defmodule Hermes.Server.Component.Tool do
       end
   """
   @callback execute(params :: params(), frame :: Frame.t()) ::
-              {:ok, result :: result()}
-              | {:ok, result :: result(), new_frame :: Frame.t()}
+              {:ok, result :: result(), new_frame :: Frame.t()}
               | {:error, reason :: String.t()}
 
   @doc """

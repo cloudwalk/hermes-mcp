@@ -882,7 +882,6 @@ defmodule Hermes.Client do
 
       {:error, error} ->
         Logging.client_event("decode_failed", %{error: error}, level: :warning)
-
         {:noreply, state}
     end
   rescue
@@ -1058,23 +1057,12 @@ defmodule Hermes.Client do
       {nil, state} ->
         state
 
-      {_request, updated_state} ->
-        # Update server info in state
-        updated_state =
-          State.update_server_info(
-            updated_state,
-            result["capabilities"],
-            result["serverInfo"]
-          )
+      {_request, state} ->
+        state = State.update_server_info(state, result["capabilities"], result["serverInfo"])
+        Logging.client_event("initialized", %{server_info: result["serverInfo"], capabilities: result["capabilities"]})
+        :ok = send_notification(state, "notifications/initialized")
 
-        Logging.client_event("initialized", %{
-          server_info: result["serverInfo"],
-          capabilities: result["capabilities"]
-        })
-
-        :ok = send_notification(updated_state, "notifications/initialized")
-
-        updated_state
+        state
     end
   end
 

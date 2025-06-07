@@ -85,18 +85,6 @@ defmodule Hermes.Server.Component.Prompt do
         }
 
   @doc """
-  Returns the unique name of the prompt.
-
-  This name is used by clients to reference the prompt.
-  """
-  @callback name() :: String.t()
-
-  @doc """
-  Returns a human-readable description of what the prompt does.
-  """
-  @callback description() :: String.t()
-
-  @doc """
   Returns the list of arguments this prompt accepts.
 
   Each argument should include:
@@ -150,8 +138,7 @@ defmodule Hermes.Server.Component.Prompt do
   Multiple messages can be returned to create a conversation context.
   """
   @callback get_messages(args :: arguments(), frame :: Frame.t()) ::
-              {:ok, messages :: [message()]}
-              | {:ok, messages :: [message()], new_frame :: Frame.t()}
+              {:ok, messages :: [message()], new_frame :: Frame.t()}
               | {:error, reason :: String.t()}
 
   @doc """

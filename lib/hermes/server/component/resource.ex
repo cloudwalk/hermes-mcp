@@ -87,16 +87,6 @@ defmodule Hermes.Server.Component.Resource do
   @callback uri() :: String.t()
 
   @doc """
-  Returns a human-readable name for the resource.
-  """
-  @callback name() :: String.t()
-
-  @doc """
-  Returns a description of the resource's contents.
-  """
-  @callback description() :: String.t()
-
-  @doc """
   Returns the MIME type of the resource content.
 
   Common MIME types:
@@ -130,8 +120,7 @@ defmodule Hermes.Server.Component.Resource do
   - For JSON, return the JSON-encoded string
   """
   @callback read(params :: params(), frame :: Frame.t()) ::
-              {:ok, content :: content()}
-              | {:ok, content :: content(), new_frame :: Frame.t()}
+              {:ok, content :: content(), new_frame :: Frame.t()}
               | {:error, reason :: String.t()}
 
   @doc """
