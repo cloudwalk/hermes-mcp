@@ -2,6 +2,7 @@ defmodule Upcase.Prompts.TextTransform do
   @moduledoc "Generate prompts for various text transformation requests"
 
   use Hermes.Server.Component, type: :prompt
+  alias Hermes.Server.Response
 
   schema do
     %{
@@ -31,16 +32,9 @@ defmodule Upcase.Prompts.TextTransform do
         ""
       end
 
-    messages = [
-      %{
-        "role" => "user",
-        "content" => %{
-          "type" => "text",
-          "text" => base_message <> explanation
-        }
-      }
-    ]
-
-    {:reply, %{"messages" => messages}, frame}
+    {:reply,
+     Response.prompt()
+     |> Response.user_message(base_message <> explanation)
+     |> Response.build(), frame}
   end
 end

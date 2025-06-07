@@ -350,6 +350,25 @@ defmodule Hermes.Server do
   end
 
   defp read_resource(module, params, frame) do
-    module.read(params, frame)
+    case module.read(params, frame) do
+      {:reply, %{"text" => _} = content, new_frame} ->
+        response =
+          content
+          |> Map.put("uri", module.uri())
+          |> Map.put("mimeType", module.mime_type())
+
+        {:reply, response, new_frame}
+
+      {:reply, %{"blob" => _} = content, new_frame} ->
+        response =
+          content
+          |> Map.put("uri", module.uri())
+          |> Map.put("mimeType", module.mime_type())
+
+        {:reply, response, new_frame}
+
+      other ->
+        other
+    end
   end
 end

@@ -262,6 +262,37 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
+  def handle_info({:DOWN, _ref, :process, pid, reason}, state) do
+    # Find which session_id corresponds to this pid
+    session_id =
+      Enum.find_value(state.sessions, fn {id, name} ->
+        case Registry.whereis_server_session(state.module, id) do
+          ^pid -> id
+          _ -> nil
+        end
+      end)
+
+    if session_id do
+      Logging.server_event("session_terminated", %{session_id: session_id, reason: reason})
+
+      # Remove session from map
+      sessions = Map.delete(state.sessions, session_id)
+
+      # Clear session data from frame only if this was the current session
+      frame =
+        if state.frame.private[:session_id] == session_id do
+          Frame.clear_session(state.frame)
+        else
+          state.frame
+        end
+
+      {:noreply, %{state | sessions: sessions, frame: frame}}
+    else
+      {:noreply, state}
+    end
+  end
+
+  @impl GenServer
   def terminate(reason, %{server_info: server_info}) do
     Logging.server_event("terminating", %{reason: reason, server_info: server_info})
 
@@ -335,7 +366,14 @@ defmodule Hermes.Server.Base do
       %{id: request_id, method: method}
     )
 
-    server_request(request, state)
+    frame =
+      Frame.put_request(state.frame, %{
+        id: request_id,
+        method: method,
+        params: request["params"] || %{}
+      })
+
+    server_request(request, %{state | frame: frame})
   end
 
   # Notification handling
@@ -392,6 +430,7 @@ defmodule Hermes.Server.Base do
           %{id: request_id, method: method, status: :success}
         )
 
+        frame = Frame.clear_request(frame)
         {:reply, encode_response(response, request_id), %{state | frame: frame}}
 
       {:noreply, %Frame{} = frame} ->
@@ -401,6 +440,7 @@ defmodule Hermes.Server.Base do
           %{id: request_id, method: method, status: :noreply}
         )
 
+        frame = Frame.clear_request(frame)
         {:reply, {:ok, nil}, %{state | frame: frame}}
 
       {:error, %Error{} = error, %Frame{} = frame} ->
@@ -416,6 +456,7 @@ defmodule Hermes.Server.Base do
           %{id: request_id, method: method, error: error}
         )
 
+        frame = Frame.clear_request(frame)
         {:reply, {:ok, Error.to_json_rpc!(error, request_id)}, %{state | frame: frame}}
     end
   end
@@ -438,25 +479,43 @@ defmodule Hermes.Server.Base do
 
   @spec maybe_attach_session(session_id :: String.t(), t) :: {:ok, {session :: Session.t(), t}}
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    {:ok, {Session.get(sessions[session_id]), state}}
+    session = Session.get(sessions[session_id])
+    frame = populate_frame_private(state.frame, session)
+    {:ok, {session, %{state | frame: frame}}}
   end
 
   defp maybe_attach_session(session_id, %{sessions: sessions} = state) do
-    session = Registry.server_session(state.module, session_id)
+    session_name = Registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(state.module, session_id) do
-      {:ok, _} ->
-        state = %{state | sessions: Map.put(sessions, session_id, session)}
-        {:ok, {Session.get(session), state}}
+      {:ok, pid} ->
+        # Monitor the session process
+        Process.monitor(pid)
+        state = %{state | sessions: Map.put(sessions, session_id, session_name)}
+        session = Session.get(session_name)
+        frame = populate_frame_private(state.frame, session)
+        {:ok, {session, %{state | frame: frame}}}
 
-      {:error, {:already_started, _}} ->
-        # Session already exists, just use it
-        state = %{state | sessions: Map.put(sessions, session_id, session)}
-        {:ok, {Session.get(session), state}}
+      {:error, {:already_started, pid}} ->
+        # Session already exists, monitor it if not already
+        Process.monitor(pid)
+        state = %{state | sessions: Map.put(sessions, session_id, session_name)}
+        session = Session.get(session_name)
+        frame = populate_frame_private(state.frame, session)
+        {:ok, {session, %{state | frame: frame}}}
 
       error ->
         error
     end
+  end
+
+  defp populate_frame_private(frame, %Session{} = session) do
+    Frame.put_private(frame, %{
+      session_id: session.id,
+      client_info: session.client_info,
+      client_capabilities: session.client_capabilities,
+      protocol_version: session.protocol_version
+    })
   end
 
   defp negotiate_protocol_version([latest | _] = supported_versions, requested_version) do

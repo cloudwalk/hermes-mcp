@@ -13,6 +13,7 @@ defmodule Upcase.Server do
   end
 
   component(Upcase.Tools.Upcase)
+  component(Upcase.Tools.AnalyzeText)
   component(Upcase.Prompts.TextTransform)
   component(Upcase.Resources.Examples)
 

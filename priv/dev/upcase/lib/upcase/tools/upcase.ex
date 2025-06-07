@@ -2,6 +2,7 @@ defmodule Upcase.Tools.Upcase do
   @moduledoc "Converts text to upcase"
 
   use Hermes.Server.Component, type: :tool
+  alias Hermes.Server.Response
 
   schema do
     %{text: {:required, :string}}
@@ -9,18 +10,9 @@ defmodule Upcase.Tools.Upcase do
 
   @impl true
   def execute(%{text: text}, frame) do
-    upcased_text = String.upcase(text)
-
-    response = %{
-      "content" => [
-        %{
-          "type" => "text",
-          "text" => upcased_text
-        }
-      ],
-      "isError" => false
-    }
-
-    {:reply, response, frame}
+    {:reply,
+     Response.tool()
+     |> Response.text(String.upcase(text))
+     |> Response.build(), frame}
   end
 end
