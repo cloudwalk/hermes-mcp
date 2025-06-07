@@ -227,7 +227,7 @@ defmodule Hermes.Server.Base do
           handle_request(decoded, session, state)
 
         true ->
-          error = Error.invalid_request(%{data: %{message: "Expected request but got different message type"}})
+          error = Error.protocol(:invalid_request, %{message: "Expected request but got different message type"})
           {:reply, {:error, error}, state}
       end
     end
@@ -307,7 +307,7 @@ defmodule Hermes.Server.Base do
   end
 
   defp handle_server_not_initialized(state) do
-    error = Error.invalid_request(%{data: %{message: "Server not initialized"}})
+    error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
 
     Logging.server_event(
       "request_error",
@@ -315,7 +315,7 @@ defmodule Hermes.Server.Base do
       level: :warning
     )
 
-    {:reply, {:ok, Error.to_json_rpc!(error)}, state}
+    {:reply, Error.to_json_rpc(error), state}
   end
 
   # Request handling
@@ -454,7 +454,7 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, {:ok, Error.to_json_rpc!(error, request_id)}, %{state | frame: frame}}
+        {:reply, Error.to_json_rpc(request_id), %{state | frame: frame}}
     end
   end
 
@@ -538,12 +538,12 @@ defmodule Hermes.Server.Base do
   end
 
   defp send_to_transport(nil, _data) do
-    {:error, Error.transport_error(:no_transport, %{data: %{message: "No transport configured"}})}
+    {:error, Error.transport(:no_transport, %{message: "No transport configured"})}
   end
 
   defp send_to_transport(%{layer: layer, name: name}, data) do
     with {:error, reason} <- layer.send_message(name, data) do
-      {:error, Error.transport_error(:send_failure, %{original_reason: reason})}
+      {:error, Error.transport(:send_failure, %{original_reason: reason})}
     end
   end
 end

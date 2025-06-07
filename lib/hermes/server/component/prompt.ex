@@ -75,7 +75,9 @@ defmodule Hermes.Server.Component.Prompt do
       end
   """
 
+  alias Hermes.MCP.Error
   alias Hermes.Server.Frame
+  alias Hermes.Server.Response
 
   @type arguments :: map()
   @type message :: map()
@@ -138,8 +140,9 @@ defmodule Hermes.Server.Component.Prompt do
   Multiple messages can be returned to create a conversation context.
   """
   @callback get_messages(args :: arguments(), frame :: Frame.t()) ::
-              {:ok, messages :: [message()], new_frame :: Frame.t()}
-              | {:error, reason :: String.t()}
+              {:reply, response :: Response.t(), new_state :: Frame.t()}
+              | {:noreply, new_state :: Frame.t()}
+              | {:error, error :: Error.t(), new_state :: Frame.t()}
 
   @doc """
   Converts a prompt module into the MCP protocol format.

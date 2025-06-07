@@ -87,7 +87,7 @@ defmodule Ascii.MCPServer do
       ) do
     case Map.get(args, "text") do
       nil ->
-        {:error, Error.invalid_params(%{message: "Missing required parameter: text"}), state}
+        {:error, Error.protocol(:invalid_params, %{message: "Missing required parameter: text"}), state}
 
       text when is_binary(text) ->
         font = Map.get(args, "font", "standard")
@@ -115,11 +115,11 @@ defmodule Ascii.MCPServer do
             {:reply, response, state}
 
           {:error, reason} ->
-            {:error, Error.invalid_params(%{message: "Failed to generate art: #{reason}"}), state}
+            {:error, Error.execution("Failed to generate art: #{reason}"), state}
         end
 
       _ ->
-        {:error, Error.invalid_params(%{message: "Parameter 'text' must be a string"}), state}
+        {:error, Error.protocol(:invalid_params, %{message: "Parameter 'text' must be a string"}), state}
     end
   end
 
@@ -153,7 +153,7 @@ defmodule Ascii.MCPServer do
       ) do
     case Map.get(args, "text") do
       nil ->
-        {:error, Error.invalid_params(%{message: "Missing required parameter: text"}), state}
+        {:error, Error.protocol(:invalid_params, %{message: "Missing required parameter: text"}), state}
 
       text when is_binary(text) ->
         width = Map.get(args, "width", 60)
@@ -173,13 +173,13 @@ defmodule Ascii.MCPServer do
         {:reply, response, state}
 
       _ ->
-        {:error, Error.invalid_params(%{message: "Parameter 'text' must be a string"}), state}
+        {:error, Error.protocol(:invalid_params, %{message: "Parameter 'text' must be a string"}), state}
     end
   end
 
   @impl true
   def handle_request(request, state) do
-    {:error, Error.method_not_found(%{method: request["method"]}), state}
+    {:error, Error.protocol(:method_not_found, %{method: request["method"]}), state}
   end
 
   @impl true

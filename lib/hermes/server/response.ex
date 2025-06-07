@@ -24,6 +24,15 @@ defmodule Hermes.Server.Response do
       |> Response.build()
   """
 
+  @type t :: %__MODULE__{
+          type: :tool | :prompt | :resource,
+          content: list(map),
+          messages: list(map),
+          contents: list(map) | nil,
+          isError: boolean,
+          metadata: map
+        }
+
   defstruct [
     :type,
     content: [],

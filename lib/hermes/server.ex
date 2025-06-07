@@ -163,7 +163,7 @@ defmodule Hermes.Server do
     capabilities
     |> Map.put("resources", %{})
     |> then(&if(is_nil(subscribe?), do: &1, else: Map.put(&1, :subscribe, subscribe?)))
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :subscribe, list_changed?)))
+    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
   end
 
   defp parse_capability({capability, opts}, %{} = capabilities) when is_server_capability(capability) do
@@ -171,7 +171,7 @@ defmodule Hermes.Server do
 
     capabilities
     |> Map.put(to_string(capability), %{})
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :subscribe, list_changed?)))
+    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
   end
 
   @doc """
@@ -250,13 +250,13 @@ defmodule Hermes.Server do
       call_tool(module, args, frame)
     else
       nil ->
-        {:error, Error.invalid_params(%{message: "Tool not found: #{params["name"]}"}), frame}
+        {:error, Error.protocol(:invalid_params, %{message: "Tool not found: #{params["name"]}"}), frame}
 
       {:error, reason} ->
-        {:error, Error.invalid_params(reason), frame}
+        {:error, Error.protocol(:invalid_params, reason), frame}
 
       {:error, reason, new_frame} ->
-        {:error, Error.invalid_params(reason), new_frame}
+        {:error, Error.protocol(:invalid_params, reason), new_frame}
     end
   end
 
@@ -280,13 +280,13 @@ defmodule Hermes.Server do
       get_prompt_messages(module, args, frame)
     else
       nil ->
-        {:error, Error.invalid_params(%{message: "Prompt not found: #{params["name"]}"}), frame}
+        {:error, Error.protocol(:invalid_params, %{message: "Prompt not found: #{params["name"]}"}), frame}
 
       {:error, reason} ->
-        {:error, Error.invalid_params(reason), frame}
+        {:error, Error.protocol(:invalid_params, reason), frame}
 
       {:error, reason, new_frame} ->
-        {:error, Error.invalid_params(reason), new_frame}
+        {:error, Error.protocol(:invalid_params, reason), new_frame}
     end
   end
 
@@ -310,18 +310,18 @@ defmodule Hermes.Server do
       read_resource(module, params, frame)
     else
       nil ->
-        {:error, Error.invalid_params(%{message: "Resource not found: #{params["uri"]}"}), frame}
+        {:error, Error.resource(:not_found, %{uri: params["uri"]}), frame}
 
       {:error, reason} ->
-        {:error, Error.invalid_params(reason), frame}
+        {:error, Error.protocol(:invalid_params, reason), frame}
 
       {:error, reason, new_frame} ->
-        {:error, Error.invalid_params(reason), new_frame}
+        {:error, Error.protocol(:invalid_params, reason), new_frame}
     end
   end
 
   def __default_handle_request__(_request, frame, _server_module) do
-    {:error, Error.method_not_found(), frame}
+    {:error, Error.protocol(:method_not_found), frame}
   end
 
   defp find_component(components, name) do
@@ -338,14 +338,14 @@ defmodule Hermes.Server do
   defp call_tool(module, args, frame) do
     case module.mcp_schema(args) do
       {:ok, args} -> module.execute(args, frame)
-      {:error, errors} -> {:error, Error.invalid_request(%{message: Schema.format_errors(errors)}), frame}
+      {:error, errors} -> {:error, Error.protocol(:invalid_request, %{message: Schema.format_errors(errors)}), frame}
     end
   end
 
   defp get_prompt_messages(module, args, frame) do
     case module.mcp_schema(args) do
       {:ok, args} -> module.get_messages(args, frame)
-      {:error, errors} -> {:error, Error.invalid_request(%{message: Schema.format_errors(errors)}), frame}
+      {:error, errors} -> {:error, Error.protocol(:invalid_request, %{message: Schema.format_errors(errors)}), frame}
     end
   end
 

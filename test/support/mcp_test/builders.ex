@@ -332,7 +332,7 @@ defmodule MCPTest.Builders do
   Builds a parse error response.
   """
   def parse_error(request_id) do
-    error = Error.parse_error()
+    error = Error.protocol(:parse_error)
     build_error(request_id, error.code, "Parse error", error.data)
   end
 
@@ -340,7 +340,7 @@ defmodule MCPTest.Builders do
   Builds an invalid request error response.
   """
   def invalid_request_error(request_id) do
-    error = Error.invalid_request()
+    error = Error.protocol(:invalid_request)
     build_error(request_id, error.code, "Invalid Request", error.data)
   end
 
@@ -348,7 +348,7 @@ defmodule MCPTest.Builders do
   Builds a method not found error response.
   """
   def method_not_found_error(request_id) do
-    error = Error.method_not_found()
+    error = Error.protocol(:method_not_found)
     build_error(request_id, error.code, "Method not found", error.data)
   end
 
@@ -356,7 +356,7 @@ defmodule MCPTest.Builders do
   Builds an invalid params error response.
   """
   def invalid_params_error(request_id) do
-    error = Error.invalid_params()
+    error = Error.protocol(:invalid_params)
     build_error(request_id, error.code, "Invalid params", error.data)
   end
 
@@ -364,7 +364,7 @@ defmodule MCPTest.Builders do
   Builds an internal error response.
   """
   def internal_error(request_id) do
-    error = Error.internal_error()
+    error = Error.protocol(:internal_error)
     build_error(request_id, error.code, "Internal error", error.data)
   end
 

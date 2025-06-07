@@ -498,7 +498,7 @@ defmodule Hermes.Client.State do
   """
   @spec validate_capability(t(), String.t()) :: :ok | {:error, Error.t()}
   def validate_capability(%{server_capabilities: nil}, _method) do
-    {:error, Error.client_error(:server_capabilities_not_set)}
+    {:error, Error.protocol(:internal_error, %{message: "Server capabilities not set"})}
   end
 
   def validate_capability(%{server_capabilities: _}, "ping"), do: :ok
@@ -510,7 +510,7 @@ defmodule Hermes.Client.State do
     if valid_capability?(server_capabilities, capability) do
       :ok
     else
-      {:error, Error.method_not_found(%{method: method})}
+      {:error, Error.protocol(:method_not_found, %{method: method})}
     end
   end
 

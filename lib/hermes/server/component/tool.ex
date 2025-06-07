@@ -55,7 +55,9 @@ defmodule Hermes.Server.Component.Tool do
       end
   """
 
+  alias Hermes.MCP.Error
   alias Hermes.Server.Frame
+  alias Hermes.Server.Response
 
   @type params :: map()
   @type result :: term()
@@ -101,8 +103,9 @@ defmodule Hermes.Server.Component.Tool do
       end
   """
   @callback execute(params :: params(), frame :: Frame.t()) ::
-              {:ok, result :: result(), new_frame :: Frame.t()}
-              | {:error, reason :: String.t()}
+              {:reply, response :: Response.t(), new_state :: Frame.t()}
+              | {:noreply, new_state :: Frame.t()}
+              | {:error, error :: Error.t(), new_state :: Frame.t()}
 
   @doc """
   Converts a tool module into the MCP protocol format.

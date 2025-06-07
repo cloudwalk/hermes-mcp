@@ -70,7 +70,9 @@ defmodule Hermes.Server.Component.Resource do
       end
   """
 
+  alias Hermes.MCP.Error
   alias Hermes.Server.Frame
+  alias Hermes.Server.Response
 
   @type params :: map()
   @type content :: binary() | String.t()
@@ -120,8 +122,9 @@ defmodule Hermes.Server.Component.Resource do
   - For JSON, return the JSON-encoded string
   """
   @callback read(params :: params(), frame :: Frame.t()) ::
-              {:ok, content :: content(), new_frame :: Frame.t()}
-              | {:error, reason :: String.t()}
+              {:reply, response :: Response.t(), new_state :: Frame.t()}
+              | {:noreply, new_state :: Frame.t()}
+              | {:error, error :: Error.t(), new_state :: Frame.t()}
 
   @doc """
   Converts a resource module into the MCP protocol format.

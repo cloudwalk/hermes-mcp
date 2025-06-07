@@ -26,16 +26,16 @@ defmodule TestServer do
 
   defp handle_method("resources/read", request, state) do
     params = request["params"] || %{}
-    {:error, Error.invalid_params(%{param: "uri", message: "Resource not found: #{params["uri"]}"}), state}
+    {:error, Error.resource(:not_found, %{uri: params["uri"]}), state}
   end
 
   defp handle_method("prompts/get", request, state) do
     params = request["params"] || %{}
-    {:error, Error.invalid_params(%{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
+    {:error, Error.protocol(:invalid_params, %{param: "name", message: "Prompt not found: #{params["name"]}"}), state}
   end
 
   defp handle_method(method, _request, state) do
-    {:error, Error.method_not_found(%{method: method}), state}
+    {:error, Error.protocol(:method_not_found, %{method: method}), state}
   end
 
   defp handle_tools_call(request, state) do
@@ -43,7 +43,7 @@ defmodule TestServer do
 
     case Map.get(params, "name") do
       nil ->
-        {:error, Error.invalid_params(%{param: "name", message: "name parameter is required"}), state}
+        {:error, Error.protocol(:invalid_params, %{param: "name", message: "name parameter is required"}), state}
 
       name ->
         {:reply,

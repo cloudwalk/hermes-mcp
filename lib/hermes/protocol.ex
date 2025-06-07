@@ -118,7 +118,7 @@ defmodule Hermes.Protocol do
 
   def validate_version(version) do
     {:error,
-     Error.client_error(:unsupported_protocol_version, %{
+     Error.protocol(:invalid_params, %{
        version: version,
        supported: @supported_versions
      })}
@@ -148,7 +148,7 @@ defmodule Hermes.Protocol do
       :ok
     else
       {:error,
-       Error.client_error(:incompatible_transport, %{
+       Error.transport(:incompatible_transport, %{
          version: version,
          transport: transport_module,
          supported_versions: supported_versions
@@ -232,7 +232,7 @@ defmodule Hermes.Protocol do
 
       true ->
         {:error,
-         Error.client_error(:incompatible_versions, %{
+         Error.protocol(:invalid_params, %{
            client_version: client_version,
            server_version: server_version,
            supported: @supported_versions

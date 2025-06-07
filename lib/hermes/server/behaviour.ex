@@ -91,7 +91,7 @@ defmodule Hermes.Server.Behaviour do
             {:reply, %{"data" => data}, frame}
           
           {:error, :not_found} ->
-            error = Hermes.MCP.Error.invalid_params(%{message: "Data not found"})
+            error = Hermes.MCP.Error.protocol(:invalid_params, %{message: "Data not found"})
             {:error, error, frame}
         end
       end
@@ -106,7 +106,7 @@ defmodule Hermes.Server.Behaviour do
       # Fallback for unknown methods
       @impl Hermes.Server.Behaviour
       def handle_request(_request, frame) do
-        {:error, Hermes.MCP.Error.method_not_found(), frame}
+        {:error, Hermes.MCP.Error.protocol(:method_not_found), frame}
       end
   """
   @callback handle_request(request :: request(), state :: Frame.t()) ::
@@ -147,7 +147,7 @@ defmodule Hermes.Server.Behaviour do
       @impl Hermes.Server.Behaviour
       def handle_notification(%{"method" => "progress/update", "params" => %{"token" => token}}, frame) do
         # Track progress updates
-        Logger.info("Progress update for token: #{token}")
+        Logger.info("Progress update for token: \#{token}")
         {:noreply, frame}
       end
 
