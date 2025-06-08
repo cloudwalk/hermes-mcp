@@ -27,10 +27,7 @@ defmodule Upcase.Tools.AnalyzeText do
       }
     }
 
-    {:reply,
-     Response.tool()
-     |> Response.json(analysis)
-     |> Response.build(), frame}
+    {:reply, Response.json(Response.tool(), analysis), frame}
   end
 
   defp count_chars(text, predicate) do

@@ -457,7 +457,7 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, Error.to_json_rpc(request_id), %{state | frame: frame}}
+        {:reply, Error.to_json_rpc(error, request_id), %{state | frame: frame}}
     end
   end
 

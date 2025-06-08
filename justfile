@@ -9,12 +9,8 @@ calculator-server transport="stdio":
     cd priv/dev/calculator && go build && ./calculator -t {{transport}} || cd -
 
 [working-directory: 'priv/dev/upcase']
-build-upcase-server:
-    mix assemble 1>/dev/null
-
-[working-directory: 'priv/dev/upcase']
-upcase-server transport="stdio": build-upcase-server
-    ./upcase
+upcase-server:
+    iex -S mix
 
 [working-directory: 'priv/dev/ascii']
 ascii-server:

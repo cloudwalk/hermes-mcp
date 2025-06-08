@@ -52,8 +52,8 @@ defmodule Hermes.Server do
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Component
-  alias Hermes.Server.Component.Schema
   alias Hermes.Server.ConfigurationError
+  alias Hermes.Server.Handlers
 
   @server_capabilities ~w(prompts tools resources logging)a
   @protocol_versions ~w(2025-03-26 2024-05-11 2024-10-07)
@@ -221,154 +221,32 @@ defmodule Hermes.Server do
       def __components__(_), do: []
 
       @impl Hermes.Server.Behaviour
-      def handle_request(request, frame) do
-        Hermes.Server.__default_handle_request__(request, frame, __MODULE__)
+      def handle_request(%{"method" => "tools/" <> action} = request, frame) do
+        case action do
+          "list" -> Handlers.Tools.handle_list(frame, __MODULE__)
+          "call" -> Handlers.Tools.handle_call(request, frame, __MODULE__)
+        end
+      end
+
+      def handle_request(%{"method" => "prompts/" <> action} = request, frame) do
+        case action do
+          "list" -> Handlers.Prompts.handle_list(frame, __MODULE__)
+          "get" -> Handlers.Prompts.handle_get(request, frame, __MODULE__)
+        end
+      end
+
+      def handle_request(%{"method" => "resources/" <> action} = request, frame) do
+        case action do
+          "list" -> Handlers.Resources.handle_list(frame, __MODULE__)
+          "read" -> Handlers.Resources.handle_read(request, frame, __MODULE__)
+        end
+      end
+
+      def handle_request(%{"method" => method} = request, frame) do
+        {:error, Error.protocol(:method_not_found, %{method: method}), frame}
       end
 
       defoverridable handle_request: 2
-    end
-  end
-
-  @doc false
-  def __default_handle_request__(%{"method" => "tools/list"}, frame, server_module) do
-    {:reply,
-     %{
-       "tools" =>
-         for {name, module} <- server_module.__components__(:tool) do
-           %{
-             "name" => name,
-             "description" => Component.get_description(module),
-             "inputSchema" => module.input_schema()
-           }
-         end
-     }, frame}
-  end
-
-  def __default_handle_request__(%{"method" => "tools/call", "params" => params}, frame, server_module) do
-    with %{"name" => tool_name, "arguments" => args} <- params,
-         {_name, module} <- find_component(server_module.__components__(:tool), tool_name) do
-      call_tool(module, args, frame)
-    else
-      nil ->
-        {:error, Error.protocol(:invalid_params, %{message: "Tool not found: #{params["name"]}"}), frame}
-
-      {:error, reason} ->
-        {:error, Error.protocol(:invalid_params, reason), frame}
-
-      {:error, reason, new_frame} ->
-        {:error, Error.protocol(:invalid_params, reason), new_frame}
-    end
-  end
-
-  def __default_handle_request__(%{"method" => "prompts/list"}, frame, server_module) do
-    {:reply,
-     %{
-       "prompts" =>
-         for {name, module} <- server_module.__components__(:prompt) do
-           %{
-             "name" => name,
-             "description" => Component.get_description(module),
-             "arguments" => module.arguments()
-           }
-         end
-     }, frame}
-  end
-
-  def __default_handle_request__(%{"method" => "prompts/get", "params" => params}, frame, server_module) do
-    with %{"name" => prompt_name, "arguments" => args} <- params,
-         {_name, module} <- find_component(server_module.__components__(:prompt), prompt_name) do
-      get_prompt_messages(module, args, frame)
-    else
-      nil ->
-        {:error, Error.protocol(:invalid_params, %{message: "Prompt not found: #{params["name"]}"}), frame}
-
-      {:error, reason} ->
-        {:error, Error.protocol(:invalid_params, reason), frame}
-
-      {:error, reason, new_frame} ->
-        {:error, Error.protocol(:invalid_params, reason), new_frame}
-    end
-  end
-
-  def __default_handle_request__(%{"method" => "resources/list"}, frame, server_module) do
-    {:reply,
-     %{
-       "resources" =>
-         for {_name, module} <- server_module.__components__(:resource) do
-           %{
-             "uri" => module.uri(),
-             "name" => Component.get_description(module),
-             "mimeType" => module.mime_type()
-           }
-         end
-     }, frame}
-  end
-
-  def __default_handle_request__(%{"method" => "resources/read", "params" => params}, frame, server_module) do
-    with %{"uri" => uri} <- params,
-         module when not is_nil(module) <- find_resource_by_uri(server_module.__components__(:resource), uri) do
-      read_resource(module, params, frame)
-    else
-      nil ->
-        {:error, Error.resource(:not_found, %{uri: params["uri"]}), frame}
-
-      {:error, reason} ->
-        {:error, Error.protocol(:invalid_params, reason), frame}
-
-      {:error, reason, new_frame} ->
-        {:error, Error.protocol(:invalid_params, reason), new_frame}
-    end
-  end
-
-  def __default_handle_request__(_request, frame, _server_module) do
-    {:error, Error.protocol(:method_not_found), frame}
-  end
-
-  defp find_component(components, name) do
-    Enum.find(components, fn {n, _} -> n == name end)
-  end
-
-  defp find_resource_by_uri(components, uri) do
-    case Enum.find(components, fn {_name, module} -> module.uri() == uri end) do
-      {_name, module} -> module
-      nil -> nil
-    end
-  end
-
-  defp call_tool(module, args, frame) do
-    case module.mcp_schema(args) do
-      {:ok, args} -> module.execute(args, frame)
-      {:error, errors} -> {:error, Error.protocol(:invalid_request, %{message: Schema.format_errors(errors)}), frame}
-    end
-  end
-
-  defp get_prompt_messages(module, args, frame) do
-    case module.mcp_schema(args) do
-      {:ok, args} -> module.get_messages(args, frame)
-      {:error, errors} -> {:error, Error.protocol(:invalid_request, %{message: Schema.format_errors(errors)}), frame}
-    end
-  end
-
-  defp read_resource(module, params, frame) do
-    case module.read(params, frame) do
-      {:reply, %{"text" => _} = content, new_frame} ->
-        response =
-          content
-          |> Map.put("uri", module.uri())
-          |> Map.put("mimeType", module.mime_type())
-
-        {:reply, response, new_frame}
-
-      {:reply, %{"blob" => _} = content, new_frame} ->
-        response =
-          content
-          |> Map.put("uri", module.uri())
-          |> Map.put("mimeType", module.mime_type())
-
-        {:reply, response, new_frame}
-
-      other ->
-        other
     end
   end
 end
