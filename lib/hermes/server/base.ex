@@ -534,8 +534,7 @@ defmodule Hermes.Server.Base do
   defp encode_response(result, id) do
     response = %{"result" => result, "id" => id}
     Logging.message("outgoing", "response", id, response)
-    {:ok, response} = Message.encode_response(%{"result" => result}, id)
-    {:ok, response}
+    Message.encode_response(%{"result" => result}, id)
   end
 
   defp send_to_transport(nil, _data) do

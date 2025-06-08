@@ -59,7 +59,7 @@ defmodule Hermes.Server.Supervisor do
   @type sse :: {:sse, keyword()}
   @type stream_http :: {:streamable_http, keyword()}
 
-  @type transport :: :stdio | stream_http | sse
+  @type transport :: :stdio | stream_http | sse | StubTransport
 
   @type start_option :: {:transport, transport} | {:name, Supervisor.name()}
 
@@ -114,14 +114,23 @@ defmodule Hermes.Server.Supervisor do
         registry: registry
       ]
 
-      children =
-        if layer == StreamableHTTP,
-          do: [{Session.Supervisor, server: server, registry: registry}, {Base, server_opts}, {layer, transport_opts}],
-          else: [{Base, server_opts}, {layer, transport_opts}]
+      children = [
+        {Session.Supervisor, server: server, registry: registry},
+        {Base, server_opts},
+        {layer, transport_opts}
+      ]
 
       Supervisor.init(children, strategy: :one_for_all)
     else
       :ignore
+    end
+  end
+
+  if Mix.env() == :test do
+    defp parse_transport_child(StubTransport = kind, server, registry) do
+      name = registry.transport(server, kind)
+      opts = [name: name, server: server]
+      {kind, opts}
     end
   end
 
@@ -138,6 +147,10 @@ defmodule Hermes.Server.Supervisor do
   end
 
   defp parse_transport_child({:sse, _opts}, _server, _), do: raise("unimplemented")
+
+  if Mix.env() == :test do
+    defp should_start?(StubTransport), do: true
+  end
 
   defp should_start?(:stdio), do: true
 

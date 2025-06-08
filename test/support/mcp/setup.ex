@@ -8,7 +8,7 @@ defmodule Hermes.MCP.Setup do
   alias Hermes.MCP.Builders
   alias Hermes.MCP.Message
 
-  require Hermes.MCP.Message
+  require Message
 
   def initialized_client(ctx) do
     protocol_version = ctx[:protocol_version]
@@ -25,28 +25,44 @@ defmodule Hermes.MCP.Setup do
     ]
 
     client = start_supervised!({Hermes.Client, client_opts})
+    start_supervised!({StubServer, transport: StubTransport})
+    assert server = Hermes.Server.Registry.whereis_server(StubServer)
+
+    Process.sleep(30)
+
     StubTransport.set_client(transport, client)
 
-    GenServer.cast(client, :initialize)
     Process.sleep(50)
-
-    assert StubTransport.count(transport) == 1
-    assert [%{"id" => id} = init_message] = StubTransport.get_messages(transport)
-    assert Message.is_initialize(init_message)
-
-    response = Builders.init_response(id, protocol_version, %{"name" => "TestServer", "version" => "1.0.0"})
-    assert {:ok, data} = Builders.encode_message(response)
-    assert is_binary(data)
-
-    GenServer.cast(client, {:response, data})
-    Process.sleep(50)
-
-    assert StubTransport.count(transport) == 2
-    assert [_init, notification] = StubTransport.get_messages(transport)
-    assert Message.is_initialize_lifecycle(notification)
 
     assert_client_initialized client
+    assert_server_initialized server
 
-    Map.merge(ctx, %{transport: transport, client: client})
+    :ok = StubTransport.clear(transport)
+
+    Map.merge(ctx, %{transport: transport, client: client, server: server})
+  end
+
+  def initialized_server(ctx) do
+    session_id = ctx[:session_id] || "test-session-123"
+    protocol_version = ctx[:protocol_version]
+    capabilities = ctx[:client_capabilities]
+    info = ctx[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
+
+    transport = start_supervised!(StubTransport)
+    start_supervised!({StubServer, transport: StubTransport})
+    assert server = Hermes.Server.Registry.whereis_server(StubServer)
+
+    request = Builders.init_request(protocol_version, info, capabilities)
+    assert {:ok, _} = GenServer.call(server, {:request, request, session_id})
+    notification = Builders.build_notification("notifications/initialized", %{})
+    assert :ok = GenServer.cast(server, {:notification, notification, session_id})
+
+    Process.sleep(50)
+
+    assert_server_initialized server
+
+    :ok = StubTransport.clear(transport)
+
+    Map.merge(ctx, %{transport: transport, server: server, session_id: session_id})
   end
 end

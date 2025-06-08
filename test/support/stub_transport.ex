@@ -9,10 +9,15 @@ defmodule StubTransport do
   use GenServer
 
   alias Hermes.MCP.Builders
+  alias Hermes.MCP.ID
+  alias Hermes.MCP.Message
+
+  require Hermes.MCP.Message
 
   @type state :: %{
           messages: [String.t()],
-          client: GenServer.name() | nil
+          client: GenServer.name() | nil,
+          session_id: String.t()
         }
 
   @doc """
@@ -23,10 +28,12 @@ defmodule StubTransport do
   """
   @impl true
   def start_link(opts \\ []) do
+    state = %{messages: [], client: nil, server: nil}
+
     if name = opts[:name] do
-      GenServer.start_link(__MODULE__, %{messages: [], client: nil}, name: name)
+      GenServer.start_link(__MODULE__, state, name: name)
     else
-      GenServer.start_link(__MODULE__, %{messages: [], client: nil})
+      GenServer.start_link(__MODULE__, state)
     end
   end
 
@@ -81,7 +88,7 @@ defmodule StubTransport do
 
   @impl true
   def init(state) do
-    {:ok, state}
+    {:ok, Map.put(state, :session_id, ID.generate_session_id())}
   end
 
   @impl true
@@ -99,6 +106,7 @@ defmodule StubTransport do
   end
 
   def handle_call({:set_client, client}, _from, state) do
+    GenServer.cast(client, :initialize)
     {:reply, :ok, %{state | client: client}}
   end
 
@@ -108,6 +116,14 @@ defmodule StubTransport do
 
   def handle_call({:send_message, message}, _from, state) do
     new_messages = [message | state.messages]
+
+    if is_binary(message) do
+      message = decode_message(message)
+      forward_to_server(message, state)
+    else
+      forward_to_server(message, state)
+    end
+
     {:reply, :ok, %{state | messages: new_messages}}
   end
 
@@ -123,5 +139,16 @@ defmodule StubTransport do
   defp decode_message(message) when is_binary(message) do
     %{} = message = Builders.decode_message(message)
     message
+  end
+
+  defp forward_to_server(message, state) when Message.is_request(message) do
+    name = Hermes.Server.Registry.server(StubServer)
+    {:ok, response} = GenServer.call(name, {:request, message, state.session_id})
+    GenServer.cast(state.client, {:response, response})
+  end
+
+  defp forward_to_server(message, state) when Message.is_notification(message) do
+    name = Hermes.Server.Registry.server(StubServer)
+    :ok = GenServer.cast(name, {:notification, message, state.session_id})
   end
 end

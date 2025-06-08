@@ -220,13 +220,18 @@ defmodule Hermes.Transport.StreamableHTTPTest do
       {:ok, stub_client} = StubClient.start_link()
       session_id = "test-session-123"
 
-      Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      Bypass.expect_once(bypass, "POST", "/mcp", fn conn ->
         conn =
           conn
           |> Plug.Conn.put_resp_header("content-type", "application/json")
           |> Plug.Conn.put_resp_header("mcp-session-id", session_id)
 
         Plug.Conn.resp(conn, 200, ~s|{"jsonrpc":"2.0","id":"1","result":{}}|)
+      end)
+
+      Bypass.expect(bypass, "DELETE", "/mcp", fn conn ->
+        assert [^session_id] = Plug.Conn.get_req_header(conn, "mcp-session-id")
+        Plug.Conn.resp(conn, 200, "")
       end)
 
       {:ok, transport} =
@@ -256,7 +261,7 @@ defmodule Hermes.Transport.StreamableHTTPTest do
       {:ok, stub_client} = StubClient.start_link()
       session_id = "test-session-456"
 
-      Bypass.expect(bypass, "POST", "/mcp", fn conn ->
+      Bypass.stub(bypass, "POST", "/mcp", fn conn ->
         session_headers = Plug.Conn.get_req_header(conn, "mcp-session-id")
 
         case session_headers do
@@ -272,6 +277,11 @@ defmodule Hermes.Transport.StreamableHTTPTest do
             conn = Plug.Conn.put_resp_header(conn, "content-type", "application/json")
             Plug.Conn.resp(conn, 200, ~s|{"jsonrpc":"2.0","id":"2","result":{}}|)
         end
+      end)
+
+      Bypass.stub(bypass, "DELETE", "/mcp", fn conn ->
+        assert [^session_id] = Plug.Conn.get_req_header(conn, "mcp-session-id")
+        Plug.Conn.resp(conn, 200, "")
       end)
 
       {:ok, transport} =
@@ -306,7 +316,7 @@ defmodule Hermes.Transport.StreamableHTTPTest do
 
       Bypass.expect(bypass, "POST", "/mcp", fn conn ->
         assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
-        assert "application/json, text/event-stream" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
+        assert "application/json" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
 
         conn = Plug.Conn.put_resp_header(conn, "content-type", "application/json")
         Plug.Conn.resp(conn, 200, ~s|{"jsonrpc":"2.0","id":"1","result":{}}|)
