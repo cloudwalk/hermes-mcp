@@ -9,10 +9,10 @@ defmodule Hermes.Application do
   def start(_type, _args) do
     :logger.add_handlers(:hermes_mcp)
 
-    children = [
-      Hermes.Server.Registry,
-      {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
-    ]
+    children =
+      [
+        {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
+      ] ++ if Mix.env() == :test, do: [Hermes.Server.Registry], else: []
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

@@ -60,7 +60,6 @@ defmodule Hermes.Server.Base do
   alias Hermes.MCP.Message
   alias Hermes.Server
   alias Hermes.Server.Frame
-  alias Hermes.Server.Registry
   alias Hermes.Server.Session
   alias Hermes.Server.Session.Supervisor, as: SessionSupervisor
   alias Hermes.Telemetry
@@ -77,6 +76,7 @@ defmodule Hermes.Server.Base do
           supported_versions: list(String.t()),
           transport: [layer: module, name: GenServer.name()],
           init_arg: term,
+          registry: module,
           sessions: %{required(String.t()) => {GenServer.name(), reference()}}
         }
 
@@ -97,7 +97,8 @@ defmodule Hermes.Server.Base do
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:init_arg, {:required, :any}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:transport, {:required, {:custom, &Hermes.server_transport/1}}}
+    {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
   ]
 
   @doc """
@@ -108,6 +109,7 @@ defmodule Hermes.Server.Base do
       * `:module` - (required) The module implementing the `Hermes.Server.Behaviour`
       * `:init_arg` - Argument to pass to the module's `init/2` callback
       * `:name` - (required) Name for the GenServer process
+      * `registry` - The custom registry module to use to call related processes
       * `:transport` - (required) Transport configuration
         * `:layer` - The transport module (e.g., `Hermes.Server.Transport.STDIO`)
         * `:name` - The registered name of the transport process
@@ -192,6 +194,7 @@ defmodule Hermes.Server.Base do
       supported_versions: protocol_versions,
       transport: Map.new(opts.transport),
       init_arg: opts.init_arg,
+      registry: opts.registry,
       sessions: %{},
       frame: Frame.new()
     }
@@ -482,12 +485,11 @@ defmodule Hermes.Server.Base do
     {:ok, {session, %{state | frame: frame}}}
   end
 
-  defp maybe_attach_session(session_id, %{sessions: sessions} = state) do
-    session_name = Registry.server_session(state.module, session_id)
+  defp maybe_attach_session(session_id, %{sessions: sessions, registry: registry} = state) do
+    session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(state.module, session_id) do
       {:ok, pid} ->
-        # Monitor the session process
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)
@@ -495,7 +497,6 @@ defmodule Hermes.Server.Base do
         {:ok, {session, %{state | frame: frame}}}
 
       {:error, {:already_started, pid}} ->
-        # Session already exists, monitor it if not already
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)

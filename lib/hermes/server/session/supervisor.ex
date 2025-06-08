@@ -48,7 +48,6 @@ defmodule Hermes.Server.Session.Supervisor do
 
   use DynamicSupervisor
 
-  alias Hermes.Server.Registry
   alias Hermes.Server.Session
 
   @kind :session_supervisor
@@ -67,8 +66,10 @@ defmodule Hermes.Server.Session.Supervisor do
 
       {:ok, _pid} = Session.Supervisor.start_link(MyServer)
   """
-  def start_link(server) when is_atom(server) do
-    name = Registry.supervisor(@kind, server)
+  def start_link(opts \\ []) do
+    server = Keyword.fetch!(opts, :server)
+    registry = Keyword.get(opts, :registry, Hermes.Server.Registry)
+    name = registry.supervisor(@kind, server)
     DynamicSupervisor.start_link(__MODULE__, server, name: name)
   end
 
@@ -76,6 +77,7 @@ defmodule Hermes.Server.Session.Supervisor do
   Creates a new session for a client connection.
 
   ## Parameters
+    * `registry` - The registry module to use to retrieve processes names
     * `server` - The server module atom
     * `session_id` - Unique identifier for the session (typically from transport)
 
@@ -87,21 +89,23 @@ defmodule Hermes.Server.Session.Supervisor do
   ## Examples
 
       # Create a new session for a client
-      {:ok, session_pid} = Session.Supervisor.create_session(MyServer, "session-123")
+      {:ok, session_pid} = Session.Supervisor.create_session(MyRegistry, MyServer, "session-123")
 
       # Attempting to create duplicate session
       {:error, {:already_started, ^session_pid}} = 
-        Session.Supervisor.create_session(MyServer, "session-123")
+        Session.Supervisor.create_session(MyRegistry, MyServer, "session-123")
   """
-  def create_session(server, session_id) do
-    name = Registry.supervisor(@kind, server)
-    DynamicSupervisor.start_child(name, {Session, server: server, session_id: session_id})
+  def create_session(registry \\ Hermes.Server.Registry, server, session_id) do
+    name = registry.supervisor(@kind, server)
+    session_name = registry.server_session(server, session_id)
+    DynamicSupervisor.start_child(name, {Session, session_id: session_id, name: session_name})
   end
 
   @doc """
   Terminates a session and cleans up its resources.
 
   ## Parameters
+    * `registry` - The registry module to use to retrieve processes names
     * `server` - The server module atom
     * `session_id` - The session identifier to terminate
 
@@ -112,15 +116,15 @@ defmodule Hermes.Server.Session.Supervisor do
   ## Examples
 
       # Close an existing session
-      :ok = Session.Supervisor.close_session(MyServer, "session-123")
+      :ok = Session.Supervisor.close_session(MyRegistry, MyServer, "session-123")
 
       # Attempting to close non-existent session
-      {:error, :not_found} = Session.Supervisor.close_session(MyServer, "unknown")
+      {:error, :not_found} = Session.Supervisor.close_session(MyRegistry, MyServer, "unknown")
   """
-  def close_session(server, session_id) when is_binary(session_id) do
-    name = Registry.supervisor(@kind, server)
+  def close_session(registry \\ Hermes.Server.Registry, server, session_id) when is_binary(session_id) do
+    name = registry.supervisor(@kind, server)
 
-    if pid = Registry.whereis_server_session(server, session_id) do
+    if pid = registry.whereis_server_session(server, session_id) do
       DynamicSupervisor.terminate_child(name, pid)
     else
       {:error, :not_found}
