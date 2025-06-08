@@ -75,7 +75,7 @@ defmodule Hermes.MCP.Setup do
 
     transport_name = Hermes.Server.Registry.transport(server_module, :stdio)
     start_supervised!({Transport.STDIO, name: transport_name, server: server_module})
-    assert transport = Hermes.Server.Registry.whereis_server(server_module)
+    assert transport = Hermes.Server.Registry.whereis_transport(server_module, :stdio)
 
     opts = [
       module: server_module,
@@ -85,7 +85,7 @@ defmodule Hermes.MCP.Setup do
     ]
 
     start_supervised!({Hermes.Server.Base, opts})
-    assert server = Hermes.Server.Registry.whereis_server(StubServer)
+    assert server = Hermes.Server.Registry.whereis_server(server_module)
 
     Map.merge(ctx, %{server: server, transport: transport})
   end

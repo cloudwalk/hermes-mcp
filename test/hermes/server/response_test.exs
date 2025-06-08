@@ -36,7 +36,7 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.tool()
         |> Response.error("Division by zero")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [%{"type" => "text", "text" => "Error: Division by zero"}],
@@ -48,7 +48,7 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.tool()
         |> Response.image("base64data", "image/png")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [%{"type" => "image", "data" => "base64data", "mimeType" => "image/png"}],
@@ -60,7 +60,7 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.tool()
         |> Response.audio("audiodata", "audio/wav", transcription: "Hello")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [
@@ -83,7 +83,7 @@ defmodule Hermes.Server.ResponseTest do
           mime_type: "text/plain",
           text: "Contents"
         )
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [
@@ -105,7 +105,7 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.tool()
         |> Response.json(%{status: "success", count: 42, items: ["a", "b", "c"]})
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert %{
                "content" => [
@@ -128,7 +128,7 @@ defmodule Hermes.Server.ResponseTest do
         Response.prompt()
         |> Response.user_message("What's the weather?")
         |> Response.assistant_message("Let me check...")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "messages" => [
@@ -143,7 +143,7 @@ defmodule Hermes.Server.ResponseTest do
         "Weather assistant"
         |> Response.prompt()
         |> Response.system_message("You are a weather expert")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "description" => "Weather assistant",
