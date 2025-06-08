@@ -1,23 +1,10 @@
-defmodule MockTransport do
+defmodule StubTransport do
   @moduledoc """
   Unified mock transport for MCP protocol testing.
 
   Provides a single mock transport implementation that can be used for both
   client and server testing. Supports message recording, expectations, and
   verification patterns for different testing scenarios.
-
-  ## Usage
-
-  For client testing with mocking libraries:
-
-      client = setup_client(transport: [layer: MCPTest.MockTransport, name: :test_transport])
-      
-  For server testing with message recording:
-
-      {:ok, transport} = MCPTest.MockTransport.start_link(name: :server_transport)
-      server = setup_server(transport: [layer: MCPTest.MockTransport, name: :server_transport])
-      
-      messages = MCPTest.MockTransport.get_messages(:server_transport)
   """
 
   @behaviour Hermes.Transport.Behaviour

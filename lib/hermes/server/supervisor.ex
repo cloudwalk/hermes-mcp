@@ -51,7 +51,6 @@ defmodule Hermes.Server.Supervisor do
   use Supervisor, restart: :permanent
 
   alias Hermes.Server.Base
-  alias Hermes.Server.Registry
   alias Hermes.Server.Session
   alias Hermes.Server.Transport.STDIO
   alias Hermes.Server.Transport.StreamableHTTP
@@ -74,6 +73,7 @@ defmodule Hermes.Server.Supervisor do
     * `opts` - Options including:
       * `:transport` - Transport configuration (required)
       * `:name` - Supervisor name (optional, defaults to registered name)
+      * `:registry` - The custom registry to use to manage processes names (defaults to `Hermes.Server.Registry`)
 
   ## Examples
 
@@ -86,9 +86,10 @@ defmodule Hermes.Server.Supervisor do
       )
   """
   @spec start_link(server :: module, init_arg :: term, list(start_option)) :: Supervisor.on_start()
-  def start_link(server, init_arg, opts) when is_atom(server) do
-    name = opts[:name] || Registry.supervisor(server)
-    opts = Keyword.merge(opts, module: server, init_arg: init_arg)
+  def start_link(server, init_arg, opts) when is_atom(server) and is_list(opts) do
+    registry = Keyword.get(opts, :registry, Hermes.Server.Registry)
+    name = Keyword.get(opts, :name, registry.supervisor(server))
+    opts = Keyword.merge(opts, module: server, init_arg: init_arg, registry: registry)
     Supervisor.start_link(__MODULE__, opts, name: name)
   end
 
@@ -97,11 +98,12 @@ defmodule Hermes.Server.Supervisor do
     server = Keyword.fetch!(opts, :module)
     transport = Keyword.fetch!(opts, :transport)
     init_arg = Keyword.fetch!(opts, :init_arg)
+    registry = Keyword.fetch!(opts, :registry)
 
     if should_start?(transport) do
-      {layer, transport_opts} = parse_transport_child(transport, server)
+      {layer, transport_opts} = parse_transport_child(transport, server, registry)
 
-      server_name = Registry.server(server)
+      server_name = registry.server(server)
       server_transport = [layer: layer, name: transport_opts[:name]]
 
       server_opts = [
@@ -109,12 +111,12 @@ defmodule Hermes.Server.Supervisor do
         name: server_name,
         transport: server_transport,
         init_arg: init_arg,
-        session_mode: :per_client
+        registry: registry
       ]
 
       children =
         if layer == StreamableHTTP,
-          do: [{Session.Supervisor, server}, {Base, server_opts}, {layer, transport_opts}],
+          do: [{Session.Supervisor, server: server, registry: registry}, {Base, server_opts}, {layer, transport_opts}],
           else: [{Base, server_opts}, {layer, transport_opts}]
 
       Supervisor.init(children, strategy: :one_for_all)
@@ -123,19 +125,19 @@ defmodule Hermes.Server.Supervisor do
     end
   end
 
-  defp parse_transport_child(:stdio, server) do
-    name = Registry.transport(server, :stdio)
+  defp parse_transport_child(:stdio, server, registry) do
+    name = registry.transport(server, :stdio)
     opts = [name: name, server: server]
     {STDIO, opts}
   end
 
-  defp parse_transport_child({:streamable_http, opts}, server) do
-    name = Registry.transport(server, :streamable_http)
+  defp parse_transport_child({:streamable_http, opts}, server, registry) do
+    name = registry.transport(server, :streamable_http)
     opts = Keyword.merge(opts, name: name, server: server)
     {StreamableHTTP, opts}
   end
 
-  defp parse_transport_child({:sse, _opts}, _server), do: raise("unimplemented")
+  defp parse_transport_child({:sse, _opts}, _server, _), do: raise("unimplemented")
 
   defp should_start?(:stdio), do: true
 

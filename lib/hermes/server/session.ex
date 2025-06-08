@@ -17,8 +17,6 @@ defmodule Hermes.Server.Session do
 
   use Agent, restart: :transient
 
-  alias Hermes.Server.Registry
-
   @type t :: %__MODULE__{
           protocol_version: String.t() | nil,
           initialized: boolean(),
@@ -44,9 +42,8 @@ defmodule Hermes.Server.Session do
   """
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
-    server = Keyword.fetch!(opts, :server)
     session_id = Keyword.fetch!(opts, :session_id)
-    name = Registry.server_session(server, session_id)
+    name = Keyword.fetch!(opts, :name)
 
     Agent.start_link(fn -> new(id: session_id, name: name) end, name: name)
   end
@@ -136,13 +133,5 @@ defmodule Hermes.Server.Session do
   @spec set_log_level(GenServer.name(), String.t()) :: :ok
   def set_log_level(session, level) do
     Agent.update(session, fn state -> %{state | log_level: level} end)
-  end
-
-  @doc """
-  Checks if a session exists.
-  """
-  @spec exists?(module(), String.t()) :: boolean()
-  def exists?(server, session_id) do
-    not is_nil(Registry.whereis_server_session(server, session_id))
   end
 end
