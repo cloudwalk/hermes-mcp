@@ -9,9 +9,6 @@ locals = [
 ]
 
 test = [
-  assert_mcp_response: 1,
-  assert_mcp_error: 1,
-  assert_mcp_notification: 1,
   assert_client_initialized: 1,
   assert_server_initialized: 1
 ]

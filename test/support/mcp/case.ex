@@ -15,6 +15,9 @@ defmodule Hermes.MCP.Case do
 
       import Hermes.MCP.Assertions
       import Hermes.MCP.Builders
+      import Hermes.MCP.Setup
+
+      require Hermes.MCP.Message
 
       @moduletag capture_log: true
     end

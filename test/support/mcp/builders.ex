@@ -6,33 +6,29 @@ defmodule Hermes.MCP.Builders do
 
   require Message
 
-  def init_request(opts \\ []) do
+  def init_request(protocol_version, client_info, capabilities \\ %{}) do
     %{
       "jsonrpc" => "2.0",
-      "id" => opts[:id] || ID.generate_request_id(),
+      "id" => ID.generate_request_id(),
       "method" => "initialize",
       "params" => %{
-        "protocolVersion" => opts[:version] || "2025-03-26",
-        "clientInfo" => opts[:client_info] || %{"name" => "test-client", "version" => "1.0.0"},
-        "capabilities" => opts[:capabilities] || %{}
+        "protocolVersion" => protocol_version,
+        "clientInfo" => client_info,
+        "capabilities" => capabilities
       }
     }
   end
 
-  def init_response(request_id, opts \\ []) do
+  def init_response(request_id, protocol_version, server_info, capabilities \\ %{}) do
     %{
       "jsonrpc" => "2.0",
       "id" => request_id,
       "result" => %{
-        "protocolVersion" => opts[:version] || "2025-03-26",
-        "serverInfo" => opts[:server_info] || %{"name" => "test-server", "version" => "1.0.0"},
-        "capabilities" => opts[:capabilities] || %{}
+        "protocolVersion" => protocol_version,
+        "serverInfo" => server_info,
+        "capabilities" => capabilities
       }
     }
-  end
-
-  def initialized_notification do
-    %{"method" => "notifications/initialized", "params" => %{}}
   end
 
   def build_request(method, params \\ %{}, id \\ ID.generate_request_id()) do
