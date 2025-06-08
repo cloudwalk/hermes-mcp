@@ -8,7 +8,7 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.tool()
         |> Response.text("Hello world")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [%{"type" => "text", "text" => "Hello world"}],
@@ -21,7 +21,7 @@ defmodule Hermes.Server.ResponseTest do
         Response.tool()
         |> Response.text("Processing...")
         |> Response.text("Result: 42")
-        |> Response.build()
+        |> Response.to_protocol()
 
       assert result == %{
                "content" => [
@@ -159,18 +159,26 @@ defmodule Hermes.Server.ResponseTest do
       result =
         Response.resource()
         |> Response.text("File contents")
-        |> Response.build()
+        |> Response.to_protocol("file://test.txt", "text/plain")
 
-      assert result == %{"text" => "File contents"}
+      assert result == %{
+               "text" => "File contents",
+               "uri" => "file://test.txt",
+               "mimeType" => "text/plain"
+             }
     end
 
     test "builds a blob resource response" do
       result =
         Response.resource()
         |> Response.blob("base64data")
-        |> Response.build()
+        |> Response.to_protocol("file://image.png", "image/png")
 
-      assert result == %{"blob" => "base64data"}
+      assert result == %{
+               "blob" => "base64data",
+               "uri" => "file://image.png",
+               "mimeType" => "image/png"
+             }
     end
 
     test "builds a resource with metadata" do
@@ -179,19 +187,26 @@ defmodule Hermes.Server.ResponseTest do
         |> Response.text("Contents")
         |> Response.name("Config File")
         |> Response.description("Application configuration")
-        |> Response.build()
+        |> Response.to_protocol("file://config.json", "application/json")
 
       assert result == %{
                "text" => "Contents",
-               :name => "Config File",
-               :description => "Application configuration"
+               "name" => "Config File",
+               "description" => "Application configuration",
+               "uri" => "file://config.json",
+               "mimeType" => "application/json"
              }
     end
 
-    test "raises when building resource without content" do
-      assert_raise RuntimeError, "Resource response must have content (text or blob)", fn ->
-        Response.build(Response.resource())
-      end
+    test "validates resource has content" do
+      resource = Response.resource()
+      refute resource.contents
+
+      resource_with_text = Response.text(resource, "content")
+      assert resource_with_text.contents == %{"text" => "content"}
+
+      resource_with_blob = Response.blob(Response.resource(), "data")
+      assert resource_with_blob.contents == %{"blob" => "data"}
     end
   end
 end

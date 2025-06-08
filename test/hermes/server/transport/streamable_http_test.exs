@@ -1,42 +1,10 @@
 defmodule Hermes.Server.Transport.StreamableHTTPTest do
-  use ExUnit.Case, async: true
+  use Hermes.MCP.Case, async: true
 
   alias Hermes.MCP.Message
-  alias Hermes.Server.Base
   alias Hermes.Server.Transport.StreamableHTTP
-  alias Hermes.Server.Transport.StreamableHTTP.Supervisor, as: StreamableSupervisor
 
   @moduletag capture_log: true
-
-  setup do
-    server_name = :"test_server_#{System.unique_integer([:positive])}"
-    transport_name = :"test_transport_#{System.unique_integer([:positive])}"
-    registry_name = :"test_registry_#{System.unique_integer([:positive])}"
-
-    server_opts = [
-      module: TestServers.MinimalServer,
-      init_arg: :ok,
-      name: server_name,
-      transport: [layer: StreamableHTTP, name: transport_name, registry: registry_name]
-    ]
-
-    server = start_supervised!({Base, server_opts})
-
-    table_name = :"hermes_test_sessions_#{System.unique_integer([:positive])}"
-
-    supervisor_opts = [
-      server: server,
-      transport_name: transport_name,
-      registry_name: registry_name,
-      table_name: table_name
-    ]
-
-    start_supervised!({StreamableSupervisor, supervisor_opts})
-
-    transport = transport_name
-
-    %{server: server, transport: transport, registry: registry_name}
-  end
 
   describe "start_link/1" do
     test "starts with valid options" do
@@ -47,17 +15,20 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
           end
         end)
 
-      registry_name = :"test_registry_#{System.unique_integer([:positive])}"
-      transport_name = :"test_transport_#{System.unique_integer([:positive])}"
+      name = :"test_streamable_http_#{System.unique_integer([:positive])}"
 
-      table_name = :"hermes_test_sessions_#{System.unique_integer([:positive])}"
-      start_supervised!({StreamableHTTP.SessionRegistry, [name: registry_name, table_name: table_name]})
-
-      assert {:ok, pid} = StreamableHTTP.start_link(server: server, name: transport_name, registry: registry_name)
+      assert {:ok, pid} = StreamableHTTP.start_link(server: server, name: name)
       assert Process.alive?(pid)
+      assert Process.whereis(name) == pid
     end
 
-    test "starts with named process" do
+    test "requires server option" do
+      assert_raise Peri.InvalidSchema, fn ->
+        StreamableHTTP.start_link(name: :test)
+      end
+    end
+
+    test "requires name option" do
       server =
         spawn(fn ->
           receive do
@@ -65,249 +36,117 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
           end
         end)
 
-      registry_name = :"test_registry_#{System.unique_integer([:positive])}"
-      name = :"test_streamable_http_#{System.unique_integer([:positive])}"
-
-      table_name = :"hermes_test_sessions_#{System.unique_integer([:positive])}"
-      start_supervised!({StreamableHTTP.SessionRegistry, [name: registry_name, table_name: table_name]})
-
-      assert {:ok, _pid} = StreamableHTTP.start_link(server: server, name: name, registry: registry_name)
-      assert pid = Process.whereis(name)
-      assert Process.alive?(pid)
-    end
-
-    test "requires server option" do
       assert_raise Peri.InvalidSchema, fn ->
-        StreamableHTTP.start_link([])
+        StreamableHTTP.start_link(server: server)
       end
     end
   end
 
-  describe "create_session/1" do
-    test "creates a new session", %{transport: transport, server: server} do
-      assert {:ok, session_id} = StreamableHTTP.create_session(transport)
-      assert is_binary(session_id)
-
-      assert {:ok, session_info} = StreamableHTTP.lookup_session(transport, session_id)
-      assert session_info.server == server
-    end
-
-    test "each session gets unique ID", %{transport: transport} do
-      {:ok, session_id1} = StreamableHTTP.create_session(transport)
-      {:ok, session_id2} = StreamableHTTP.create_session(transport)
-
-      assert session_id1 != session_id2
-    end
-  end
-
-  describe "handle_message/3" do
-    test "forwards message to server and returns response", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
-
-      {:ok, message} =
-        Message.encode_request(
-          %{
-            "method" => "initialize",
-            "params" => %{
-              "protocolVersion" => "2025-03-26",
-              "capabilities" => %{"tools" => %{}},
-              "clientInfo" => %{"name" => "Test Client", "version" => "1.0.0"}
-            }
-          },
-          1
-        )
-
-      assert {:ok, response_json} = StreamableHTTP.handle_message(transport, session_id, message)
-      assert is_binary(response_json)
-
-      assert {:ok, response} = Jason.decode(response_json)
-      assert response["jsonrpc"] == "2.0"
-      assert response["id"] == 1
-      assert is_map(response["result"])
-    end
-
-    test "records session activity", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
-
-      {:ok, original_info} = StreamableHTTP.lookup_session(transport, session_id)
-
-      Process.sleep(10)
-
-      message =
-        Jason.encode!(%{
-          "jsonrpc" => "2.0",
-          "method" => "notifications/initialized"
-        })
-
-      StreamableHTTP.handle_message(transport, session_id, message)
-
-      {:ok, updated_info} = StreamableHTTP.lookup_session(transport, session_id)
-      assert DateTime.after?(updated_info.last_activity, original_info.last_activity)
-    end
-
-    test "returns error for non-existent session", %{transport: transport} do
-      message = Jason.encode!(%{"jsonrpc" => "2.0", "method" => "ping"})
-
-      assert {:error, :session_not_found} =
-               StreamableHTTP.handle_message(transport, "non-existent", message)
-    end
-
-    test "handles server errors gracefully", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
-
-      invalid_message = "invalid json"
-
-      assert {:error, _reason} = StreamableHTTP.handle_message(transport, session_id, invalid_message)
-    end
-  end
-
-  describe "set_sse_connection/3" do
-    test "sets SSE connection for session", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
-
-      sse_pid =
+  describe "with running transport" do
+    setup do
+      server =
         spawn(fn ->
           receive do
             _ -> :ok
           end
         end)
 
-      assert :ok = StreamableHTTP.set_sse_connection(transport, session_id, sse_pid)
+      name = :"test_transport_#{System.unique_integer([:positive])}"
+      {:ok, transport} = start_supervised({StreamableHTTP, server: server, name: name})
 
-      {:ok, session_info} = StreamableHTTP.lookup_session(transport, session_id)
-      assert session_info.sse_pid == sse_pid
+      %{transport: transport, server: server}
     end
 
-    test "monitors SSE process", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
+    test "registers and unregisters SSE handlers", %{transport: transport} do
+      session_id = "test-session-123"
+      handler_pid = self()
 
-      sse_pid =
-        spawn(fn ->
-          receive do
-            _ -> :ok
-          end
-        end)
+      # Register handler
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id, handler_pid)
 
-      StreamableHTTP.set_sse_connection(transport, session_id, sse_pid)
+      # Get handler
+      assert {:ok, ^handler_pid} = StreamableHTTP.get_sse_handler(transport, session_id)
 
-      Process.exit(sse_pid, :kill)
+      # Unregister handler
+      assert :ok = StreamableHTTP.unregister_sse_handler(transport, session_id)
 
-      Process.sleep(50)
-
-      assert {:error, :not_found} = StreamableHTTP.lookup_session(transport, session_id)
+      # Handler should be gone
+      assert {:error, :not_found} = StreamableHTTP.get_sse_handler(transport, session_id)
     end
 
-    test "returns error for non-existent session", %{transport: transport} do
-      sse_pid =
-        spawn(fn ->
-          receive do
-            _ -> :ok
-          end
-        end)
+    test "handles messages for SSE sessions", %{transport: transport} do
+      session_id = "test-session-456"
+      handler_pid = self()
 
-      assert {:error, :not_found} =
-               StreamableHTTP.set_sse_connection(transport, "non-existent", sse_pid)
+      # Register handler
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id, handler_pid)
+
+      # Send a message
+      message = ~s|{"jsonrpc":"2.0","method":"ping","params":{},"id":"1"}|
+      assert {:ok, response} = StreamableHTTP.handle_message_for_sse(transport, session_id, message)
+
+      # Should receive the response through SSE
+      assert_receive {:sse_data, ^response}
     end
-  end
 
-  describe "send_message/2" do
-    test "returns error for no active session", %{transport: transport} do
+    test "routes messages to sessions", %{transport: transport} do
+      session_id = "test-session-789"
+      handler_pid = self()
+
+      # Register handler
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id, handler_pid)
+
+      # Route a message
       message = "test message"
+      assert :ok = StreamableHTTP.route_to_session(transport, session_id, message)
 
-      assert {:error, :no_active_session} = StreamableHTTP.send_message(transport, message)
+      # Should receive the message
+      assert_receive {:sse_data, ^message}
     end
-  end
 
-  describe "shutdown/1" do
-    test "gracefully shuts down transport", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
+    test "cleans up handlers when they crash", %{transport: transport} do
+      session_id = "test-session-crash"
 
-      assert {:ok, _} = StreamableHTTP.lookup_session(transport, session_id)
+      # Spawn a handler that will crash
+      handler_pid =
+        spawn(fn ->
+          receive do
+            :crash -> exit(:boom)
+          end
+        end)
 
+      # Register handler
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id, handler_pid)
+
+      # Verify it's registered
+      assert {:ok, ^handler_pid} = StreamableHTTP.get_sse_handler(transport, session_id)
+
+      # Crash the handler
+      send(handler_pid, :crash)
+      Process.sleep(50)
+
+      # Handler should be automatically removed
+      assert {:error, :not_found} = StreamableHTTP.get_sse_handler(transport, session_id)
+    end
+
+    test "send_message/2 works", %{transport: transport} do
+      message = "test message"
+      assert :ok = StreamableHTTP.send_message(transport, message)
+    end
+
+    test "shutdown/1 gracefully shuts down", %{transport: transport} do
+      assert Process.alive?(transport)
       assert :ok = StreamableHTTP.shutdown(transport)
-
-      Process.sleep(50)
-
-      assert {:error, :not_found} = StreamableHTTP.lookup_session(transport, session_id)
-    end
-
-    test "terminates all sessions on shutdown", %{transport: transport} do
-      {:ok, session_id1} = StreamableHTTP.create_session(transport)
-      {:ok, session_id2} = StreamableHTTP.create_session(transport)
-
-      assert {:ok, _} = StreamableHTTP.lookup_session(transport, session_id1)
-      assert {:ok, _} = StreamableHTTP.lookup_session(transport, session_id2)
-
-      StreamableHTTP.shutdown(transport)
-
-      Process.sleep(50)
-
-      assert {:error, :not_found} = StreamableHTTP.lookup_session(transport, session_id1)
-      assert {:error, :not_found} = StreamableHTTP.lookup_session(transport, session_id2)
+      Process.sleep(100)
+      refute Process.alive?(transport)
     end
   end
 
-  describe "integration with server" do
-    test "full message flow works", %{transport: transport} do
-      {:ok, session_id} = StreamableHTTP.create_session(transport)
-
-      {:ok, init_message_encoded} =
-        Message.encode_request(
-          %{
-            "method" => "initialize",
-            "params" => %{
-              "protocolVersion" => "2025-03-26",
-              "capabilities" => %{"tools" => %{}},
-              "clientInfo" => %{"name" => "Test Client", "version" => "1.0.0"}
-            }
-          },
-          1
-        )
-
-      {:ok, response_json} =
-        StreamableHTTP.handle_message(
-          transport,
-          session_id,
-          init_message_encoded
-        )
-
-      {:ok, response} = Jason.decode(response_json)
-      assert response["jsonrpc"] == "2.0"
-      assert response["id"] == 1
-      assert is_map(response["result"])
-      assert response["result"]["protocolVersion"] == "2025-03-26"
-      assert is_map(response["result"]["serverInfo"])
-      assert is_map(response["result"]["capabilities"])
-
-      {:ok, initialized_message_encoded} =
-        Message.encode_notification(%{
-          "method" => "notifications/initialized"
-        })
-
-      {:ok, nil} =
-        StreamableHTTP.handle_message(
-          transport,
-          session_id,
-          initialized_message_encoded
-        )
-
-      {:ok, ping_message_encoded} =
-        Message.encode_request(
-          %{"method" => "ping"},
-          2
-        )
-
-      {:ok, ping_response_json} =
-        StreamableHTTP.handle_message(
-          transport,
-          session_id,
-          ping_message_encoded
-        )
-
-      {:ok, ping_response} = Jason.decode(ping_response_json)
-      assert ping_response["jsonrpc"] == "2.0"
-      assert ping_response["id"] == 2
-      assert ping_response["result"] == %{}
+  describe "supported_protocol_versions/0" do
+    test "returns supported versions" do
+      versions = StreamableHTTP.supported_protocol_versions()
+      assert is_list(versions)
+      assert "2025-03-26" in versions
     end
   end
 end

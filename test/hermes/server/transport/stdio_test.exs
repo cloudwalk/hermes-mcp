@@ -1,25 +1,13 @@
 defmodule Hermes.Server.Transport.STDIOTest do
-  use ExUnit.Case, async: false
+  use Hermes.MCP.Case, async: false
 
   import ExUnit.CaptureIO
 
-  alias Hermes.Server.Base
   alias Hermes.Server.Transport.STDIO
 
   @moduletag capture_log: true, capture_io: true
 
-  setup do
-    # Create server with required fields
-    opts = [
-      module: TestServers.MinimalServer,
-      init_arg: :ok,
-      name: __MODULE__.Server,
-      transport: [layer: STDIO, name: __MODULE__.Transport]
-    ]
-
-    server = start_supervised!({Base, opts})
-    %{server: server}
-  end
+  setup :server_with_stdio_transport
 
   describe "start_link/1" do
     test "starts successfully with valid options", %{server: server} do
