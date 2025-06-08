@@ -32,9 +32,6 @@ defmodule Upcase.Prompts.TextTransform do
         ""
       end
 
-    {:reply,
-     Response.prompt()
-     |> Response.user_message(base_message <> explanation)
-     |> Response.build(), frame}
+    {:reply, Response.user_message(Response.prompt(), base_message <> explanation), frame}
   end
 end

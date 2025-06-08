@@ -10,9 +10,6 @@ defmodule Upcase.Tools.Upcase do
 
   @impl true
   def execute(%{text: text}, frame) do
-    {:reply,
-     Response.tool()
-     |> Response.text(String.upcase(text))
-     |> Response.build(), frame}
+    {:reply, Response.text(Response.tool(), String.upcase(text)), frame}
   end
 end

@@ -5,7 +5,7 @@ defmodule Upcase.Resources.Examples do
     type: :resource,
     uri: "upcase://examples",
     mime_type: "application/json"
-  
+
   alias Hermes.Server.Response
 
   @impl true
@@ -44,9 +44,6 @@ defmodule Upcase.Resources.Examples do
       }
     }
 
-    {:reply,
-     Response.resource()
-     |> Response.text(JSON.encode!(examples))
-     |> Response.build(), frame}
+    {:reply, Response.json(Response.resource(), examples), frame}
   end
 end

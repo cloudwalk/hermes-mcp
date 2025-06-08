@@ -22,7 +22,7 @@ defmodule Hermes do
     name: {:required, get_schema(:process_name)}
 
   defschema :server_transport,
-    layer: {:required, {:enum, @sevrer_transports}},
+    layer: {:required, {:enum, @server_transports}},
     name: {:required, get_schema(:process_name)}
 
   defschema :process_name, {:either, {:pid, {:custom, &genserver_name/1}}}

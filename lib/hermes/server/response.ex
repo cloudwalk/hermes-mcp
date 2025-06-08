@@ -147,6 +147,10 @@ defmodule Hermes.Server.Response do
     add_content(r, %{"type" => "text", "text" => JSON.encode!(data)})
   end
 
+  def json(%{type: :resource} = r, data) do
+    %{r | contents: %{"text" => JSON.encode!(data)}}
+  end
+
   @doc """
   Add image content to a tool response.
 
@@ -386,28 +390,29 @@ defmodule Hermes.Server.Response do
 
   ## Examples
 
-      iex> Response.tool() |> Response.text("Hello") |> Response.build()
+      iex> Response.tool() |> Response.text("Hello") |> Response.to_protocol()
       %{"content" => [%{"type" => "text", "text" => "Hello"}], "isError" => false}
       
-      iex> Response.prompt() |> Response.user_message("Hi") |> Response.build()
+      iex> Response.prompt() |> Response.user_message("Hi") |> Response.to_protocol()
       %{"messages" => [%{"role" => "user", "content" => "Hi"}]}
       
-      iex> Response.resource() |> Response.text("data") |> Response.build()
+      iex> Response.resource() |> Response.text("data") |> Response.to_protocol()
       %{"text" => "data"}
   """
-  def build(%{type: :tool} = r) do
+  def to_protocol(%{type: :tool} = r) do
     %{"content" => r.content, "isError" => r.isError}
   end
 
-  def build(%{type: :prompt} = r) do
+  def to_protocol(%{type: :prompt} = r) do
     base = %{"messages" => r.messages}
     if Map.get(r, :description), do: Map.put(base, "description", r.description), else: base
   end
 
-  def build(%{type: :resource} = r) do
-    if !r.contents, do: raise("Resource response must have content (text or blob)")
-
-    Map.merge(r.contents, r.metadata)
+  def to_protocol(%{type: :resource} = r, uri, mime_type) do
+    r.contents
+    |> Map.merge(r.metadata)
+    |> Map.put("uri", uri)
+    |> Map.put("mimeType", mime_type)
   end
 
   defp add_content(r, content), do: %{r | content: r.content ++ [content]}
