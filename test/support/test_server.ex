@@ -3,13 +3,18 @@ defmodule TestServer do
   Test implementation of the Server.Behaviour for testing.
   """
 
-  @behaviour Hermes.Server.Behaviour
+  use Hermes.Server, name: "Test Server", version: "1.0.0", capabilities: [:tools, :prompts, :resources]
 
   alias Hermes.MCP.Error
+  alias Hermes.Server.Frame
+
+  def start_link(opts) do
+    Hermes.Server.start_link(__MODULE__, :ok, opts)
+  end
 
   @impl true
-  def init(_) do
-    {:ok, %{}}
+  def init(:ok, %Frame{} = frame) do
+    {:ok, frame}
   end
 
   @impl true
@@ -61,16 +66,5 @@ defmodule TestServer do
       "notifications/initialized" -> {:noreply, Map.put(state, :initialized_notification_received, true)}
       _ -> {:noreply, state}
     end
-  end
-
-  @impl true
-  def server_info, do: %{"name" => "Test Server", "version" => "1.0.0"}
-
-  @impl true
-  def server_capabilities, do: %{"tools" => %{"listChanged" => true}}
-
-  @impl true
-  def supported_protocol_versions do
-    ["2024-11-05", "2025-03-26"]
   end
 end

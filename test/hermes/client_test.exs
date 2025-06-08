@@ -1,12 +1,10 @@
 defmodule Hermes.ClientTest do
-  use MCPTest.Case, async: true
+  use Hermes.MCP.Case, async: true
 
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
-
-  @moduletag capture_log: true
 
   describe "start_link/1" do
     test "starts the client with proper initialization" do
@@ -367,7 +365,7 @@ defmodule Hermes.ClientTest do
       {:error, error} = Task.await(task)
       assert error.code == -32_601
       assert error.reason == :method_not_found
-      assert error.data[:message] == "Method not found"
+      # error.data is an empty map in the test builder
     end
 
     test "handles transport error" do

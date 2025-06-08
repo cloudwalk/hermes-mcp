@@ -1,4 +1,4 @@
-defmodule MCPTest.MockTransport do
+defmodule MockTransport do
   @moduledoc """
   Unified mock transport for MCP protocol testing.
 

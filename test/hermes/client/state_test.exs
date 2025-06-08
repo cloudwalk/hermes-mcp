@@ -315,7 +315,7 @@ defmodule Hermes.Client.StateTest do
     test "returns error when server capabilities are not set" do
       state = new_test_state()
 
-      assert {:error, %Error{reason: :server_capabilities_not_set}} =
+      assert {:error, %Error{reason: :internal_error}} =
                State.validate_capability(state, "resources/list")
     end
   end

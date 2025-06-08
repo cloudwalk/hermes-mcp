@@ -11,9 +11,6 @@ mix compile --force --warnings-as-errors
 # Run all tests
 mix test
 
-# Run tests without stderr output (suppresses "broken pipe" messages)
-mix test 2>/dev/null
-
 # Run a single test
 mix test test/path/to/test_file.exs:line_number
 
@@ -28,10 +25,6 @@ mix dialyzer
 
 # Generate documentation
 mix docs
-
-# Start dev servers
-just echo-server
-just calculator-server
 ```
 
 ## Core Architecture & Design Patterns
@@ -101,7 +94,7 @@ just calculator-server
   - `client_event/2`, `server_event/2`, `message/4` for protocol message logging
 
 ### Testing Patterns
-- **MCPTest Framework**: Use `MCPTest.Case` for comprehensive MCP protocol testing
+- **MCP Framework**: Use `Hermes.MCP.Case` for comprehensive MCP protocol testing
   - Provides builders, setup functions, helpers, and domain-specific assertions
   - Reduces test boilerplate by ~90% while maintaining flexibility
   - Uses MockTransport (test double) instead of real transports like STDIO/HTTP
@@ -144,6 +137,6 @@ just calculator-server
 - **Imports**: Group imports at top, organize by category (Elixir stdlib, deps, project modules)
 - **Documentation**: Include @moduledoc and @doc with examples
 - **Error Handling**: Pattern match with {:ok, _} and {:error, reason}
-- **Testing**: Descriptive test blocks, use Mox for mocking
+- **Testing**: Descriptive test blocks
 - **Constants**: Define defaults as module attributes (@default_*)
 - **Module Structure**: Follow pattern: moduledoc, types, constants, public API, GenServer callbacks, private helpers

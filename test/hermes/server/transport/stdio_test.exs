@@ -9,9 +9,12 @@ defmodule Hermes.Server.Transport.STDIOTest do
   @moduletag capture_log: true, capture_io: true
 
   setup do
+    # Create server with required fields
     opts = [
-      module: TestServer,
-      transport: [layer: STDIO]
+      module: TestServers.MinimalServer,
+      init_arg: :ok,
+      name: __MODULE__.Server,
+      transport: [layer: STDIO, name: __MODULE__.Transport]
     ]
 
     server = start_supervised!({Base, opts})

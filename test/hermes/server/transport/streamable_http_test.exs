@@ -14,7 +14,8 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
     registry_name = :"test_registry_#{System.unique_integer([:positive])}"
 
     server_opts = [
-      module: TestServer,
+      module: TestServers.MinimalServer,
+      init_arg: :ok,
       name: server_name,
       transport: [layer: StreamableHTTP, name: transport_name, registry: registry_name]
     ]
