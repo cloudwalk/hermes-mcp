@@ -14,7 +14,7 @@ defmodule Hermes.Server.BaseTest do
 
       assert {:ok, pid} =
                Base.start_link(
-                 module: TestServer,
+                 module: StubServer,
                  name: :named_server,
                  init_arg: :ok,
                  transport: [layer: StubTransport, name: transport]
@@ -28,7 +28,7 @@ defmodule Hermes.Server.BaseTest do
 
       assert {:ok, _pid} =
                Base.start_link(
-                 module: TestServer,
+                 module: StubServer,
                  name: :named_server,
                  init_arg: :ok,
                  transport: [layer: StubTransport, name: transport]
