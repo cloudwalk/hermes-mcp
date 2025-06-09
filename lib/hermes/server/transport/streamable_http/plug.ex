@@ -114,30 +114,15 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
   defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
     with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
-         {:ok, [messages]} <- maybe_parse_messages(body) do
+         {:ok, messages} <- maybe_parse_messages(body) do
       session_id = determine_session_id(conn, session_header, messages)
-
-      # if Enum.any?(messages, &Message.is_request/1) do
-      if Message.is_request(messages) do
-        handle_request_with_possible_sse(conn, transport, session_id, messages, session_header)
-      else
-        case StreamableHTTP.handle_message(transport, session_id, messages) do
-          {:ok, _} ->
-            conn
-            |> put_resp_content_type("application/json")
-            |> send_resp(202, "{}")
-
-          {:error, %Error{} = error} ->
-            send_jsonrpc_error(conn, error, nil)
-
-          {:error, reason} ->
-            Logging.transport_event("notification_handling_failed", %{reason: reason}, level: :error)
-            send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), nil)
-        end
-      end
+      handle_messages(conn, transport, session_id, messages, session_header)
     else
       {:error, :invalid_json} ->
         send_jsonrpc_error(conn, Error.protocol(:parse_error, %{message: "Invalid JSON"}), nil)
+
+      {:error, :empty_batch} ->
+        send_jsonrpc_error(conn, Error.protocol(:invalid_request, %{message: "Empty batch"}), nil)
 
       {:error, reason} ->
         Logging.transport_event("request_error", %{reason: reason}, level: :error)
@@ -158,6 +143,69 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
       _ ->
         send_error(conn, 400, "Session ID required")
+    end
+  end
+
+  # Handle messages - pattern match on single vs batch
+
+  defp handle_messages(conn, transport, session_id, [message], session_header) do
+    # Single message case
+    if Message.is_request(message) do
+      handle_request_with_possible_sse(conn, transport, session_id, message, session_header)
+    else
+      # It's a notification
+      case StreamableHTTP.handle_message(transport, session_id, message) do
+        {:ok, _} ->
+          conn
+          |> put_resp_content_type("application/json")
+          |> send_resp(202, "{}")
+
+        {:error, %Error{} = error} ->
+          send_jsonrpc_error(conn, error, nil)
+
+        {:error, reason} ->
+          Logging.transport_event("notification_handling_failed", %{reason: reason}, level: :error)
+          send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), nil)
+      end
+    end
+  end
+
+  defp handle_messages(conn, transport, session_id, messages, session_header) when is_list(messages) do
+    responses = Enum.reduce(messages, [], &handle_batch_message(&1, transport, session_id, &2))
+
+    case responses do
+      [] ->
+        conn
+        |> put_resp_content_type("application/json")
+        |> send_resp(202, "{}")
+
+      responses ->
+        batch_response = JSON.encode!(responses) <> "\n"
+
+        conn
+        |> put_resp_content_type("application/json")
+        |> maybe_add_session_header(session_header, session_id)
+        |> send_resp(200, batch_response)
+    end
+  end
+
+  defp handle_batch_message(message, transport, session_id, responses) do
+    if Message.is_notification(message) do
+      StreamableHTTP.handle_message(transport, session_id, message)
+      responses
+    else
+      case StreamableHTTP.handle_message(transport, session_id, message) do
+        {:ok, response} when is_binary(response) ->
+          with {:ok, [decoded]} <- Message.decode(response), do: responses ++ [decoded]
+
+        {:error, %Error{} = error} ->
+          with {:ok, err} <- Error.to_json_rpc(error, message["id"]),
+               {:ok, [decoded]} <- Message.decode(err),
+               do: responses ++ [decoded]
+
+        _ ->
+          responses
+      end
     end
   end
 
@@ -188,15 +236,16 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp handle_json_request(conn, transport, session_id, body, session_header) do
-    with {:ok, [messages]} <- maybe_parse_messages(body),
-         {:ok, response} <- StreamableHTTP.handle_message(transport, session_id, messages) do
-      conn
-      |> put_resp_content_type("application/json")
-      |> maybe_add_session_header(session_header, session_id)
-      |> send_resp(200, response)
-    else
-      {:error, error} -> handle_request_error(conn, error, body)
+  defp handle_json_request(conn, transport, session_id, message, session_header) do
+    case StreamableHTTP.handle_message(transport, session_id, message) do
+      {:ok, response} ->
+        conn
+        |> put_resp_content_type("application/json")
+        |> maybe_add_session_header(session_header, session_id)
+        |> send_resp(200, response)
+
+      {:error, error} ->
+        handle_request_error(conn, error, message)
     end
   end
 
@@ -287,10 +336,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   end
 
   defp maybe_parse_messages(body) when is_binary(body) do
-    case Message.decode(body) do
-      {:ok, messages} -> {:ok, messages}
-      {:error, _} -> {:error, :invalid_json}
-    end
+    Message.decode(body)
   end
 
   defp maybe_parse_messages(body) when is_map(body) do
@@ -301,10 +347,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   end
 
   defp maybe_parse_messages(body) when is_list(body) do
-    Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, messages} ->
-      case maybe_parse_messages(msg) do
-        {:ok, parsed} -> {:cont, {:ok, messages ++ parsed}}
-        err -> {:halt, err}
+    Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, acc} ->
+      case Message.validate_message(msg) do
+        {:ok, validated} -> {:cont, {:ok, acc ++ [validated]}}
+        {:error, _} -> {:halt, {:error, :invalid_json}}
       end
     end)
   end
