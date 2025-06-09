@@ -15,3 +15,7 @@ upcase-server:
 [working-directory: 'priv/dev/ascii']
 ascii-server:
     iex -S mix phx.server
+
+[working-directory: 'priv/dev/echo-elixir']
+echo-ex-server:
+    iex -S mix phx.server
