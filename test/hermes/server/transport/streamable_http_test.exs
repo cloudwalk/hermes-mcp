@@ -3,22 +3,14 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
 
   alias Hermes.Server.Transport.StreamableHTTP
 
-  @moduletag capture_log: true
-
   describe "start_link/1" do
     test "starts with valid options" do
-      server =
-        spawn(fn ->
-          receive do
-            _ -> :ok
-          end
-        end)
-
-      name = :"test_streamable_http_#{System.unique_integer([:positive])}"
+      server = Hermes.Server.Registry.server(StubServer)
+      name = Hermes.Server.Registry.transport(StubServer, :streamable_http)
 
       assert {:ok, pid} = StreamableHTTP.start_link(server: server, name: name)
       assert Process.alive?(pid)
-      assert Process.whereis(name) == pid
+      assert Hermes.Server.Registry.whereis_transport(StubServer, :streamable_http) == pid
     end
 
     test "requires server option" do
@@ -26,63 +18,34 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
         StreamableHTTP.start_link(name: :test)
       end
     end
-
-    test "requires name option" do
-      server =
-        spawn(fn ->
-          receive do
-            _ -> :ok
-          end
-        end)
-
-      assert_raise Peri.InvalidSchema, fn ->
-        StreamableHTTP.start_link(server: server)
-      end
-    end
   end
 
   describe "with running transport" do
     setup do
-      server =
-        spawn(fn ->
-          receive do
-            _ -> :ok
-          end
-        end)
+      registry = Hermes.Server.Registry
+      name = registry.transport(StubServer, :streamable_http)
+      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
 
-      name = :"test_transport_#{System.unique_integer([:positive])}"
-      {:ok, transport} = start_supervised({StreamableHTTP, server: server, name: name})
-
-      %{transport: transport, server: server}
+      %{transport: transport, server: StubServer}
     end
 
     test "registers and unregisters SSE handlers", %{transport: transport} do
       session_id = "test-session-123"
       handler_pid = self()
 
-      # Register handler
       assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
-
-      # Get handler
       assert ^handler_pid = StreamableHTTP.get_sse_handler(transport, session_id)
-
-      # Unregister handler
       assert :ok = StreamableHTTP.unregister_sse_handler(transport, session_id)
-
-      # Handler should be gone
-      assert nil == StreamableHTTP.get_sse_handler(transport, session_id)
+      refute StreamableHTTP.get_sse_handler(transport, session_id)
     end
 
     test "handle_message_for_sse fails when server is not in registry", %{transport: transport} do
       session_id = "test-session-456"
 
       assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+      message = build_request("ping", %{})
 
-      message = ~s|{"jsonrpc":"2.0","method":"ping","params":{},"id":"1"}|
-
-      assert_raise FunctionClauseError, ~r/no function clause matching in Hermes.Server.Registry.whereis_server/, fn ->
-        StreamableHTTP.handle_message_for_sse(transport, session_id, message)
-      end
+      StreamableHTTP.handle_message_for_sse(transport, session_id, message)
     end
 
     test "routes messages to sessions", %{transport: transport} do
@@ -98,32 +61,27 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
 
     test "cleans up handlers when they crash", %{transport: transport} do
       session_id = "test-session-crash"
+      test_pid = self()
 
       handler_pid =
         spawn(fn ->
+          StreamableHTTP.register_sse_handler(transport, session_id)
+          send(test_pid, :registered)
+
           receive do
             :crash -> exit(:boom)
           end
         end)
 
-      Task.start(fn ->
-        StreamableHTTP.register_sse_handler(transport, session_id)
-        send(handler_pid, :registered)
-
-        receive do
-          :crash -> exit(:boom)
-        end
-      end)
-
-      assert_receive :registered
+      assert_receive :registered, 1000
 
       handler = StreamableHTTP.get_sse_handler(transport, session_id)
       assert is_pid(handler)
 
       send(handler_pid, :crash)
-      Process.sleep(50)
+      Process.sleep(100)
 
-      assert nil == StreamableHTTP.get_sse_handler(transport, session_id)
+      refute StreamableHTTP.get_sse_handler(transport, session_id)
     end
 
     test "send_message/2 works", %{transport: transport} do

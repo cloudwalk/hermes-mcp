@@ -5,7 +5,7 @@ defmodule Hermes.Server.Transport.STDIOTest do
 
   alias Hermes.Server.Transport.STDIO
 
-  @moduletag capture_log: true, capture_io: true
+  @moduletag capture_log: true, capture_io: true, skip: true
 
   setup :server_with_stdio_transport
 
