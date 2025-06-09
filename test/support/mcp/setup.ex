@@ -11,7 +11,66 @@ defmodule Hermes.MCP.Setup do
 
   require Message
 
-  def initialized_client(ctx) do
+  def get_request_id(client, method, retries \\ 5) do
+    Process.sleep(15 * retries)
+    state = :sys.get_state(client)
+
+    request_id =
+      Enum.find_value(state.pending_requests, fn {id, request} ->
+        if request.method == method, do: id
+      end)
+
+    cond do
+      request_id != nil -> request_id
+      retries > 0 -> get_request_id(client, method, retries - 1)
+      true -> nil
+    end
+  end
+
+  def send_response(client, response) do
+    {:ok, encoded} = Message.encode_response(response, response["id"])
+    GenServer.cast(client, {:response, encoded})
+  end
+
+  def send_error(client, error_response) do
+    {:ok, encoded} = Message.encode_error(error_response, error_response["id"])
+    GenServer.cast(client, {:response, encoded})
+  end
+
+  def send_notification(client, notification) do
+    {:ok, encoded} = Message.encode_notification(notification)
+    GenServer.cast(client, {:response, encoded})
+  end
+
+  def initialize_client(client, opts \\ []) do
+    server_capabilities =
+      opts[:server_capabilities] ||
+        %{
+          "resources" => %{},
+          "tools" => %{},
+          "prompts" => %{}
+        }
+
+    GenServer.cast(client, :initialize)
+    Process.sleep(50)
+
+    request_id = get_request_id(client, "initialize")
+    assert request_id
+
+    response =
+      Builders.init_response(
+        request_id,
+        "2025-03-26",
+        %{"name" => "TestServer", "version" => "1.0.0"},
+        server_capabilities
+      )
+
+    send_response(client, response)
+
+    Process.sleep(50)
+  end
+
+  def initialized_client_with_server(ctx) do
     protocol_version = ctx[:protocol_version]
     capabilities = ctx[:client_capabilities]
     info = ctx[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
@@ -110,5 +169,34 @@ defmodule Hermes.MCP.Setup do
     assert server = Hermes.Server.Registry.whereis_server(StubServer)
 
     Map.merge(ctx, %{server: server, transport: transport})
+  end
+
+  def initialized_client(context) do
+    import Mox
+
+    server_capabilities =
+      context[:server_capabilities] ||
+        %{
+          "resources" => %{},
+          "tools" => %{},
+          "prompts" => %{}
+        }
+
+    client_info = context[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
+    client_capabilities = context[:client_capabilities]
+
+    client =
+      start_supervised!(
+        {Hermes.Client,
+         transport: [layer: Hermes.MockTransport, name: MockTransport],
+         client_info: client_info,
+         capabilities: client_capabilities},
+        restart: :temporary
+      )
+
+    allow(Hermes.MockTransport, self(), fn -> client end)
+    initialize_client(client, server_capabilities: server_capabilities)
+
+    Map.put(context, :client, client)
   end
 end

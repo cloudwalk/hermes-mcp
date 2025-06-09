@@ -110,7 +110,14 @@ defmodule Hermes.Client do
   @spec start_link(Enumerable.t(option)) :: GenServer.on_start()
   def start_link(opts) do
     opts = parse_options!(opts)
-    GenServer.start_link(__MODULE__, Map.new(opts), name: opts[:name])
+
+    protocol_version = opts[:protocol_version]
+    layer = opts[:transport][:layer]
+
+    with :ok <- Protocol.validate_version(protocol_version),
+         :ok <- Protocol.validate_transport(protocol_version, layer) do
+      GenServer.start_link(__MODULE__, Map.new(opts), name: opts[:name])
+    end
   end
 
   @doc """
@@ -640,59 +647,42 @@ defmodule Hermes.Client do
     layer = opts.transport[:layer]
     name = opts.transport[:name] || layer
     protocol_version = opts.protocol_version
+    transport = %{layer: layer, name: name}
 
-    with :ok <- Protocol.validate_version(protocol_version),
-         :ok <- Protocol.validate_transport(protocol_version, layer) do
-      transport = %{layer: layer, name: name}
-
-      state =
-        State.new(%{
-          client_info: opts.client_info,
-          capabilities: opts.capabilities,
-          protocol_version: protocol_version,
-          transport: transport
-        })
-
-      client_name = get_in(opts, [:client_info, "name"])
-
-      Logger.metadata(
-        mcp_client: opts.name,
-        mcp_client_name: client_name,
-        mcp_transport: opts.transport
-      )
-
-      Logging.client_event("initializing", %{
-        protocol_version: protocol_version,
+    state =
+      State.new(%{
+        client_info: opts.client_info,
         capabilities: opts.capabilities,
-        transport: layer
+        protocol_version: protocol_version,
+        transport: transport
       })
 
-      Telemetry.execute(
-        Telemetry.event_client_init(),
-        %{system_time: System.system_time()},
-        %{
-          client_name: client_name,
-          transport: transport,
-          protocol_version: protocol_version,
-          capabilities: opts.capabilities
-        }
-      )
+    client_name = get_in(opts, [:client_info, "name"])
 
-      {:ok, state, :hibernate}
-    else
-      {:error, %Error{} = error} ->
-        Logging.client_event(
-          "initialization_failed",
-          %{
-            error: error,
-            protocol_version: protocol_version,
-            transport: layer
-          },
-          level: :error
-        )
+    Logger.metadata(
+      mcp_client: opts.name,
+      mcp_client_name: client_name,
+      mcp_transport: opts.transport
+    )
 
-        {:stop, error}
-    end
+    Logging.client_event("initializing", %{
+      protocol_version: protocol_version,
+      capabilities: opts.capabilities,
+      transport: layer
+    })
+
+    Telemetry.execute(
+      Telemetry.event_client_init(),
+      %{system_time: System.system_time()},
+      %{
+        client_name: client_name,
+        transport: transport,
+        protocol_version: protocol_version,
+        capabilities: opts.capabilities
+      }
+    )
+
+    {:ok, state, :hibernate}
   end
 
   @impl true

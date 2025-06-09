@@ -31,6 +31,10 @@ defmodule Hermes.MCP.Builders do
     }
   end
 
+  def init_response(request_id, capabilities) when is_binary(request_id) and is_map(capabilities) do
+    init_response(request_id, "2025-03-26", %{"name" => "TestServer", "version" => "1.0.0"}, capabilities)
+  end
+
   def build_request(method, params \\ %{}, id \\ ID.generate_request_id()) do
     %{"jsonrpc" => "2.0", "id" => id, "method" => method, "params" => params}
   end
@@ -72,5 +76,65 @@ defmodule Hermes.MCP.Builders do
       Message.is_request(message) ->
         Message.encode_request(message, message["id"])
     end
+  end
+
+  # Response builders for testing - using generic builders
+
+  def ping_response(request_id) do
+    build_response(%{}, request_id)
+  end
+
+  def resources_list_response(request_id, resources) do
+    build_response(%{"resources" => resources, "nextCursor" => nil}, request_id)
+  end
+
+  def resources_read_response(request_id, contents) do
+    build_response(%{"contents" => contents}, request_id)
+  end
+
+  def prompts_list_response(request_id, prompts) do
+    build_response(%{"prompts" => prompts, "nextCursor" => nil}, request_id)
+  end
+
+  def prompts_get_response(request_id, messages) do
+    build_response(%{"messages" => messages}, request_id)
+  end
+
+  def tools_list_response(request_id, tools) do
+    build_response(%{"tools" => tools, "nextCursor" => nil}, request_id)
+  end
+
+  def tools_call_response(request_id, content, is_error \\ false) do
+    build_response(%{"content" => content, "isError" => is_error}, request_id)
+  end
+
+  def error_response(request_id) do
+    build_error(-32_601, "Method not found", request_id)
+  end
+
+  def completion_complete_response(request_id, values, total, has_more) do
+    build_response(%{"completion" => %{"values" => values, "total" => total, "hasMore" => has_more}}, request_id)
+  end
+
+  def empty_result_response(request_id) do
+    build_response(%{}, request_id)
+  end
+
+  # Notification builders - using generic builder
+
+  def log_notification(level, data, logger) do
+    build_notification("notifications/message", %{"level" => level, "data" => data, "logger" => logger})
+  end
+
+  def progress_notification(token, progress \\ 0, total \\ nil) do
+    params = %{"progressToken" => token, "progress" => progress}
+
+    params = if total == nil, do: params, else: Map.put(params, "total", total)
+
+    build_notification("notifications/progress", params)
+  end
+
+  def cancelled_notification(request_id, reason) do
+    build_notification("notifications/cancelled", %{"requestId" => request_id, "reason" => reason})
   end
 end

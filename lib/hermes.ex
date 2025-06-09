@@ -10,7 +10,7 @@ defmodule Hermes do
   alias Hermes.Transport.StreamableHTTP, as: ClientStreamableHTTP
 
   @client_transports if Mix.env() == :test,
-                       do: [ClientSTDIO, ClientSSE, ClientStreamableHTTP, StubTransport],
+                       do: [ClientSTDIO, ClientSSE, ClientStreamableHTTP, StubTransport, Hermes.MockTransport],
                        else: [ClientSTDIO, ClientSSE, ClientStreamableHTTP]
 
   @server_transports if Mix.env() == :test,
