@@ -1,45 +1,52 @@
-defmodule Hermes.Server.Transport.StreamableHTTP do
+defmodule Hermes.Server.Transport.SSE do
   @moduledoc """
-  StreamableHTTP transport implementation for MCP servers.
+  SSE (Server-Sent Events) transport implementation for MCP servers.
 
-  This module provides an HTTP-based transport layer that supports multiple
-  concurrent client sessions through Server-Sent Events (SSE). It enables
-  web-based MCP clients to communicate with the server using standard HTTP
-  protocols.
+  This module provides backward compatibility with the HTTP+SSE transport
+  from MCP protocol version 2024-11-05. It supports multiple concurrent
+  client sessions through Server-Sent Events for server-to-client communication
+  and HTTP POST for client-to-server messages.
 
   ## Features
 
   - Multiple concurrent client sessions
   - Server-Sent Events for real-time server-to-client communication
-  - HTTP POST endpoint for client-to-server messages
+  - Separate SSE and POST endpoints (as per 2024-11-05 spec)
   - Automatic session cleanup on disconnect
-  - Integration with Phoenix/Plug applications
+  - Integration with existing Phoenix/Plug applications
 
   ## Usage
 
-  StreamableHTTP is typically started through the server supervisor:
+  SSE transport is typically started through the server supervisor:
 
       Hermes.Server.start_link(MyServer, [],
-        transport: :streamable_http,
-        streamable_http: [port: 4000]
+        transport: :sse,
+        sse: [port: 8080, sse_path: "/sse", post_path: "/messages"]
       )
 
   For integration with existing Phoenix/Plug applications:
 
       # In your router
-      forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug,
-        server: MyApp.MCPServer
+      forward "/sse", Hermes.Server.Transport.SSE.Plug,
+        server: MyApp.MCPServer,
+        mode: :sse
+
+      forward "/messages", Hermes.Server.Transport.SSE.Plug,
+        server: MyApp.MCPServer,
+        mode: :post
 
   ## Message Flow
 
-  1. Client connects to `/sse` endpoint, receives a session ID
-  2. Client sends messages via POST to `/messages` with session ID header
+  1. Client connects to SSE endpoint, receives "endpoint" event with POST URL
+  2. Client sends messages via POST to the endpoint URL
   3. Server responses are pushed through the SSE connection
   4. Connection closes on client disconnect or server shutdown
 
   ## Configuration
 
-  - `:port` - HTTP server port (default: 4000)
+  - `:port` - HTTP server port (default: 8080)
+  - `:sse_path` - Path for SSE connections (default: "/sse")
+  - `:post_path` - Path for POST messages (default: "/messages")
   - `:server` - The MCP server process to connect to
   - `:name` - Process registration name
   """
@@ -61,23 +68,29 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   @type t :: GenServer.server()
 
   @typedoc """
-  StreamableHTTP transport options
+  SSE transport options
 
   - `:server` - The server process (required)
   - `:name` - Name for registering the GenServer (required)
+  - `:base_url` - Base URL for constructing endpoint URLs
+  - `:post_path` - Path for POST endpoint (default: "/messages")
   """
   @type option ::
           {:server, GenServer.server()}
           | {:name, GenServer.name()}
+          | {:base_url, String.t()}
+          | {:post_path, String.t()}
           | GenServer.option()
 
   defschema :parse_options, [
     {:server, {:required, Hermes.get_schema(:process_name)}},
-    {:name, {:required, {:custom, &Hermes.genserver_name/1}}}
+    {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
+    {:base_url, {:string, {:default, ""}}},
+    {:post_path, {:string, {:default, "/messages"}}}
   ]
 
   @doc """
-  Starts the StreamableHTTP transport.
+  Starts the SSE transport.
   """
   @impl Transport
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
@@ -91,8 +104,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   @doc """
   Sends a message to the client via the active SSE connection.
 
-  This function is used for server-initiated notifications.
-  It will broadcast to all active SSE connections.
+  This broadcasts to all active SSE connections for the session.
 
   ## Parameters
     * `transport` - The transport process
@@ -124,7 +136,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl Transport
   def supported_protocol_versions do
-    ["2024-11-05", "2025-03-26"]
+    ["2024-11-05"]
   end
 
   @doc """
@@ -160,18 +172,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @doc """
-  Handles an incoming message and returns {:sse, response} if SSE handler exists.
-
-  This allows the Plug to know whether to stream the response via SSE
-  or return it as a regular HTTP response.
-  """
-  @spec handle_message_for_sse(GenServer.server(), String.t(), map()) ::
-          {:ok, binary()} | {:sse, binary()} | {:error, term()}
-  def handle_message_for_sse(transport, session_id, message) do
-    GenServer.call(transport, {:handle_message_for_sse, session_id, message})
-  end
-
-  @doc """
   Gets the SSE handler process for a session.
 
   Returns the pid of the process handling SSE for this session,
@@ -192,25 +192,37 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     GenServer.call(transport, {:route_to_session, session_id, message})
   end
 
+  @doc """
+  Gets the endpoint URL that should be sent to clients.
+
+  This constructs the URL that clients should use for POST requests.
+  """
+  @spec get_endpoint_url(GenServer.server()) :: String.t()
+  def get_endpoint_url(transport) do
+    GenServer.call(transport, :get_endpoint_url)
+  end
+
   # GenServer implementation
 
   @impl GenServer
-  def init(%{server: server}) do
+  def init(%{server: server} = opts) do
     Process.flag(:trap_exit, true)
 
     state = %{
       server: server,
+      base_url: Map.get(opts, :base_url, ""),
+      post_path: Map.get(opts, :post_path, "/messages"),
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{}
     }
 
-    Logger.metadata(mcp_transport: :streamable_http, mcp_server: server)
-    Logging.transport_event("starting", %{transport: :streamable_http, server: server})
+    Logger.metadata(mcp_transport: :sse, mcp_server: server)
+    Logging.transport_event("starting", %{transport: :sse, server: server})
 
     Telemetry.execute(
       Telemetry.event_transport_init(),
       %{system_time: System.system_time()},
-      %{transport: :streamable_http, server: server}
+      %{transport: :sse, server: server}
     )
 
     {:ok, state}
@@ -243,19 +255,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
-    server = Registry.whereis_server(state.server)
-
-    if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
-      {:reply, {:ok, nil}, state}
-    else
-      sse_handler? = Map.has_key?(state.sse_handlers, session_id)
-      {:reply, forward_request_to_server(server, message, session_id, sse_handler?), state}
-    end
-  end
-
-  @impl GenServer
   def handle_call({:get_sse_handler, session_id}, _from, state) do
     case Map.get(state.sse_handlers, session_id) do
       {pid, _ref} -> {:reply, pid, state}
@@ -277,7 +276,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:send_message, message}, _from, state) do
-    Logging.transport_event("broadcast_notification", %{
+    Logging.transport_event("broadcast_message", %{
       message_size: byte_size(message),
       active_handlers: map_size(state.sse_handlers)
     })
@@ -289,11 +288,14 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:reply, :ok, state}
   end
 
-  defp forward_request_to_server(server, message, session_id, has_sse_handler \\ false) do
-    case GenServer.call(server, {:request, message, session_id}) do
-      {:ok, response} when has_sse_handler ->
-        {:sse, response}
+  @impl GenServer
+  def handle_call(:get_endpoint_url, _from, state) do
+    endpoint_url = Path.join([state.base_url, state.post_path])
+    {:reply, endpoint_url, state}
+  end
 
+  defp forward_request_to_server(server, message, session_id) do
+    case GenServer.call(server, {:request, message, session_id}) do
       {:ok, response} ->
         {:ok, response}
 
@@ -324,7 +326,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_cast(:shutdown, state) do
-    Logging.transport_event("shutdown", %{transport: :streamable_http}, level: :info)
+    Logging.transport_event("shutdown", %{transport: :sse}, level: :info)
 
     for {_session_id, {pid, _ref}} <- state.sse_handlers do
       send(pid, :close_sse)
@@ -333,7 +335,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     Telemetry.execute(
       Telemetry.event_transport_disconnect(),
       %{system_time: System.system_time()},
-      %{transport: :streamable_http, reason: :shutdown}
+      %{transport: :sse, reason: :shutdown}
     )
 
     {:stop, :normal, state}
@@ -363,7 +365,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     Telemetry.execute(
       Telemetry.event_transport_terminate(),
       %{system_time: System.system_time()},
-      %{transport: :streamable_http, reason: reason}
+      %{transport: :sse, reason: reason}
     )
 
     :ok

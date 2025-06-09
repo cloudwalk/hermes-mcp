@@ -52,10 +52,10 @@ defmodule Hermes.Server.Supervisor do
 
   alias Hermes.Server.Base
   alias Hermes.Server.Session
+  alias Hermes.Server.Transport.SSE
   alias Hermes.Server.Transport.STDIO
   alias Hermes.Server.Transport.StreamableHTTP
 
-  # TODO(zoedsoupe): need to implement backward compatibility with SSE/2024-05-11
   @type sse :: {:sse, keyword()}
   @type stream_http :: {:streamable_http, keyword()}
 
@@ -146,7 +146,11 @@ defmodule Hermes.Server.Supervisor do
     {StreamableHTTP, opts}
   end
 
-  defp parse_transport_child({:sse, _opts}, _server, _), do: raise("unimplemented")
+  defp parse_transport_child({:sse, opts}, server, registry) do
+    name = registry.transport(server, :sse)
+    opts = Keyword.merge(opts, name: name, server: server, registry: registry)
+    {SSE, opts}
+  end
 
   if Mix.env() == :test do
     defp should_start?(StubTransport), do: true
