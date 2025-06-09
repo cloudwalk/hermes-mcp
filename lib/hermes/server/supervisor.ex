@@ -129,20 +129,20 @@ defmodule Hermes.Server.Supervisor do
   if Mix.env() == :test do
     defp parse_transport_child(StubTransport = kind, server, registry) do
       name = registry.transport(server, kind)
-      opts = [name: name, server: server]
+      opts = [name: name, server: server, registry: registry]
       {kind, opts}
     end
   end
 
   defp parse_transport_child(:stdio, server, registry) do
     name = registry.transport(server, :stdio)
-    opts = [name: name, server: server]
+    opts = [name: name, server: server, registry: registry]
     {STDIO, opts}
   end
 
   defp parse_transport_child({:streamable_http, opts}, server, registry) do
     name = registry.transport(server, :streamable_http)
-    opts = Keyword.merge(opts, name: name, server: server)
+    opts = Keyword.merge(opts, name: name, server: server, registry: registry)
     {StreamableHTTP, opts}
   end
 

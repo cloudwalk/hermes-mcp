@@ -13,8 +13,11 @@ defmodule Hermes.Server.Transport.STDIO do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
+
+  require Message
 
   @type t :: GenServer.server()
 
@@ -31,7 +34,8 @@ defmodule Hermes.Server.Transport.STDIO do
 
   defschema(:parse_options, [
     {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
-    {:name, {:custom, &Hermes.genserver_name/1}}
+    {:name, {:custom, &Hermes.genserver_name/1}},
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
   ])
 
   @doc """
@@ -95,19 +99,19 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   @impl GenServer
-  def init(%{server: server}) do
+  def init(opts) do
     :ok = :io.setopts(encoding: :utf8)
     Process.flag(:trap_exit, true)
 
-    state = %{server: server, reading_task: nil}
+    state = %{server: opts.server, reading_task: nil, registry: opts.registry}
 
-    Logger.metadata(mcp_transport: :stdio, mcp_server: server)
-    Logging.transport_event("starting", %{transport: :stdio, server: server})
+    Logger.metadata(mcp_transport: :stdio, mcp_server: state.server)
+    Logging.transport_event("starting", %{transport: :stdio, server: state.server})
 
     Telemetry.execute(
       Telemetry.event_transport_init(),
       %{system_time: System.system_time()},
-      %{transport: :stdio, server: server}
+      %{transport: :stdio, server: state.server}
     )
 
     {:ok, state, {:continue, :start_reading}}
@@ -217,7 +221,7 @@ defmodule Hermes.Server.Transport.STDIO do
     end
   end
 
-  defp handle_incoming_data(data, %{server: server}) do
+  defp handle_incoming_data(data, state) do
     Logging.transport_event(
       "incoming",
       %{transport: :stdio, message_size: byte_size(data)},
@@ -230,10 +234,27 @@ defmodule Hermes.Server.Transport.STDIO do
       %{transport: :stdio, message_size: byte_size(data)}
     )
 
-    case GenServer.call(server, {:message, data}) do
-      {:ok, nil} -> :ok
-      {:ok, message} -> send_message(self(), message)
-      {:error, reason} -> Logging.transport_event("server_error", %{reason: reason}, level: :error)
+    case Message.decode(data) do
+      {:ok, messages} ->
+        Enum.each(messages, fn message ->
+          process_message(message, state)
+        end)
+
+      {:error, reason} ->
+        Logging.transport_event("parse_error", %{reason: reason}, level: :error)
+    end
+  end
+
+  defp process_message(message, %{server: server_name, registry: registry}) do
+    server = registry.whereis_server(server_name)
+
+    if Message.is_notification(message) do
+      GenServer.cast(server, {:notification, message, "stdio"})
+    else
+      case GenServer.call(server, {:request, message, "stdio"}) do
+        {:ok, response} when is_binary(response) -> send_message(self(), response)
+        {:error, reason} -> Logging.transport_event("server_error", %{reason: reason}, level: :error)
+      end
     end
   catch
     :exit, reason ->
