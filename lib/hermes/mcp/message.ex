@@ -293,21 +293,67 @@ defmodule Hermes.MCP.Message do
   @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.
 
+  Handles both single messages and batch requests (JSON arrays).
   Returns either:
   - `{:ok, messages}` where messages is a list of parsed JSON-RPC messages
   - `{:error, reason}` if parsing fails
   """
   def decode(data) when is_binary(data) do
+    # First try to decode as JSON to check if it's a batch
+    case JSON.decode(data) do
+      {:ok, decoded} when is_list(decoded) ->
+        # It's a batch request - validate each message
+        validate_batch(decoded)
+
+      {:ok, decoded} when is_map(decoded) ->
+        # It's a single message
+        with {:ok, message} <- validate_message(decoded) do
+          {:ok, [message]}
+        end
+
+      {:error, _} ->
+        # Not valid JSON, try line-by-line parsing for streaming transports
+        decode_lines(data)
+    end
+  end
+
+  defp validate_batch(messages) when is_list(messages) do
+    # Empty arrays are invalid per JSON-RPC spec
+    if messages == [] do
+      {:error, :empty_batch}
+    else
+      messages
+      |> Enum.reduce_while({:ok, []}, fn msg, {:ok, acc} ->
+        case validate_message(msg) do
+          {:ok, validated} ->
+            {:cont, {:ok, [validated | acc]}}
+
+          {:error, _} ->
+            # Per JSON-RPC spec, invalid messages in batch get error responses
+            error_response = %{
+              "jsonrpc" => "2.0",
+              "error" => %{"code" => -32_600, "message" => "Invalid Request"},
+              "id" => nil
+            }
+
+            {:cont, {:ok, [error_response | acc]}}
+        end
+      end)
+      |> then(fn {:ok, messages} -> {:ok, Enum.reverse(messages)} end)
+    end
+  end
+
+  defp decode_lines(data) do
     data
     |> String.split("\n", trim: true)
-    |> Enum.reduce_while({:ok, []}, &parse_message/2)
+    |> Enum.reduce_while({:ok, []}, &parse_line/2)
     |> then(fn
       {:ok, messages} -> {:ok, Enum.reverse(messages)}
       {:error, reason} -> {:error, reason}
     end)
   end
 
-  defp parse_message(line, {:ok, acc}) do
+  defp parse_line(line, {:ok, acc}) do
     with {:ok, message} <- JSON.decode(line),
          {:ok, message} <- validate_message(message) do
       {:cont, {:ok, [message | acc]}}

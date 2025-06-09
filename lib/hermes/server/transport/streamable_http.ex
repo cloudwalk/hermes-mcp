@@ -245,11 +245,16 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_call({:handle_message, session_id, message}, _from, state) do
     server = Registry.whereis_server(state.server)
 
-    if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
-      {:reply, {:ok, nil}, state}
-    else
-      {:reply, forward_request_to_server(server, message, session_id), state}
+    cond do
+      is_list(message) ->
+        {:reply, forward_batch_to_server(server, message, session_id), state}
+
+      Message.is_notification(message) ->
+        GenServer.cast(server, {:notification, message, session_id})
+        {:reply, {:ok, nil}, state}
+
+      true ->
+        {:reply, forward_request_to_server(server, message, session_id), state}
     end
   end
 
@@ -257,12 +262,17 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
     server = Registry.whereis_server(state.server)
 
-    if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
-      {:reply, {:ok, nil}, state}
-    else
-      sse_handler? = Map.has_key?(state.sse_handlers, session_id)
-      {:reply, forward_request_to_server(server, message, session_id, sse_handler?), state}
+    cond do
+      is_list(message) ->
+        {:reply, forward_batch_to_server(server, message, session_id), state}
+
+      Message.is_notification(message) ->
+        GenServer.cast(server, {:notification, message, session_id})
+        {:reply, {:ok, nil}, state}
+
+      true ->
+        sse_handler? = Map.has_key?(state.sse_handlers, session_id)
+        {:reply, forward_request_to_server(server, message, session_id, sse_handler?), state}
     end
   end
 
@@ -315,6 +325,21 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   catch
     :exit, reason ->
       Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
+      {:error, :server_unavailable}
+  end
+
+  defp forward_batch_to_server(server, messages, session_id) do
+    case GenServer.call(server, {:batch, messages, session_id}) do
+      {:ok, responses} ->
+        {:ok, responses}
+
+      {:error, reason} ->
+        Logging.transport_event("batch_server_error", %{reason: reason, session_id: session_id}, level: :error)
+        {:error, reason}
+    end
+  catch
+    :exit, reason ->
+      Logging.transport_event("batch_server_call_failed", %{reason: reason}, level: :error)
       {:error, :server_unavailable}
   end
 
