@@ -42,13 +42,7 @@ defmodule Hermes.Server.Transport.SSETest do
   end
 
   describe "with running transport" do
-    setup do
-      registry = Hermes.Server.Registry
-      name = registry.transport(StubServer, :sse)
-      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
-
-      %{transport: transport, server: StubServer}
-    end
+    setup :server_with_sse_transport
 
     test "registers and unregisters SSE handlers", %{transport: transport} do
       session_id = "test-session-123"
@@ -62,7 +56,7 @@ defmodule Hermes.Server.Transport.SSETest do
 
     test "handle_message processes notifications", %{transport: transport} do
       session_id = "test-session-456"
-      notification = build_notification("test/notification", %{"data" => "test"})
+      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
 
       # Should return nil for notifications and send them to server
       assert {:ok, nil} = SSE.handle_message(transport, session_id, notification)
@@ -186,21 +180,22 @@ defmodule Hermes.Server.Transport.SSETest do
   end
 
   describe "message handling edge cases" do
-    setup do
-      registry = Hermes.Server.Registry
-      name = registry.transport(StubServer, :sse)
-      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
+    setup :server_with_sse_transport
 
-      %{transport: transport}
-    end
+    test "handle_message with valid request returns response", %{transport: transport} do
+      session_id = "test-session"
+      request = build_request("ping", %{})
 
-    test "handle_message with request when server not in registry", %{transport: transport} do
-      session_id = "test-error-session"
-      request = build_request("test/method", %{"param" => "value"})
+      # Register an SSE handler first
+      assert :ok = SSE.register_sse_handler(transport, session_id)
 
-      # Should return error when server is not found
-      result = SSE.handle_message(transport, session_id, request)
-      assert {:error, :server_unavailable} = result
+      # handle_message should return nil since response goes through SSE
+      assert {:ok, nil} = SSE.handle_message(transport, session_id, request)
+
+      # The response should be sent through the SSE handler
+      assert_receive {:sse_message, response}
+      # StubServer returns empty result for ping
+      assert response =~ "\"result\":{}"
     end
   end
 end

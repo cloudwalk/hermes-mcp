@@ -250,7 +250,13 @@ defmodule Hermes.Server.Transport.SSE do
       GenServer.cast(server, {:notification, message, session_id})
       {:reply, {:ok, nil}, state}
     else
-      {:reply, forward_request_to_server(server, message, session_id), state}
+      case forward_request_to_server(server, message, session_id) do
+        {:ok, response} ->
+          maybe_send_through_sse(response, session_id, state)
+
+        {:error, reason} ->
+          {:reply, {:error, reason}, state}
+      end
     end
   end
 
@@ -290,8 +296,25 @@ defmodule Hermes.Server.Transport.SSE do
 
   @impl GenServer
   def handle_call(:get_endpoint_url, _from, state) do
-    endpoint_url = Path.join([state.base_url, state.post_path])
+    endpoint_url =
+      if state.base_url == "" do
+        state.post_path
+      else
+        Path.join([state.base_url, state.post_path])
+      end
+
     {:reply, endpoint_url, state}
+  end
+
+  defp maybe_send_through_sse(response, session_id, state) do
+    case Map.get(state.sse_handlers, session_id) do
+      {pid, _ref} ->
+        send(pid, {:sse_message, response})
+        {:reply, {:ok, nil}, state}
+
+      nil ->
+        {:reply, {:error, :no_sse_handler}, state}
+    end
   end
 
   defp forward_request_to_server(server, message, session_id) do

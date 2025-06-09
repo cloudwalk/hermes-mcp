@@ -27,7 +27,7 @@ defmodule Echo.MixProject do
     [
       {:phoenix, "~> 1.7.21"},
       {:bandit, "~> 1.5"},
-      {:hermes_mcp, "~> 0.6"}
+      {:hermes_mcp, path: "../../../"}
     ]
   end
 

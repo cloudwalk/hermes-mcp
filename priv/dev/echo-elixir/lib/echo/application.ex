@@ -9,7 +9,7 @@ defmodule Echo.Application do
       {Phoenix.PubSub, name: Echo.PubSub},
       EchoWeb.Endpoint,
       Hermes.Server.Registry,
-      {EchoMCP.Server, transport: {:streamable_http, []}}
+      {EchoMCP.Server, transport: {:sse, base_url: "/mcp", post_path: "/message"}}
     ]
 
     opts = [strategy: :one_for_one, name: Echo.Supervisor]

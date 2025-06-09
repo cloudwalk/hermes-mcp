@@ -1,15 +1,16 @@
 defmodule EchoWeb.Router do
   use EchoWeb, :router
 
-  alias Hermes.Server.Transport.StreamableHTTP
+  alias Hermes.Server.Transport.SSE
 
-  pipeline :api do
-    plug :accepts, ["json"]
+  pipeline :sse do
+    plug :accepts, ["json", "event-stream"]
   end
 
-  scope "/" do
-    pipe_through :api
+  scope "/mcp" do
+    pipe_through :sse
 
-    forward "/mcp", StreamableHTTP.Plug, server: EchoMCP.Server
+    get "/sse", SSE.Plug, server: EchoMCP.Server, mode: :sse
+    post "/message", SSE.Plug, server: EchoMCP.Server, mode: :post
   end
 end

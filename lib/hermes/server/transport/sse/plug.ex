@@ -31,15 +31,20 @@ defmodule Hermes.Server.Transport.SSE.Plug do
           server: :your_server_name, mode: :post
       end
 
-  ## Usage in Plug Router
+  ## Usage in Plug Router (Standalone)
 
-      # SSE endpoint
-      forward "/sse", to: Hermes.Server.Transport.SSE.Plug, 
-        init_opts: [server: :your_server_name, mode: :sse]
-      
-      # POST endpoint
-      forward "/messages", to: Hermes.Server.Transport.SSE.Plug,
-        init_opts: [server: :your_server_name, mode: :post]
+      # When using in a standalone Plug.Router app
+      plug Hermes.Server.Transport.SSE.Plug,
+        server: :your_server_name,
+        mode: :sse,
+        at: "/sse",
+        method_whitelist: ["GET"]
+        
+      plug Hermes.Server.Transport.SSE.Plug,
+        server: :your_server_name,
+        mode: :post,
+        at: "/messages",
+        method_whitelist: ["POST"]
 
   ## Configuration Options
 
@@ -123,15 +128,15 @@ defmodule Hermes.Server.Transport.SSE.Plug do
 
       case SSE.register_sse_handler(transport, session_id) do
         :ok ->
-          # Get the endpoint URL to send to the client
           endpoint_url = SSE.get_endpoint_url(transport)
+          # Include session_id as query parameter in the endpoint URL
+          endpoint_url_with_session = "#{endpoint_url}?session_id=#{session_id}"
 
-          # Send the endpoint event first
           conn
           |> put_resp_header("cache-control", "no-cache")
           |> put_resp_header("connection", "keep-alive")
           |> Streaming.prepare_connection()
-          |> send_endpoint_event(endpoint_url)
+          |> send_endpoint_event(endpoint_url_with_session)
           |> Streaming.start(transport, session_id,
             on_close: fn ->
               SSE.unregister_sse_handler(transport, session_id)
@@ -148,7 +153,6 @@ defmodule Hermes.Server.Transport.SSE.Plug do
   end
 
   defp send_endpoint_event(conn, endpoint_url) do
-    # Send the endpoint event as per MCP 2024-11-05 spec
     chunk_data = format_sse_event("endpoint", endpoint_url)
 
     case chunk(conn, chunk_data) do
@@ -173,18 +177,16 @@ defmodule Hermes.Server.Transport.SSE.Plug do
     end
   end
 
-  defp handle_post_message(conn, %{transport: transport, timeout: timeout} = _opts) do
-    with {:ok, body, conn} <- read_body(conn, read_timeout: timeout),
-         {:ok, [message]} <- parse_message(body),
+  defp handle_post_message(conn, %{transport: transport} = opts) do
+    with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
+         {:ok, [message]} <- maybe_parse_messages(body),
          session_id = extract_session_id(conn),
          {:ok, response} <- SSE.handle_message(transport, session_id, message) do
       if is_nil(response) do
-        # Notification or response - return 202 Accepted
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(202, "{}")
       else
-        # Request - return the response
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(200, response)
@@ -213,34 +215,52 @@ defmodule Hermes.Server.Transport.SSE.Plug do
   end
 
   defp extract_session_id(conn) do
-    # Extract session ID from various possible sources
-    # For SSE transport, session management is handled differently than StreamableHTTP
+    alias Plug.Conn.Query
+
     conn
     |> get_req_header("x-session-id")
     |> List.first()
     |> case do
       nil ->
-        # Try to extract from query params or generate new
-        conn.params["session_id"] || ID.generate_session_id()
+        query_params = Query.decode(conn.query_string)
+        query_params["session_id"] || ID.generate_session_id()
 
       session_id ->
         session_id
     end
   end
 
-  defp parse_message(body) when is_binary(body) do
+  defp maybe_parse_messages(body) when is_binary(body) do
     case Message.decode(body) do
       {:ok, messages} -> {:ok, messages}
       {:error, _} -> {:error, :invalid_json}
     end
   end
 
-  defp parse_message(body) when is_map(body) do
+  defp maybe_parse_messages(body) when is_map(body) do
     case Message.validate_message(body) do
       {:ok, message} -> {:ok, [message]}
       {:error, _} -> {:error, :invalid_json}
     end
   end
+
+  defp maybe_parse_messages(body) when is_list(body) do
+    Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, messages} ->
+      case maybe_parse_messages(msg) do
+        {:ok, parsed} -> {:cont, {:ok, messages ++ parsed}}
+        err -> {:halt, err}
+      end
+    end)
+  end
+
+  defp maybe_read_request_body(%{body_params: %Plug.Conn.Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
+    case Plug.Conn.read_body(conn, read_timeout: timeout) do
+      {:ok, body, conn} -> {:ok, body, conn}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
 
   defp send_error(conn, status, message) do
     data = %{data: %{message: message, http_status: status}}

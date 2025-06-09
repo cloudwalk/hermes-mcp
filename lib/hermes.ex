@@ -3,6 +3,7 @@ defmodule Hermes do
 
   import Peri
 
+  alias Hermes.Server.Transport.SSE, as: ServerSSE
   alias Hermes.Server.Transport.STDIO, as: ServerSTDIO
   alias Hermes.Server.Transport.StreamableHTTP, as: ServerStreamableHTTP
   alias Hermes.Transport.SSE, as: ClientSSE
@@ -14,8 +15,8 @@ defmodule Hermes do
                        else: [ClientSTDIO, ClientSSE, ClientStreamableHTTP]
 
   @server_transports if Mix.env() == :test,
-                       do: [ServerSTDIO, ServerStreamableHTTP, StubTransport],
-                       else: [ServerSTDIO, ServerStreamableHTTP]
+                       do: [ServerSTDIO, ServerStreamableHTTP, ServerSSE, StubTransport],
+                       else: [ServerSTDIO, ServerStreamableHTTP, ServerSSE]
 
   defschema :client_transport,
     layer: {:required, {:enum, @client_transports}},
