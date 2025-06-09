@@ -64,7 +64,8 @@
       "release-type": "elixir",
       "extra-files": [
         "flake.nix",
-        "README.md"
+        "README.md",
+        "pages/installation.md"
       ]
     }
   },
