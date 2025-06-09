@@ -5,7 +5,9 @@ locals = [
   assert_notification: 2,
   component: 1,
   component: 2,
-  schema: 1
+  schema: 1,
+  field: 2,
+  field: 3
 ]
 
 test = [

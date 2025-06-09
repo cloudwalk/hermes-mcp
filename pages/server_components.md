@@ -30,6 +30,40 @@ defmodule MyServer.Tools.Calculator do
 end
 ```
 
+### Schema with Field Metadata
+
+The `field` macro allows adding JSON Schema metadata like format and description:
+
+```elixir
+defmodule MyServer.Tools.UserManager do
+  @moduledoc "Manage user data"
+
+  use Hermes.Server.Component, type: :tool
+
+  alias Hermes.Server.Response
+
+  schema do
+    field :email, {:required, :string}, format: "email", description: "User's email address"
+    field :age, {:integer, {:range, {0, 150}}}, description: "Age in years"
+    field :website, :string, format: "uri"
+    
+    field :address, description: "Mailing address" do
+      field :street, {:required, :string}
+      field :city, {:required, :string}
+      field :postal_code, :string, format: "postal-code"
+      field :country, :string, description: "ISO 3166-1 alpha-2 code"
+    end
+  end
+
+  @impl true
+  def execute(params, frame) do
+    {:reply, Response.text(Response.tool(), "User created: #{params.email}"), frame}
+  end
+end
+```
+
+The field metadata is included in the JSON Schema exposed to MCP clients, providing better documentation and validation hints.
+
 ### Tool with Error Handling
 
 ```elixir
@@ -332,6 +366,45 @@ Where:
 - `response` is built using `Hermes.Server.Response`
 - `error` can be a string or `Hermes.MCP.Error`
 - `frame` is the updated frame state
+
+## Schema Definition
+
+### Traditional Peri Schema
+
+You can use standard Peri schema syntax:
+
+```elixir
+schema do
+  %{
+    name: {:required, :string},
+    age: {:integer, {:default, 25}},
+    tags: {:list, :string}
+  }
+end
+```
+
+### Field Macro with Metadata
+
+For richer JSON Schema output, use the `field` macro:
+
+```elixir
+schema do
+  field :email, {:required, :string}, format: "email", description: "Contact email"
+  field :phone, :string, format: "phone"
+  field :birth_date, :string, format: "date", description: "YYYY-MM-DD"
+  
+  field :preferences do
+    field :theme, {:enum, ["light", "dark"]}, description: "UI theme"
+    field :notifications, :boolean, description: "Email notifications"
+  end
+end
+```
+
+Supported metadata options:
+- `format`: JSON Schema format hint (email, uri, date, date-time, phone, etc.)
+- `description`: Human-readable field description
+
+Both schema styles work together - choose based on whether you need JSON Schema metadata.
 
 ## Next Steps
 

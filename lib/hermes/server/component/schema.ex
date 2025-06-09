@@ -77,9 +77,22 @@ defmodule Hermes.Server.Component.Schema do
   defp format_error(error) when is_binary(error), do: error
   defp format_error(error), do: inspect(error, pretty: true)
 
-  # Type conversion helpers
+  defp convert_type({:required, {:mcp_field, type, opts}}) do
+    convert_type({:mcp_field, {:required, type}, opts})
+  end
 
   defp convert_type({:required, type}), do: convert_type(type)
+
+  defp convert_type({:mcp_field, type, opts}) when is_list(opts) do
+    base_schema = convert_type(type)
+
+    # For nested objects, we need to merge metadata at the object level
+    Enum.reduce(opts, base_schema, fn
+      {:format, format}, schema -> Map.put(schema, "format", format)
+      {:description, desc}, schema -> Map.put(schema, "description", desc)
+      _, schema -> schema
+    end)
+  end
 
   defp convert_type(:string), do: %{"type" => "string"}
   defp convert_type(:integer), do: %{"type" => "integer"}
@@ -159,12 +172,15 @@ defmodule Hermes.Server.Component.Schema do
 
   defp convert_type(_unknown), do: %{}
 
-  # Helper functions
-
   defp required?({:required, _}), do: true
+  defp required?({:mcp_field, type, _opts}), do: required?(type)
   defp required?(_), do: false
 
   defp describe_type({:required, type}), do: "Required " <> describe_base_type(type)
+
+  defp describe_type({:mcp_field, type, opts}) do
+    Keyword.get(opts, :description) || describe_type(type)
+  end
 
   defp describe_type({type, {:default, default}}) do
     "Optional " <> describe_base_type(type) <> " (default: #{to_string(default)})"

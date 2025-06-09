@@ -141,7 +141,7 @@ defmodule Hermes.Server.Component do
     quote do
       @behaviour unquote(behaviour_module)
 
-      import Hermes.Server.Component, only: [schema: 1]
+      import Hermes.Server.Component, only: [schema: 1, field: 3, field: 2]
 
       @doc false
       def __mcp_component_type__, do: unquote(type)
@@ -154,7 +154,7 @@ defmodule Hermes.Server.Component do
         def input_schema do
           alias Hermes.Server.Component.Schema
 
-          Schema.to_json_schema(get_schema(:mcp_schema))
+          Schema.to_json_schema(__mcp_raw_schema__())
         end
       end
 
@@ -197,12 +197,98 @@ defmodule Hermes.Server.Component do
           }
         }
       end
+
+      # With field metadata for JSON Schema (no braces needed!)
+      schema do
+        field(:email, {:required, :string}, format: "email", description: "User's email address")
+        field(:age, :integer, description: "Age in years")
+        field :address, description: "User's address" do
+          field(:street, {:required, :string})
+          field(:city, :string)
+          field(:country, :string, description: "ISO 3166-1 alpha-2 code")
+        end
+      end
   """
   defmacro schema(do: schema_def) do
+    wrapped_schema =
+      case schema_def do
+        {:%{}, _, _} = map_ast ->
+          map_ast
+
+        {:__block__, _, field_calls} ->
+          {:%{}, [], field_calls}
+
+        single_field ->
+          {:%{}, [], [single_field]}
+      end
+
     quote do
       import Peri
 
-      defschema :mcp_schema, unquote(schema_def)
+      alias Hermes.Server.Component
+
+      @doc false
+      def __mcp_raw_schema__, do: unquote(wrapped_schema)
+
+      defschema :mcp_schema, Component.__clean_schema_for_peri__(unquote(wrapped_schema))
+    end
+  end
+
+  @doc """
+  Defines a field with metadata for JSON Schema generation.
+
+  Supports both simple fields and nested objects with their own fields.
+
+  ## Examples
+
+      # Simple field
+      field :email, {:required, :string}, format: "email", description: "User's email address"
+      field :age, :integer, description: "Age in years"
+      
+      # Nested field
+      field :user do
+        field :name, {:required, :string}
+        field :email, :string, format: "email"
+      end
+
+      # Nested field with metadata
+      field :profile, description: "User profile information" do
+        field :bio, :string, description: "Short biography"
+        field :avatar_url, :string, format: "uri"
+      end
+  """
+  defmacro field(name, type \\ nil, opts \\ [])
+
+  defmacro field(name, opts, do: block) when is_list(opts) and opts != [] do
+    build_nested_field(name, opts, block)
+  end
+
+  defmacro field(name, nil, do: block) do
+    build_nested_field(name, [], block)
+  end
+
+  defmacro field(name, [do: block], []) do
+    build_nested_field(name, [], block)
+  end
+
+  defmacro field(name, type, opts) when not is_nil(type) and is_list(opts) do
+    quote do
+      {unquote(name), {:mcp_field, unquote(type), unquote(opts)}}
+    end
+  end
+
+  defp build_nested_field(name, opts, block) do
+    nested_content =
+      case block do
+        {:__block__, _, expressions} ->
+          {:%{}, [], expressions}
+
+        single_expr ->
+          {:%{}, [], [single_expr]}
+      end
+
+    quote do
+      {unquote(name), {:mcp_field, unquote(nested_content), unquote(opts)}}
     end
   end
 
@@ -287,4 +373,15 @@ defmodule Hermes.Server.Component do
   def component?(module) when is_atom(module) do
     not is_nil(get_type(module))
   end
+
+  @doc false
+  def __clean_schema_for_peri__(schema) when is_map(schema) do
+    Map.new(schema, fn
+      {key, {:mcp_field, type, _opts}} -> {key, __clean_schema_for_peri__(type)}
+      {key, nested} when is_map(nested) -> {key, __clean_schema_for_peri__(nested)}
+      {key, value} -> {key, value}
+    end)
+  end
+
+  def __clean_schema_for_peri__(schema), do: schema
 end

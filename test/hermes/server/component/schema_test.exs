@@ -301,4 +301,175 @@ defmodule Hermes.Server.Component.SchemaTest do
       assert result == "Simple error; field: complex error; {:unexpected, \"format\"}"
     end
   end
+
+  describe "to_json_schema/1 with mcp_field" do
+    test "converts mcp_field with format and description" do
+      schema = %{
+        email: {:mcp_field, {:required, :string}, format: "email", description: "User's email address"},
+        age: {:mcp_field, :integer, description: "Age in years"}
+      }
+
+      result = Schema.to_json_schema(schema)
+
+      assert result == %{
+               "type" => "object",
+               "properties" => %{
+                 "email" => %{
+                   "type" => "string",
+                   "format" => "email",
+                   "description" => "User's email address"
+                 },
+                 "age" => %{
+                   "type" => "integer",
+                   "description" => "Age in years"
+                 }
+               },
+               "required" => ["email"]
+             }
+    end
+
+    test "handles nested mcp_field with constraints" do
+      schema = %{
+        website: {:mcp_field, :string, format: "uri"},
+        score: {:mcp_field, {:integer, {:range, {0, 100}}}, description: "Score percentage"}
+      }
+
+      result = Schema.to_json_schema(schema)
+
+      assert result == %{
+               "type" => "object",
+               "properties" => %{
+                 "website" => %{
+                   "type" => "string",
+                   "format" => "uri"
+                 },
+                 "score" => %{
+                   "type" => "integer",
+                   "minimum" => 0,
+                   "maximum" => 100,
+                   "description" => "Score percentage"
+                 }
+               }
+             }
+    end
+
+    test "handles required mcp_field" do
+      schema = %{
+        name: {:required, {:mcp_field, :string, description: "Full name"}}
+      }
+
+      result = Schema.to_json_schema(schema)
+
+      assert result == %{
+               "type" => "object",
+               "properties" => %{
+                 "name" => %{
+                   "type" => "string",
+                   "description" => "Full name"
+                 }
+               },
+               "required" => ["name"]
+             }
+    end
+  end
+
+  describe "to_prompt_arguments/1 with mcp_field" do
+    test "uses custom description from mcp_field" do
+      schema = %{
+        language: {:mcp_field, {:required, :string}, description: "Programming language"},
+        focus: {:mcp_field, :string, description: "Areas to focus on"}
+      }
+
+      result = Schema.to_prompt_arguments(schema)
+
+      assert result == [
+               %{
+                 "name" => "language",
+                 "description" => "Programming language",
+                 "required" => true
+               },
+               %{
+                 "name" => "focus",
+                 "description" => "Areas to focus on",
+                 "required" => false
+               }
+             ]
+    end
+
+    test "falls back to generated description when not provided" do
+      schema = %{
+        count: {:mcp_field, :integer, format: "int32"}
+      }
+
+      result = Schema.to_prompt_arguments(schema)
+
+      assert result == [
+               %{
+                 "name" => "count",
+                 "description" => "Optional integer parameter",
+                 "required" => false
+               }
+             ]
+    end
+  end
+
+  describe "nested schemas with mcp_field" do
+    test "handles nested schemas with mcp_field metadata" do
+      schema = %{
+        user: %{
+          email: {:mcp_field, {:required, :string}, format: "email", description: "Email address"},
+          profile: %{
+            age: {:mcp_field, :integer, description: "User age"},
+            website: {:mcp_field, :string, format: "uri"}
+          }
+        },
+        settings:
+          {:mcp_field,
+           %{
+             theme: :string,
+             notifications: :boolean
+           }, description: "User settings object"}
+      }
+
+      result = Schema.to_json_schema(schema)
+
+      assert result == %{
+               "type" => "object",
+               "properties" => %{
+                 "user" => %{
+                   "type" => "object",
+                   "properties" => %{
+                     "email" => %{
+                       "type" => "string",
+                       "format" => "email",
+                       "description" => "Email address"
+                     },
+                     "profile" => %{
+                       "type" => "object",
+                       "properties" => %{
+                         "age" => %{
+                           "type" => "integer",
+                           "description" => "User age"
+                         },
+                         "website" => %{
+                           "type" => "string",
+                           "format" => "uri"
+                         }
+                       }
+                     }
+                   },
+                   "required" => ["email"]
+                 },
+                 "settings" => %{
+                   "type" => "object",
+                   "properties" => %{
+                     "theme" => %{"type" => "string"},
+                     "notifications" => %{"type" => "boolean"}
+                   },
+                   "description" => "User settings object"
+                 }
+               }
+             }
+    end
+  end
 end
