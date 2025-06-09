@@ -264,7 +264,7 @@ defmodule Hermes.Server.Response do
   """
   def error(%{type: :tool} = r, message) when is_binary(message) do
     r
-    |> text("Error: #{message}")
+    |> text(message)
     |> Map.put(:isError, true)
   end
 

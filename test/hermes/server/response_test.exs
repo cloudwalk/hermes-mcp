@@ -39,7 +39,7 @@ defmodule Hermes.Server.ResponseTest do
         |> Response.to_protocol()
 
       assert result == %{
-               "content" => [%{"type" => "text", "text" => "Error: Division by zero"}],
+               "content" => [%{"type" => "text", "text" => "Division by zero"}],
                "isError" => true
              }
     end

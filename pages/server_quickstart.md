@@ -40,6 +40,8 @@ defmodule MyApp.Application do
 
   def start(_type, _args) do
     children = [
+      # Registry to handle processes names
+      Hermes.Server.Registry,
       # Start with STDIO transport (for local tests)
       {MyApp.MCPServer, transport: :stdio}
     ]
@@ -56,9 +58,9 @@ Tools are functions that AI assistants can call:
 
 ```elixir
 defmodule MyApp.MCPServer.Tools.Greeter do
-  use Hermes.Server.Component, 
-    type: :tool,
-    description: "Greet someone by name"
+  @moduledoc "Greet someone by name"
+
+  use Hermes.Server.Component, type: :tool
 
   schema do
     %{name: {:required, :string}}

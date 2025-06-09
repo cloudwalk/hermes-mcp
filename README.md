@@ -35,13 +35,13 @@ Currently, Hermes MCP offers a feature-complete client implementation conforming
   - JSON-RPC batch operations
   - Enhanced tool annotations
 
-- [ ] Server Implementation
+- [x] Server Implementation
   - STDIO transport
   - HTTP/SSE transport
   - Streamable HTTP transport
   - Support for resources, tools, and prompts
 
-- [ ] Sample Implementations
+- [x] Sample Implementations
   - Reference servers
   - Integration examples with popular Elixir libraries
 
@@ -61,19 +61,6 @@ def deps do
 end
 ```
 
-### Standalone CLI Installation
-
-Download the appropriate binary for your platform from the [GitHub releases page](https://github.com/cloudwalk/hermes-mcp/releases).
-
-```bash
-# Make it executable (Linux/macOS)
-# or hermes_cli-macos-intel, hermes_cli-macos-arm
-mv hermes_mcp_linux hermes-mcp && chmod +x hermes-mcp
-
-# Run it
-./hermes-mcp --transport sse --base-url="http://localhost:8000"
-```
-
 ## Quick Start
 
 ### Interactive Testing
@@ -81,6 +68,8 @@ mv hermes_mcp_linux hermes-mcp && chmod +x hermes-mcp
 Hermes MCP provides interactive tools for testing MCP servers with a user-friendly CLI.
 
 #### Using the CLI Binary:
+
+Download the appropriate binary for your platform from the [GitHub releases page](https://github.com/cloudwalk/hermes-mcp/releases).
 
 ```bash
 # Test an SSE server
@@ -107,6 +96,65 @@ mix hermes.stdio.interactive --command="mcp" --args="run,path/to/server.py"
 ```
 
 These interactive shells provide commands for listing and calling tools, exploring prompts, and accessing resources.
+
+### Setting up a Server
+
+```elixir
+# lib/my_app/server/tools/greet.ex
+defmodule MyApp.Server.Tools.Greet do
+  @moduledoc "Tool to greet someone"
+
+  use Hermes.Server.Component, type: :tool
+
+  alias Hermes.MCP.Error
+  alias Hermes.Server.Response
+
+  schema do
+    %{name: {:required, :string}}
+  end
+
+  @impl true
+  def execute(%{name: name}, frame) do
+    case name do
+      "mcp" -> {:reply, Response.text(Response.tool(), "Hello MCP!"), frame}
+      "domain-error" -> {:reply, Response.error(Response.tool(), "we dont like it"), frame}
+      _ -> {:error, Error.protocol(:invalid_params), frame}
+    end
+  end
+end
+
+# lib/my_app/server.ex
+defmodule MyApp.Server do
+  use Hermes.Server, name: "my server", version: "1.0.0", capabilities: [:tools]
+
+  def start_link(opts) do
+    Hermes.Server.start_link(__MODULE__, :ok, opts)
+  end
+
+  @impl true
+  def init(:ok, frame) do
+    {:ok, frame}
+  end
+end
+
+# lib/my_app/application.ex
+defmodule MyApp.Application do
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      # handle processes names, you can customize via `Hermes.Server.Registry.Adapter`
+      Hermes.Server.Registry,
+      
+      # start server using stdio
+      {MyApp.Server, transport: :stdio}
+    ]
+    
+    opts = [strategy: :one_for_all, name: MyApp.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
+```
 
 ### Setting up a Client
 

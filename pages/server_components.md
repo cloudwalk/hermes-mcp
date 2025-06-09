@@ -10,9 +10,9 @@ Tools are functions that AI assistants can call to perform actions.
 
 ```elixir
 defmodule MyServer.Tools.Calculator do
-  use Hermes.Server.Component, 
-    type: :tool,
-    description: "Add two numbers"
+  @moduledoc "Add two numbers"
+
+  use Hermes.Server.Component, type: :tool
 
   alias Hermes.Server.Response
 
@@ -34,9 +34,9 @@ end
 
 ```elixir
 defmodule MyServer.Tools.Divider do
-  use Hermes.Server.Component,
-    type: :tool,
-    description: "Divide two numbers"
+  @moduledoc "Divide two numbers"
+
+  use Hermes.Server.Component, type: :tool
 
   alias Hermes.Server.Response
 
@@ -62,9 +62,9 @@ end
 
 ```elixir
 defmodule MyServer.Tools.SystemInfo do
-  use Hermes.Server.Component,
-    type: :tool,
-    description: "Get system information"
+  @moduledoc "Get system information"
+
+  use Hermes.Server.Component, type: :tool
 
   alias Hermes.Server.Response
   
@@ -89,9 +89,9 @@ Prompts provide reusable message templates for AI conversations.
 
 ```elixir
 defmodule MyServer.Prompts.Assistant do
-  use Hermes.Server.Component,
-    type: :prompt,
-    description: "General assistant prompt"
+  @moduledoc "General assistant prompt"
+
+  use Hermes.Server.Component, type: :prompt
 
   alias Hermes.Server.Response
 
@@ -124,9 +124,9 @@ end
 
 ```elixir
 defmodule MyServer.Prompts.CodeReview do
-  use Hermes.Server.Component,
-    type: :prompt,
-    description: "Code review prompt"
+  @moduledoc "Code review prompt"
+
+  use Hermes.Server.Component, type: :prompt
 
   schema do
     %{language: {:required, :string}}
@@ -152,9 +152,10 @@ Resources provide data that AI can read, identified by URIs.
 
 ```elixir
 defmodule MyServer.Resources.Config do
+  @moduledoc "Application configuration"
+
   use Hermes.Server.Component,
     type: :resource,
-    description: "Application configuration",
     uri: "config://app",
     mime_type: "application/json"
 
@@ -173,9 +174,10 @@ end
 
 ```elixir
 defmodule MyServer.Resources.Logo do
+  @moduledoc "Company logo"
+
   use Hermes.Server.Component,
     type: :resource,
-    description: "Company logo",
     uri: "assets://logo",
     mime_type: "image/png"
 
