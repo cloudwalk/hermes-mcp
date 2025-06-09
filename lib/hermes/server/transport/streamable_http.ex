@@ -52,7 +52,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   alias Hermes.Logging
   alias Hermes.MCP.Message
-  alias Hermes.Server.Registry
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
@@ -73,7 +72,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   defschema :parse_options, [
     {:server, {:required, Hermes.get_schema(:process_name)}},
-    {:name, {:required, {:custom, &Hermes.genserver_name/1}}}
+    {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
   ]
 
   @doc """
@@ -195,11 +195,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   # GenServer implementation
 
   @impl GenServer
-  def init(%{server: server}) do
+  def init(%{server: server} = opts) do
     Process.flag(:trap_exit, true)
 
     state = %{
       server: server,
+      registry: opts.registry,
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{}
     }
@@ -232,7 +233,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:handle_message, session_id, message}, _from, state) do
-    server = Registry.whereis_server(state.server)
+    server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id})
@@ -244,7 +245,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   @impl GenServer
   def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
-    server = Registry.whereis_server(state.server)
+    server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id})

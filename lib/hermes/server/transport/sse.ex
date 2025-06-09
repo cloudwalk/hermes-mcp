@@ -59,7 +59,6 @@ defmodule Hermes.Server.Transport.SSE do
 
   alias Hermes.Logging
   alias Hermes.MCP.Message
-  alias Hermes.Server.Registry
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
@@ -86,7 +85,8 @@ defmodule Hermes.Server.Transport.SSE do
     {:server, {:required, Hermes.get_schema(:process_name)}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:base_url, {:string, {:default, ""}}},
-    {:post_path, {:string, {:default, "/messages"}}}
+    {:post_path, {:string, {:default, "/messages"}}},
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
   ]
 
   @doc """
@@ -212,6 +212,7 @@ defmodule Hermes.Server.Transport.SSE do
       server: server,
       base_url: Map.get(opts, :base_url, ""),
       post_path: Map.get(opts, :post_path, "/messages"),
+      registry: opts.registry,
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{}
     }
@@ -244,7 +245,7 @@ defmodule Hermes.Server.Transport.SSE do
 
   @impl GenServer
   def handle_call({:handle_message, session_id, message}, _from, state) do
-    server = Registry.whereis_server(state.server)
+    server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id})
