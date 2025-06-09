@@ -50,7 +50,6 @@ defmodule Hermes.Server do
   - "2024-05-11" - Legacy version for backward compatibility
   """
 
-  alias Hermes.MCP.Error
   alias Hermes.Server.Component
   alias Hermes.Server.ConfigurationError
   alias Hermes.Server.Handlers
@@ -221,29 +220,8 @@ defmodule Hermes.Server do
       def __components__(_), do: []
 
       @impl Hermes.Server.Behaviour
-      def handle_request(%{"method" => "tools/" <> action} = request, frame) do
-        case action do
-          "list" -> Handlers.Tools.handle_list(frame, __MODULE__)
-          "call" -> Handlers.Tools.handle_call(request, frame, __MODULE__)
-        end
-      end
-
-      def handle_request(%{"method" => "prompts/" <> action} = request, frame) do
-        case action do
-          "list" -> Handlers.Prompts.handle_list(frame, __MODULE__)
-          "get" -> Handlers.Prompts.handle_get(request, frame, __MODULE__)
-        end
-      end
-
-      def handle_request(%{"method" => "resources/" <> action} = request, frame) do
-        case action do
-          "list" -> Handlers.Resources.handle_list(frame, __MODULE__)
-          "read" -> Handlers.Resources.handle_read(request, frame, __MODULE__)
-        end
-      end
-
-      def handle_request(%{"method" => method} = request, frame) do
-        {:error, Error.protocol(:method_not_found, %{method: method}), frame}
+      def handle_request(%{} = request, frame) do
+        Handlers.handle(request, __MODULE__, frame)
       end
 
       defoverridable handle_request: 2
