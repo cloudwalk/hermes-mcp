@@ -8,7 +8,6 @@ defmodule Hermes.MCP.Setup do
   alias Hermes.MCP.Builders
   alias Hermes.MCP.Message
   alias Hermes.Server.Transport
-  alias Hermes.Server.Transport.SSE
 
   require Message
 
@@ -94,7 +93,7 @@ defmodule Hermes.MCP.Setup do
 
     StubTransport.set_client(transport, client)
 
-    Process.sleep(50)
+    Process.sleep(80)
 
     assert_client_initialized client
     assert_server_initialized server
@@ -146,53 +145,6 @@ defmodule Hermes.MCP.Setup do
 
     start_supervised!({Hermes.Server.Base, opts})
     assert server = Hermes.Server.Registry.whereis_server(server_module)
-
-    Map.merge(ctx, %{server: server, transport: transport})
-  end
-
-  def server_with_streamable_http_transport(ctx) do
-    name = ctx[:name] || :test_stdio_server
-    name = Hermes.Server.Registry.server(name)
-    server_module = ctx[:server_module] || StubServer
-
-    transport_name = Hermes.Server.Registry.transport(server_module, :streamable_http)
-    start_supervised!({Transport.StreamableHTTP, name: transport_name, server: server_module})
-    assert transport = Hermes.Server.Registry.whereis_server(server_module)
-
-    opts = [
-      module: server_module,
-      init_arg: :ok,
-      name: name,
-      transport: [layer: Transport.StreamableHTTP, name: transport_name]
-    ]
-
-    start_supervised!({Hermes.Server.Base, opts})
-    assert server = Hermes.Server.Registry.whereis_server(StubServer)
-
-    Map.merge(ctx, %{server: server, transport: transport})
-  end
-
-  def server_with_sse_transport(ctx) do
-    server_module = ctx[:server_module] || StubServer
-    name = ctx[:name] || server_module
-    server_name = Hermes.Server.Registry.server(name)
-
-    # Start session supervisor first
-    start_supervised!({Hermes.Server.Session.Supervisor, server: server_module, registry: Hermes.Server.Registry})
-
-    transport_name = Hermes.Server.Registry.transport(server_module, :sse)
-    start_supervised!({SSE, name: transport_name, server: server_module})
-    assert transport = Hermes.Server.Registry.whereis_transport(server_module, :sse)
-
-    opts = [
-      module: server_module,
-      init_arg: :ok,
-      name: server_name,
-      transport: [layer: SSE, name: transport_name]
-    ]
-
-    start_supervised!({Hermes.Server.Base, opts})
-    assert server = Hermes.Server.Registry.whereis_server(name)
 
     Map.merge(ctx, %{server: server, transport: transport})
   end

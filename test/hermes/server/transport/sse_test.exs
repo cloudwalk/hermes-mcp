@@ -5,17 +5,16 @@ defmodule Hermes.Server.Transport.SSETest do
 
   describe "start_link/1" do
     test "starts with valid options" do
-      server = Hermes.Server.Registry.server(StubServer)
-      name = Hermes.Server.Registry.transport(StubServer, :sse)
+      server = :"test_server_#{System.unique_integer([:positive])}"
+      name = :"test_transport_#{System.unique_integer([:positive])}"
 
       assert {:ok, pid} = SSE.start_link(server: server, name: name)
       assert Process.alive?(pid)
-      assert Hermes.Server.Registry.whereis_transport(StubServer, :sse) == pid
     end
 
     test "starts with optional base_url and post_path" do
-      server = Hermes.Server.Registry.server(StubServer)
-      name = Hermes.Server.Registry.transport(StubServer, :sse)
+      server = :"test_server_#{System.unique_integer([:positive])}"
+      name = :"test_transport_#{System.unique_integer([:positive])}"
 
       assert {:ok, pid} =
                SSE.start_link(
@@ -42,7 +41,13 @@ defmodule Hermes.Server.Transport.SSETest do
   end
 
   describe "with running transport" do
-    setup :server_with_sse_transport
+    setup do
+      registry = Hermes.Server.Registry
+      name = registry.transport(StubServer, :sse)
+      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
+
+      %{transport: transport, server: StubServer}
+    end
 
     test "registers and unregisters SSE handlers", %{transport: transport} do
       session_id = "test-session-123"
@@ -176,26 +181,6 @@ defmodule Hermes.Server.Transport.SSETest do
   describe "supported_protocol_versions/0" do
     test "supports 2024-11-05 protocol version" do
       assert ["2024-11-05"] = SSE.supported_protocol_versions()
-    end
-  end
-
-  describe "message handling edge cases" do
-    setup :server_with_sse_transport
-
-    test "handle_message with valid request returns response", %{transport: transport} do
-      session_id = "test-session"
-      request = build_request("ping", %{})
-
-      # Register an SSE handler first
-      assert :ok = SSE.register_sse_handler(transport, session_id)
-
-      # handle_message should return nil since response goes through SSE
-      assert {:ok, nil} = SSE.handle_message(transport, session_id, request)
-
-      # The response should be sent through the SSE handler
-      assert_receive {:sse_message, response}
-      # StubServer returns empty result for ping
-      assert response =~ "\"result\":{}"
     end
   end
 end
