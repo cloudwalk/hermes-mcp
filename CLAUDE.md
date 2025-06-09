@@ -140,3 +140,6 @@ mix docs
 - **Testing**: Descriptive test blocks
 - **Constants**: Define defaults as module attributes (@default_*)
 - **Module Structure**: Follow pattern: moduledoc, types, constants, public API, GenServer callbacks, private helpers
+
+### Testing Guidelines
+- Always implement test helper modules in @test/support/ context, analyzing if there aren't any existing ones that could be used

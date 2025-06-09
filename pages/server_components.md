@@ -178,6 +178,76 @@ defmodule MyServer.Prompts.CodeReview do
 end
 ```
 
+### Prompt with Field Metadata
+
+When using prompts, you can add descriptions to arguments for better documentation in the MCP protocol:
+
+```elixir
+defmodule MyServer.Prompts.DocumentAnalyzer do
+  @moduledoc "Analyze and summarize documents"
+
+  use Hermes.Server.Component, type: :prompt
+
+  alias Hermes.Server.Response
+
+  schema do
+    field :document, {:required, :string}, description: "The document text to analyze"
+    field :language, {:required, :string}, description: "Document language (e.g., 'en', 'es', 'fr')"
+    field :analysis_type, {:enum, ["summary", "sentiment", "keywords"]}, 
+          description: "Type of analysis to perform"
+    field :max_length, {:integer, {:default, 500}}, 
+          description: "Maximum length of the summary in characters"
+  end
+
+  @impl true
+  def get_messages(params, frame) do
+    %{document: doc, language: lang, analysis_type: type, max_length: max_len} = params
+    
+    response = 
+      Response.prompt()
+      |> Response.system_message("You are an expert document analyzer specializing in #{type} analysis.")
+      |> Response.user_message("""
+      Please analyze the following #{lang} document and provide a #{type}.
+      Maximum response length: #{max_len} characters.
+      
+      Document:
+      #{doc}
+      """)
+    
+    {:reply, response, frame}
+  end
+end
+```
+
+This generates the following MCP arguments:
+
+```json
+{
+  "arguments": [
+    {
+      "name": "document",
+      "description": "The document text to analyze",
+      "required": true
+    },
+    {
+      "name": "language", 
+      "description": "Document language (e.g., 'en', 'es', 'fr')",
+      "required": true
+    },
+    {
+      "name": "analysis_type",
+      "description": "Type of analysis to perform",
+      "required": false
+    },
+    {
+      "name": "max_length",
+      "description": "Maximum length of the summary in characters",
+      "required": false
+    }
+  ]
+}
+```
+
 ## Resources
 
 Resources provide data that AI can read, identified by URIs.

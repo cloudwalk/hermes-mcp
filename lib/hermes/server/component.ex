@@ -163,7 +163,7 @@ defmodule Hermes.Server.Component do
         def arguments do
           alias Hermes.Server.Component.Schema
 
-          Schema.to_prompt_arguments(get_schema(:mcp_schema))
+          Schema.to_prompt_arguments(__mcp_raw_schema__())
         end
       end
 
