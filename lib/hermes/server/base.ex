@@ -211,8 +211,8 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:request, decoded, session_id}, _from, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, state) do
+  def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
+    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
       cond do
         Message.is_ping(decoded) ->
           handle_server_ping(decoded, state)
@@ -248,8 +248,8 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_cast({:notification, decoded, session_id}, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, state) do
+  def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
+    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
       if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
         handle_notification(decoded, session, state)
       else
@@ -477,15 +477,14 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @spec maybe_attach_session(session_id :: String.t(), t) :: {:ok, {session :: Session.t(), t}}
-  defp maybe_attach_session(session_id, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
+  @spec maybe_attach_session(session_id :: String.t(), map, t) :: {:ok, {session :: Session.t(), t}}
+  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
     {session_name, _ref} = sessions[session_id]
     session = Session.get(session_name)
-    frame = populate_frame_private(state.frame, session)
-    {:ok, {session, %{state | frame: frame}}}
+    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
   end
 
-  defp maybe_attach_session(session_id, %{sessions: sessions, registry: registry} = state) do
+  defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
     session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(state.module, session_id) do
@@ -493,23 +492,27 @@ defmodule Hermes.Server.Base do
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)
-        frame = populate_frame_private(state.frame, session)
-        {:ok, {session, %{state | frame: frame}}}
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
         session = Session.get(session_name)
-        frame = populate_frame_private(state.frame, session)
-        {:ok, {session, %{state | frame: frame}}}
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
       error ->
         error
     end
   end
 
-  defp populate_frame_private(frame, %Session{} = session) do
-    Frame.put_private(frame, %{
+  defp populate_frame(frame, %Session{} = session, context) do
+    {assigns, context} = Map.pop(context, :assigns, %{})
+    assigns = Map.merge(frame.assigns, assigns)
+
+    frame
+    |> Frame.put_transport(context)
+    |> Frame.assign(assigns)
+    |> Frame.put_private(%{
       session_id: session.id,
       client_info: session.client_info,
       client_capabilities: session.client_capabilities,

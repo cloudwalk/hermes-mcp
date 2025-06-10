@@ -149,26 +149,26 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @doc """
-  Handles an incoming message from a client.
+  Handles an incoming message from a client with request context.
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), map()) ::
+  @spec handle_message(GenServer.server(), String.t(), map(), map()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message) do
-    GenServer.call(transport, {:handle_message, session_id, message})
+  def handle_message(transport, session_id, message, context) do
+    GenServer.call(transport, {:handle_message, session_id, message, context})
   end
 
   @doc """
-  Handles an incoming message and returns {:sse, response} if SSE handler exists.
+  Handles an incoming message with context and returns {:sse, response} if SSE handler exists.
 
   This allows the Plug to know whether to stream the response via SSE
   or return it as a regular HTTP response.
   """
-  @spec handle_message_for_sse(GenServer.server(), String.t(), map()) ::
+  @spec handle_message_for_sse(GenServer.server(), String.t(), map(), map()) ::
           {:ok, binary()} | {:sse, binary()} | {:error, term()}
-  def handle_message_for_sse(transport, session_id, message) do
-    GenServer.call(transport, {:handle_message_for_sse, session_id, message})
+  def handle_message_for_sse(transport, session_id, message, context) do
+    GenServer.call(transport, {:handle_message_for_sse, session_id, message, context})
   end
 
   @doc """
@@ -232,27 +232,27 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message}, _from, state) do
+  def handle_call({:handle_message, session_id, message, context}, _from, state) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
+      GenServer.cast(server, {:notification, message, session_id, context})
       {:reply, {:ok, nil}, state}
     else
-      {:reply, forward_request_to_server(server, message, session_id), state}
+      {:reply, forward_request_to_server(server, message, session_id, context), state}
     end
   end
 
   @impl GenServer
-  def handle_call({:handle_message_for_sse, session_id, message}, _from, state) do
+  def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
+      GenServer.cast(server, {:notification, message, session_id, context})
       {:reply, {:ok, nil}, state}
     else
       sse_handler? = Map.has_key?(state.sse_handlers, session_id)
-      {:reply, forward_request_to_server(server, message, session_id, sse_handler?), state}
+      {:reply, forward_request_to_server(server, message, session_id, context, sse_handler?), state}
     end
   end
 
@@ -290,8 +290,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:reply, :ok, state}
   end
 
-  defp forward_request_to_server(server, message, session_id, has_sse_handler \\ false) do
-    case GenServer.call(server, {:request, message, session_id}) do
+  defp forward_request_to_server(server, message, session_id, context, has_sse_handler \\ false) do
+    case GenServer.call(server, {:request, message, session_id, context}) do
       {:ok, response} when has_sse_handler ->
         {:sse, response}
 

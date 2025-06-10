@@ -13,6 +13,7 @@ defmodule EchoMCP.Tools.Echo do
 
   @impl true
   def execute(%{text: text}, frame) do
+    dbg(frame)
     {:reply, Response.text(Response.tool(), text), frame}
   end
 end

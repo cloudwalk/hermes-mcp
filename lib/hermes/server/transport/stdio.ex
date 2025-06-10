@@ -248,10 +248,16 @@ defmodule Hermes.Server.Transport.STDIO do
   defp process_message(message, %{server: server_name, registry: registry}) do
     server = registry.whereis_server(server_name)
 
+    context = %{
+      type: :stdio,
+      env: System.get_env(),
+      pid: System.pid()
+    }
+
     if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, "stdio"})
+      GenServer.cast(server, {:notification, message, "stdio", context})
     else
-      case GenServer.call(server, {:request, message, "stdio"}) do
+      case GenServer.call(server, {:request, message, "stdio", context}) do
         {:ok, response} when is_binary(response) -> send_message(self(), response)
         {:error, reason} -> Logging.transport_event("server_error", %{reason: reason}, level: :error)
       end

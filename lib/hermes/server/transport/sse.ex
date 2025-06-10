@@ -161,14 +161,14 @@ defmodule Hermes.Server.Transport.SSE do
   end
 
   @doc """
-  Handles an incoming message from a client.
+  Handles an incoming message from a client with request context.
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), map()) ::
+  @spec handle_message(GenServer.server(), String.t(), map(), map()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message) do
-    GenServer.call(transport, {:handle_message, session_id, message})
+  def handle_message(transport, session_id, message, context) do
+    GenServer.call(transport, {:handle_message, session_id, message, context})
   end
 
   @doc """
@@ -244,14 +244,14 @@ defmodule Hermes.Server.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message}, _from, state) do
+  def handle_call({:handle_message, session_id, message, context}, _from, state) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id})
+      GenServer.cast(server, {:notification, message, session_id, context})
       {:reply, {:ok, nil}, state}
     else
-      case forward_request_to_server(server, message, session_id) do
+      case forward_request_to_server(server, message, session_id, context) do
         {:ok, response} ->
           maybe_send_through_sse(response, session_id, state)
 
@@ -318,8 +318,8 @@ defmodule Hermes.Server.Transport.SSE do
     end
   end
 
-  defp forward_request_to_server(server, message, session_id) do
-    case GenServer.call(server, {:request, message, session_id}) do
+  defp forward_request_to_server(server, message, session_id, context) do
+    case GenServer.call(server, {:request, message, session_id, context}) do
       {:ok, response} ->
         {:ok, response}
 

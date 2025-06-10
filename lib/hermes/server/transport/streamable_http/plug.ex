@@ -63,6 +63,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
   alias Hermes.Server.Registry, as: ServerRegistry
   alias Hermes.Server.Transport.StreamableHTTP
   alias Hermes.SSE.Streaming
+  alias Plug.Conn.Unfetched
 
   require Message
 
@@ -116,12 +117,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
          {:ok, [messages]} <- maybe_parse_messages(body) do
       session_id = determine_session_id(conn, session_header, messages)
+      context = build_request_context(conn)
 
       # if Enum.any?(messages, &Message.is_request/1) do
       if Message.is_request(messages) do
-        handle_request_with_possible_sse(conn, transport, session_id, messages, session_header)
+        handle_request_with_possible_sse(conn, transport, session_id, messages, context, session_header)
       else
-        case StreamableHTTP.handle_message(transport, session_id, messages) do
+        case StreamableHTTP.handle_message(transport, session_id, messages, context) do
           {:ok, _} ->
             conn
             |> put_resp_content_type("application/json")
@@ -163,18 +165,18 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
 
   # Handle requests that might need SSE streaming
 
-  defp handle_request_with_possible_sse(conn, transport, session_id, body, session_header) do
+  defp handle_request_with_possible_sse(conn, transport, session_id, body, context, session_header) do
     if wants_sse?(conn) do
-      handle_sse_request(conn, transport, session_id, body, session_header)
+      handle_sse_request(conn, transport, session_id, body, context, session_header)
     else
-      handle_json_request(conn, transport, session_id, body, session_header)
+      handle_json_request(conn, transport, session_id, body, context, session_header)
     end
   end
 
-  defp handle_sse_request(conn, transport, session_id, body, session_header) do
-    case StreamableHTTP.handle_message_for_sse(transport, session_id, body) do
+  defp handle_sse_request(conn, transport, session_id, body, context, session_header) do
+    case StreamableHTTP.handle_message_for_sse(transport, session_id, body, context) do
       {:sse, response} ->
-        route_sse_response(conn, transport, session_id, response, body, session_header)
+        route_sse_response(conn, transport, session_id, response, body, context, session_header)
 
       {:ok, response} ->
         # Even if client accepts SSE, return JSON response for the initial request
@@ -188,9 +190,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp handle_json_request(conn, transport, session_id, body, session_header) do
+  defp handle_json_request(conn, transport, session_id, body, context, session_header) do
     with {:ok, [messages]} <- maybe_parse_messages(body),
-         {:ok, response} <- StreamableHTTP.handle_message(transport, session_id, messages) do
+         {:ok, response} <- StreamableHTTP.handle_message(transport, session_id, messages, context) do
       conn
       |> put_resp_content_type("application/json")
       |> maybe_add_session_header(session_header, session_id)
@@ -200,7 +202,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp route_sse_response(conn, transport, session_id, response, body, session_header) do
+  defp route_sse_response(conn, transport, session_id, response, body, context, session_header) do
     if handler_pid = StreamableHTTP.get_sse_handler(transport, session_id) do
       send(handler_pid, {:sse_message, response})
 
@@ -208,7 +210,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
       |> put_resp_content_type("application/json")
       |> send_resp(202, "{}")
     else
-      establish_sse_for_request(conn, transport, session_id, body, session_header)
+      establish_sse_for_request(conn, transport, session_id, body, context, session_header)
     end
   end
 
@@ -221,10 +223,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), extract_request_id(body))
   end
 
-  defp establish_sse_for_request(conn, transport, session_id, body, session_header) do
+  defp establish_sse_for_request(conn, transport, session_id, body, context, session_header) do
     case StreamableHTTP.register_sse_handler(transport, session_id) do
       :ok ->
-        start_background_request(transport, session_id, body)
+        start_background_request(transport, session_id, body, context)
         start_sse_streaming(conn, transport, session_id, session_header)
 
       {:error, reason} ->
@@ -233,11 +235,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp start_background_request(transport, session_id, body) do
+  defp start_background_request(transport, session_id, body, context) do
     self_pid = self()
 
     Task.start(fn ->
-      case StreamableHTTP.handle_message(transport, session_id, body) do
+      case StreamableHTTP.handle_message(transport, session_id, body, context) do
         {:ok, response} when is_binary(response) ->
           send(self_pid, {:sse_message, response})
 
@@ -317,7 +319,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     end
   end
 
-  defp maybe_read_request_body(%{body_params: %Plug.Conn.Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
+  defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
     case Plug.Conn.read_body(conn, read_timeout: timeout) do
       {:ok, body, conn} -> {:ok, body, conn}
       {:error, reason} -> {:error, reason}
@@ -359,6 +361,27 @@ defmodule Hermes.Server.Transport.StreamableHTTP.Plug do
     case Message.decode(body) do
       {:ok, [message | _]} when is_map(message) -> Map.get(message, "id")
       _ -> nil
+    end
+  end
+
+  defp build_request_context(conn) do
+    %{
+      assigns: conn.assigns,
+      type: :http,
+      req_headers: conn.req_headers,
+      query_params: fetch_query_params_safe(conn),
+      remote_ip: conn.remote_ip,
+      scheme: conn.scheme,
+      host: conn.host,
+      port: conn.port,
+      request_path: conn.request_path
+    }
+  end
+
+  defp fetch_query_params_safe(conn) do
+    case conn.query_params do
+      %Unfetched{} -> nil
+      params -> params
     end
   end
 end

@@ -78,6 +78,7 @@ defmodule Hermes.Server.Transport.SSE.Plug do
   alias Hermes.Server.Registry, as: ServerRegistry
   alias Hermes.Server.Transport.SSE
   alias Hermes.SSE.Streaming
+  alias Plug.Conn.Unfetched
 
   require Message
 
@@ -181,7 +182,8 @@ defmodule Hermes.Server.Transport.SSE.Plug do
     with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
          {:ok, [message]} <- maybe_parse_messages(body),
          session_id = extract_session_id(conn),
-         {:ok, response} <- SSE.handle_message(transport, session_id, message) do
+         context = build_request_context(conn),
+         {:ok, response} <- SSE.handle_message(transport, session_id, message, context) do
       if is_nil(response) do
         conn
         |> put_resp_content_type("application/json")
@@ -253,7 +255,7 @@ defmodule Hermes.Server.Transport.SSE.Plug do
     end)
   end
 
-  defp maybe_read_request_body(%{body_params: %Plug.Conn.Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
+  defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
     case Plug.Conn.read_body(conn, read_timeout: timeout) do
       {:ok, body, conn} -> {:ok, body, conn}
       {:error, reason} -> {:error, reason}
@@ -286,5 +288,26 @@ defmodule Hermes.Server.Transport.SSE.Plug do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(400, encoded_error)
+  end
+
+  defp build_request_context(conn) do
+    %{
+      assigns: conn.assigns,
+      type: :http,
+      req_headers: conn.req_headers,
+      query_params: fetch_query_params_safe(conn),
+      remote_ip: conn.remote_ip,
+      scheme: conn.scheme,
+      host: conn.host,
+      port: conn.port,
+      request_path: conn.request_path
+    }
+  end
+
+  defp fetch_query_params_safe(conn) do
+    case conn.query_params do
+      %Unfetched{} -> nil
+      params -> params
+    end
   end
 end
