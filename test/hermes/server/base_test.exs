@@ -45,17 +45,17 @@ defmodule Hermes.Server.BaseTest do
     @tag skip: true
     test "handles errors", %{server: server} do
       error = build_error(-32_000, "got wrong", 1)
-      assert {:ok, _} = GenServer.call(server, {:request, error, "123"})
+      assert {:ok, _} = GenServer.call(server, {:request, error, "123", %{}})
     end
 
     test "rejects requests when not initialized", %{server: server} do
       request = build_request("tools/list")
-      assert {:ok, _} = GenServer.call(server, {:request, request, "not_initialized"})
+      assert {:ok, _} = GenServer.call(server, {:request, request, "not_initialized", %{}})
     end
 
     test "accept ping requests when not initialized", %{server: server, session_id: session_id} do
       request = build_request("ping")
-      assert {:ok, _} = GenServer.call(server, {:request, request, session_id})
+      assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
     end
   end
 
@@ -64,12 +64,12 @@ defmodule Hermes.Server.BaseTest do
 
     test "handles notifications", %{server: server, session_id: session_id} do
       notification = build_notification("notifications/cancelled", %{"requestId" => 1})
-      assert :ok = GenServer.cast(server, {:notification, notification, session_id})
+      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
     end
 
     test "handles initialize notification", %{server: server, session_id: session_id} do
       notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, notification, session_id})
+      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
     end
   end
 

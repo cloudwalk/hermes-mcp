@@ -424,6 +424,42 @@ defmodule MyServer.Tools.Counter do
 end
 ```
 
+## Frame and Authorization
+
+For HTTP transports, `frame.assigns` inherits from `Plug.Conn.assigns`. Users are responsible for populating it with authentication data through their own Plug pipeline:
+
+```elixir
+# In your Phoenix/Plug pipeline
+pipeline :authenticated_api do
+  plug MyApp.AuthPlug        # Sets conn.assigns[:current_user]
+  plug MyApp.PermissionsPlug # Sets conn.assigns[:permissions]
+end
+
+# In your MCP component
+defmodule MyServer.Tools.SecureTool do
+  use Hermes.Server.Component, type: :tool
+
+  @impl true
+  def execute(params, frame) do
+    # Access auth data populated by your plugs
+    current_user = frame.assigns[:current_user]
+    permissions = frame.assigns[:permissions]
+    
+    if authorized?(current_user, permissions) do
+      # Tool logic here
+    else
+      {:error, "Unauthorized", frame}
+    end
+  end
+end
+```
+
+The Frame provides access to:
+- `assigns` - User data from `conn.assigns` (authentication, business context)
+- `transport` - Request metadata (headers, query params, IP address)
+- `private` - MCP session data (session ID, client info, protocol version)
+- `request` - Current MCP request being processed
+
 ## Return Types
 
 All component callbacks must return one of:

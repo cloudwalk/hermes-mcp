@@ -1,43 +1,59 @@
 defmodule Hermes.Server.Frame do
   @moduledoc """
-  Server frame for maintaining state across MCP message handling.
+  The Hermes Frame.
 
-  Similar to LiveView's Socket or Plug.Conn, the Frame provides a consistent
-  interface for storing and updating server state throughout the request lifecycle.
+  This module defines a struct and functions for working with
+  MCP server state throughout the request/response lifecycle.
 
-  ## Usage
+  ## User fields
 
-      # Create a new frame
-      frame = Frame.new()
+  These fields contain user-controlled data:
 
-      # Assign values
-      frame = Frame.assign(frame, :user_id, 123)
-      frame = Frame.assign(frame, %{status: :active, count: 0})
+    * `assigns` - shared user data as a map. For HTTP transports, this inherits
+      from `Plug.Conn.assigns`. Users are responsible for populating authentication
+      data through their Plug pipeline before it reaches the MCP server.
 
-      # Conditional assignment
-      frame = Frame.assign_new(frame, :timestamp, fn -> DateTime.utc_now() end)
+  ## Transport fields
 
-  ## Fields
+  These fields contain transport-specific context. The structure varies by transport type:
 
-  - `assigns` - A map containing arbitrary data assigned during request processing
-  - `initialized` - Boolean indicating if the server has been initialized
-  - `private` - A map for framework-internal session data (similar to Plug.Conn.private)
-  - `request` - The current MCP request being processed (if any)
+  ### HTTP transport (when `transport.type == :http`)
 
-  ## Session Context (private)
+    * `req_headers` - the request headers as a list, example: `[{"content-type", "application/json"}]`.
+      All header names are downcased.
+    * `query_params` - the request query params as a map, example: `%{"session" => "abc123"}`.
+      Returns `nil` if query params were not fetched by the Plug pipeline.
+    * `remote_ip` - the IP of the client, example: `{151, 236, 219, 228}`. 
+      This field is set by the transport layer.
+    * `scheme` - the request scheme as an atom, example: `:https`
+    * `host` - the requested host as a binary, example: `"api.example.com"`
+    * `port` - the requested port as an integer, example: `443`
+    * `request_path` - the requested path, example: `"/mcp"`
 
-  The `private` field stores session-level context that persists across requests:
-  - `session_id` - Unique identifier for the client session
-  - `client_info` - Client information from initialization (name, version)
-  - `client_capabilities` - Negotiated client capabilities
-  - `protocol_version` - Active MCP protocol version
+  ### STDIO transport (when `transport.type == :stdio`)
 
-  ## Request Context
+    * `env` - environment variables as a map, example: `%{"USER" => "alice", "HOME" => "/home/alice"}`
+    * `pid` - the OS process ID as a string, example: `"12345"`
 
-  The `request` field stores the current request being processed:
-  - `id` - Request ID for correlation
-  - `method` - The MCP method being executed
-  - `params` - Raw request parameters (before validation)
+  ## MCP protocol fields
+
+  These fields contain MCP-specific data:
+
+    * `request` - the current MCP request being processed, with fields:
+      * `id` - the request ID for correlation
+      * `method` - the MCP method being called, example: `"tools/call"`
+      * `params` - the raw request parameters (before validation)
+    * `initialized` - boolean indicating if the MCP session has been initialized
+
+  ## Private fields
+
+  These fields are reserved for framework usage:
+
+    * `private` - shared framework data as a map. Contains MCP session context:
+      * `session_id` - unique identifier for the client session
+      * `client_info` - client information from initialization, example: `%{"name" => "my-client", "version" => "1.0.0"}`
+      * `client_capabilities` - negotiated client capabilities
+      * `protocol_version` - active MCP protocol version, example: `"2025-03-26"`
   """
 
   @type private_t :: %{

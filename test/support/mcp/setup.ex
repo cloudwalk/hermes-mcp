@@ -118,9 +118,9 @@ defmodule Hermes.MCP.Setup do
     assert server = Hermes.Server.Registry.whereis_server(StubServer)
 
     request = Builders.init_request(protocol_version, info, capabilities)
-    assert {:ok, _} = GenServer.call(server, {:request, request, session_id})
+    assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
     notification = Builders.build_notification("notifications/initialized", %{})
-    assert :ok = GenServer.cast(server, {:notification, notification, session_id})
+    assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
 
     Process.sleep(50)
 

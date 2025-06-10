@@ -68,7 +68,7 @@ defmodule Hermes.Server.Transport.SSETest do
       notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
 
       # Should return nil for notifications and send them to server
-      assert {:ok, nil} = SSE.handle_message(transport, session_id, notification)
+      assert {:ok, nil} = SSE.handle_message(transport, session_id, notification, %{})
     end
 
     test "routes messages to specific sessions", %{transport: transport} do

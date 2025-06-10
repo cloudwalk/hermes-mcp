@@ -47,7 +47,7 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
       assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
       message = build_request("ping", %{})
 
-      StreamableHTTP.handle_message_for_sse(transport, session_id, message)
+      StreamableHTTP.handle_message_for_sse(transport, session_id, message, %{})
     end
 
     test "routes messages to sessions", %{transport: transport} do
