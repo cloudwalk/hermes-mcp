@@ -13,7 +13,7 @@ defmodule Hermes.MCP.Message do
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
-    "capabilities" => {:required, :map},
+    "capabilities" => {:map, {:default, %{}}},
     "clientInfo" => %{
       "name" => {:required, :string},
       "version" => {:required, :string}
