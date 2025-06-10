@@ -12,7 +12,7 @@ defmodule Hermes.Application do
     children =
       [
         {Finch, name: Hermes.Finch, pools: %{default: [size: 15]}}
-      ] ++ if Mix.env() == :test, do: [Hermes.Server.Registry], else: []
+      ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

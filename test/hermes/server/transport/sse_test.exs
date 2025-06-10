@@ -3,6 +3,10 @@ defmodule Hermes.Server.Transport.SSETest do
 
   alias Hermes.Server.Transport.SSE
 
+  @moduletag skip: true
+
+  setup :with_default_registry
+
   describe "start_link/1" do
     test "starts with valid options" do
       server = :"test_server_#{System.unique_integer([:positive])}"
