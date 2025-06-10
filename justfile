@@ -10,7 +10,7 @@ calculator-server transport="stdio":
 
 [working-directory: 'priv/dev/upcase']
 upcase-server:
-    iex -S mix
+    HERMES_MCP_SERVER=true iex -S mix
 
 [working-directory: 'priv/dev/ascii']
 ascii-server:

@@ -15,19 +15,26 @@ defmodule Hermes.Server.Supervisor do
   The supervisor intelligently handles startup based on transport type:
 
   - **STDIO transport**: Always starts
-  - **StreamableHTTP/SSE transport**: Only starts when an HTTP server is running
-    (Phoenix with `:serve_endpoints` or Bandit/Cowboy started)
+  - **StreamableHTTP/SSE transport**: Conditional startup based on:
+    1. Explicit `:start` option in transport config (highest priority)
+    2. `HERMES_MCP_SERVER` environment variable present
+    3. `PHX_SERVER` environment variable present, for phoenix apps using releases
+    4. Phoenix `:serve_endpoints` internalr runtime config (usage with `mix phx.server`)
+    5. Default: `true` (starts by default in production releases)
 
-  This prevents MCP servers from starting in environments where they can't
-  function properly (e.g., during migrations, tests, or non-web Mix tasks).
+  This ensures MCP servers start correctly in all environments:
+  - Mix releases: Use `PHX_SERVER=true` or `HERMES_MCP_SERVER=true`
+  - Development: Use `mix phx.server`
+  - Tests/Tasks: Servers don't start unless explicitly configured
 
-  You can override this behavior with the `:start` option:
+  ## Configuration Examples
+
   ```elixir
-  # Force start even without HTTP server
+  # Force start with transport option (highest priority)
   {MyServer, transport: {:streamable_http, start: true}}
 
-  # Prevent start even with HTTP server
-  {MyServer, transport: {:streamable_http, start: false}}
+  # Control via environment variables (works in releases)
+  PHX_SERVER=true ./my_app start
   ```
 
   ## Supervision Tree
@@ -164,8 +171,14 @@ defmodule Hermes.Server.Supervisor do
   end
 
   defp http_server_running? do
-    phoenix_serving? = Application.get_env(:phoenix, :serve_endpoints)
+    cond do
+      System.get_env("HERMES_MCP_SERVER") -> true
+      System.get_env("PHX_SERVER") -> true
+      true -> check_phoenix_config()
+    end
+  end
 
-    if is_nil(phoenix_serving?), do: true, else: phoenix_serving?
+  defp check_phoenix_config do
+    Application.get_env(:phoenix, :serve_endpoints, false)
   end
 end

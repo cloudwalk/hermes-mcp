@@ -60,9 +60,21 @@
     }
   ],
   "extra-files": [
-    "flake.nix",
-    "README.md",
-    "pages/installation.md"
+    {
+      "type": "generic",
+      "path": "flake.nix",
+      "glob": false
+    },
+    {
+      "type": "generic", 
+      "path": "README.md",
+      "glob": false
+    },
+    {
+      "type": "generic",
+      "path": "pages/installation.md", 
+      "glob": false
+    }
   ],
   "packages": {
     ".": {
