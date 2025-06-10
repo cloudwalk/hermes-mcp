@@ -59,14 +59,14 @@
       "hidden": false
     }
   ],
+  "extra-files": [
+    "flake.nix",
+    "README.md",
+    "pages/installation.md"
+  ],
   "packages": {
     ".": {
-      "release-type": "elixir",
-      "extra-files": [
-        "flake.nix",
-        "README.md",
-        "pages/installation.md"
-      ]
+      "release-type": "elixir"
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
