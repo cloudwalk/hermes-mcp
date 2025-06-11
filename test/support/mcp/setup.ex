@@ -87,7 +87,7 @@ defmodule Hermes.MCP.Setup do
       protocol_version: protocol_version
     ]
 
-    client = start_supervised!({Hermes.Client, client_opts})
+    client = start_supervised!({Hermes.Client.Base, client_opts})
     unique_id = System.unique_integer([:positive])
     start_supervised!({StubServer, transport: StubTransport}, id: unique_id)
     assert server = Hermes.Server.Registry.whereis_server(StubServer)
@@ -226,7 +226,7 @@ defmodule Hermes.MCP.Setup do
 
     client =
       start_supervised!(
-        {Hermes.Client,
+        {Hermes.Client.Base,
          transport: [layer: Hermes.MockTransport, name: MockTransport],
          client_info: client_info,
          capabilities: client_capabilities},

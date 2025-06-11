@@ -28,7 +28,7 @@ defmodule Hermes.Client.BaseTest do
 
       client =
         start_supervised!(
-          {Hermes.Client,
+          {Hermes.Client.Base,
            transport: [layer: Hermes.MockTransport, name: MockTransport],
            client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
           restart: :temporary
@@ -54,7 +54,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.ping(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.ping(client) end)
 
       Process.sleep(50)
 
@@ -75,7 +75,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_resources(client) end)
 
       Process.sleep(50)
 
@@ -105,7 +105,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_resources(client, cursor: "next-page") end)
+      task = Task.async(fn -> Hermes.Client.Base.list_resources(client, cursor: "next-page") end)
 
       Process.sleep(50)
 
@@ -135,7 +135,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.read_resource(client, "test://uri") end)
+      task = Task.async(fn -> Hermes.Client.Base.read_resource(client, "test://uri") end)
 
       Process.sleep(50)
 
@@ -164,7 +164,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_prompts(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_prompts(client) end)
 
       Process.sleep(50)
 
@@ -201,7 +201,7 @@ defmodule Hermes.Client.BaseTest do
 
       task =
         Task.async(fn ->
-          Hermes.Client.get_prompt(client, "test_prompt", %{"arg1" => "value1"})
+          Hermes.Client.Base.get_prompt(client, "test_prompt", %{"arg1" => "value1"})
         end)
 
       Process.sleep(50)
@@ -231,7 +231,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_tools(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_tools(client) end)
 
       Process.sleep(50)
 
@@ -262,7 +262,7 @@ defmodule Hermes.Client.BaseTest do
       end)
 
       task =
-        Task.async(fn -> Hermes.Client.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
+        Task.async(fn -> Hermes.Client.Base.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
 
       Process.sleep(50)
 
@@ -293,7 +293,7 @@ defmodule Hermes.Client.BaseTest do
       end)
 
       task =
-        Task.async(fn -> Hermes.Client.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
+        Task.async(fn -> Hermes.Client.Base.call_tool(client, "test_tool", %{"arg1" => "value1"}) end)
 
       Process.sleep(50)
 
@@ -330,7 +330,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.ping(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.ping(client) end)
 
       Process.sleep(50)
 
@@ -345,7 +345,7 @@ defmodule Hermes.Client.BaseTest do
 
     @tag server_capabilities: %{"prompts" => %{}}
     test "tools/list fails since this capability isn't supported", %{client: client} do
-      task = Task.async(fn -> Hermes.Client.list_tools(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_tools(client) end)
 
       assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
                Task.await(task)
@@ -362,7 +362,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.ping(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.ping(client) end)
 
       Process.sleep(50)
 
@@ -383,7 +383,7 @@ defmodule Hermes.Client.BaseTest do
         {:error, :connection_closed}
       end)
 
-      assert {:error, error} = Hermes.Client.ping(client)
+      assert {:error, error} = Hermes.Client.Base.ping(client)
       assert error.reason == :send_failure
       assert error.data.original_reason == :connection_closed
     end
@@ -395,7 +395,7 @@ defmodule Hermes.Client.BaseTest do
 
       client =
         start_supervised!(
-          {Hermes.Client,
+          {Hermes.Client.Base,
            transport: [layer: Hermes.MockTransport, name: MockTransport],
            client_info: %{"name" => "TestClient", "version" => "1.0.0"},
            capabilities: %{"roots" => %{}}},
@@ -408,13 +408,13 @@ defmodule Hermes.Client.BaseTest do
 
       new_capabilities = %{"sampling" => %{}}
 
-      updated = Hermes.Client.merge_capabilities(client, new_capabilities)
+      updated = Hermes.Client.Base.merge_capabilities(client, new_capabilities)
 
       assert updated == %{"roots" => %{}, "sampling" => %{}}
 
       nested_capabilities = %{"roots" => %{"listChanged" => true}}
 
-      final = Hermes.Client.merge_capabilities(client, nested_capabilities)
+      final = Hermes.Client.Base.merge_capabilities(client, nested_capabilities)
 
       assert final == %{"sampling" => %{}, "roots" => %{"listChanged" => true}}
     end
@@ -424,7 +424,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "get_server_capabilities returns server capabilities", %{client: client} do
-      capabilities = Hermes.Client.get_server_capabilities(client)
+      capabilities = Hermes.Client.Base.get_server_capabilities(client)
 
       assert Map.has_key?(capabilities, "resources")
       assert Map.has_key?(capabilities, "tools")
@@ -432,7 +432,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "get_server_info returns server info", %{client: client} do
-      server_info = Hermes.Client.get_server_info(client)
+      server_info = Hermes.Client.Base.get_server_info(client)
 
       assert server_info == %{"name" => "TestServer", "version" => "1.0.0"}
     end
@@ -448,7 +448,7 @@ defmodule Hermes.Client.BaseTest do
       total_value = 100
 
       :ok =
-        Hermes.Client.register_progress_callback(client, progress_token, fn token, progress, total ->
+        Hermes.Client.Base.register_progress_callback(client, progress_token, fn token, progress, total ->
           send(test_pid, {:progress_callback, token, progress, total})
         end)
 
@@ -463,11 +463,11 @@ defmodule Hermes.Client.BaseTest do
       progress_token = "unregister_test_token"
 
       :ok =
-        Hermes.Client.register_progress_callback(client, progress_token, fn _, _, _ ->
+        Hermes.Client.Base.register_progress_callback(client, progress_token, fn _, _, _ ->
           send(test_pid, :should_not_be_called)
         end)
 
-      :ok = Hermes.Client.unregister_progress_callback(client, progress_token)
+      :ok = Hermes.Client.Base.unregister_progress_callback(client, progress_token)
 
       progress_notification = progress_notification(progress_token)
       send_notification(client, progress_notification)
@@ -487,7 +487,7 @@ defmodule Hermes.Client.BaseTest do
 
       task =
         Task.async(fn ->
-          Hermes.Client.list_resources(client, progress: [token: progress_token])
+          Hermes.Client.Base.list_resources(client, progress: [token: progress_token])
         end)
 
       Process.sleep(50)
@@ -525,7 +525,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.set_log_level(client, "info") end)
+      task = Task.async(fn -> Hermes.Client.Base.set_log_level(client, "info") end)
 
       Process.sleep(50)
 
@@ -559,7 +559,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.complete(client, ref, argument) end)
+      task = Task.async(fn -> Hermes.Client.Base.complete(client, ref, argument) end)
 
       Process.sleep(50)
 
@@ -601,7 +601,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.complete(client, ref, argument) end)
+      task = Task.async(fn -> Hermes.Client.Base.complete(client, ref, argument) end)
 
       Process.sleep(50)
 
@@ -622,7 +622,7 @@ defmodule Hermes.Client.BaseTest do
 
     test "register_log_callback sets the callback", %{client: client} do
       callback = fn _, _, _ -> nil end
-      :ok = Hermes.Client.register_log_callback(client, callback)
+      :ok = Hermes.Client.Base.register_log_callback(client, callback)
 
       state = :sys.get_state(client)
       assert state.log_callback == callback
@@ -631,8 +631,8 @@ defmodule Hermes.Client.BaseTest do
     test "unregister_log_callback removes the callback", %{client: client} do
       callback = fn _, _, _ -> nil end
 
-      assert :ok = Hermes.Client.register_log_callback(client, callback)
-      assert :ok = Hermes.Client.unregister_log_callback(client)
+      assert :ok = Hermes.Client.Base.register_log_callback(client, callback)
+      assert :ok = Hermes.Client.Base.unregister_log_callback(client)
 
       state = :sys.get_state(client)
       assert is_nil(state.log_callback)
@@ -642,7 +642,7 @@ defmodule Hermes.Client.BaseTest do
       test_pid = self()
 
       :ok =
-        Hermes.Client.register_log_callback(client, fn level, data, logger ->
+        Hermes.Client.Base.register_log_callback(client, fn level, data, logger ->
           send(test_pid, {:log_callback, level, data, logger})
         end)
 
@@ -672,7 +672,7 @@ defmodule Hermes.Client.BaseTest do
 
       client =
         start_supervised!(
-          {Hermes.Client,
+          {Hermes.Client.Base,
            transport: [layer: Hermes.MockTransport, name: MockTransport],
            client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
           restart: :temporary
@@ -699,7 +699,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.call_tool(client, "long_running_tool") end)
+      task = Task.async(fn -> Hermes.Client.Base.call_tool(client, "long_running_tool") end)
 
       Process.sleep(50)
 
@@ -724,7 +724,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_resources(client) end)
 
       Process.sleep(50)
 
@@ -739,7 +739,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      assert :ok = Hermes.Client.cancel_request(client, request_id, "test cancellation")
+      assert :ok = Hermes.Client.Base.cancel_request(client, request_id, "test cancellation")
 
       assert {:error, error} = Task.await(task)
       assert error.reason == :request_cancelled
@@ -750,7 +750,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "client returns not_found when cancelling non-existent request", %{client: client} do
-      result = Hermes.Client.cancel_request(client, "non_existent_id")
+      result = Hermes.Client.Base.cancel_request(client, "non_existent_id")
       assert %Error{reason: :request_not_found} = result
     end
 
@@ -761,8 +761,8 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task1 = Task.async(fn -> Hermes.Client.list_resources(client) end)
-      task2 = Task.async(fn -> Hermes.Client.list_tools(client) end)
+      task1 = Task.async(fn -> Hermes.Client.Base.list_resources(client) end)
+      task2 = Task.async(fn -> Hermes.Client.Base.list_tools(client) end)
 
       Process.sleep(50)
 
@@ -777,7 +777,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      {:ok, cancelled_requests} = Hermes.Client.cancel_all_requests(client, "batch cancellation")
+      {:ok, cancelled_requests} = Hermes.Client.Base.cancel_all_requests(client, "batch cancellation")
       assert length(cancelled_requests) == 2
 
       assert {:error, error1} = Task.await(task1)
@@ -806,7 +806,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      task = Task.async(fn -> Hermes.Client.list_resources(client, timeout: test_timeout) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_resources(client, timeout: test_timeout) end)
 
       Process.sleep(test_timeout * 2)
 
@@ -830,7 +830,7 @@ defmodule Hermes.Client.BaseTest do
       expect(Hermes.MockTransport, :send_message, fn _, _ -> :ok end)
 
       Process.flag(:trap_exit, true)
-      task = Task.async(fn -> Hermes.Client.list_resources(client, timeout: test_timeout) end)
+      task = Task.async(fn -> Hermes.Client.Base.list_resources(client, timeout: test_timeout) end)
 
       result = Task.await(task)
       assert {:error, error} = result
@@ -856,12 +856,12 @@ defmodule Hermes.Client.BaseTest do
       expect(Hermes.MockTransport, :shutdown, fn _ -> :ok end)
 
       Process.flag(:trap_exit, true)
-      %{pid: pid} = Task.async(fn -> Hermes.Client.list_resources(client) end)
+      %{pid: pid} = Task.async(fn -> Hermes.Client.Base.list_resources(client) end)
       Process.sleep(50)
 
       assert get_request_id(client, "resources/list")
 
-      Hermes.Client.close(client)
+      Hermes.Client.Base.close(client)
 
       Process.sleep(50)
       refute Process.alive?(client)
@@ -875,9 +875,9 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "add_root adds a root directory", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project", "My Project")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project", "My Project")
 
-      roots = Hermes.Client.list_roots(client)
+      roots = Hermes.Client.Base.list_roots(client)
       assert length(roots) == 1
 
       [root] = roots
@@ -886,10 +886,10 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "list_roots returns all roots", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project1", "Project 1")
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project2", "Project 2")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project1", "Project 1")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project2", "Project 2")
 
-      roots = Hermes.Client.list_roots(client)
+      roots = Hermes.Client.Base.list_roots(client)
       assert length(roots) == 2
 
       uris = Enum.map(roots, & &1.uri)
@@ -898,31 +898,31 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "remove_root removes a specific root", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project1", "Project 1")
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project2", "Project 2")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project1", "Project 1")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project2", "Project 2")
 
-      :ok = Hermes.Client.remove_root(client, "file:///home/user/project1")
+      :ok = Hermes.Client.Base.remove_root(client, "file:///home/user/project1")
 
-      roots = Hermes.Client.list_roots(client)
+      roots = Hermes.Client.Base.list_roots(client)
       assert length(roots) == 1
       assert hd(roots).uri == "file:///home/user/project2"
     end
 
     test "clear_roots removes all roots", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project1", "Project 1")
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project2", "Project 2")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project1", "Project 1")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project2", "Project 2")
 
-      :ok = Hermes.Client.clear_roots(client)
+      :ok = Hermes.Client.Base.clear_roots(client)
 
-      roots = Hermes.Client.list_roots(client)
+      roots = Hermes.Client.Base.list_roots(client)
       assert Enum.empty?(roots)
     end
 
     test "add_root doesn't add duplicates", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project", "My Project")
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project", "Duplicate Project")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project", "My Project")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project", "Duplicate Project")
 
-      roots = Hermes.Client.list_roots(client)
+      roots = Hermes.Client.Base.list_roots(client)
       assert length(roots) == 1
       assert hd(roots).name == "My Project"
     end
@@ -932,8 +932,8 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "server can request roots list", %{client: client} do
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project1", "Project 1")
-      :ok = Hermes.Client.add_root(client, "file:///home/user/project2", "Project 2")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project1", "Project 1")
+      :ok = Hermes.Client.Base.add_root(client, "file:///home/user/project2", "Project 2")
 
       request_id = "server_req_123"
 
@@ -974,7 +974,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      assert :ok = Hermes.Client.add_root(client, "file:///test/root", "Test Root")
+      assert :ok = Hermes.Client.Base.add_root(client, "file:///test/root", "Test Root")
       _ = :sys.get_state(client)
 
       Process.sleep(50)
@@ -982,7 +982,7 @@ defmodule Hermes.Client.BaseTest do
 
     @tag client_capabilities: %{"roots" => %{"listChanged" => true}}
     test "sends notification when removing a root", %{client: client} do
-      assert :ok = Hermes.Client.add_root(client, "file:///test/root", "Test Root")
+      assert :ok = Hermes.Client.Base.add_root(client, "file:///test/root", "Test Root")
       Process.sleep(50)
 
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -993,7 +993,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      assert :ok = Hermes.Client.remove_root(client, "file:///test/root")
+      assert :ok = Hermes.Client.Base.remove_root(client, "file:///test/root")
       _ = :sys.get_state(client)
 
       Process.sleep(50)
@@ -1001,8 +1001,8 @@ defmodule Hermes.Client.BaseTest do
 
     @tag client_capabilities: %{"roots" => %{"listChanged" => true}}
     test "sends notification when clearing roots", %{client: client} do
-      assert :ok = Hermes.Client.add_root(client, "file:///test/root1", "Test Root 1")
-      assert :ok = Hermes.Client.add_root(client, "file:///test/root2", "Test Root 2")
+      assert :ok = Hermes.Client.Base.add_root(client, "file:///test/root1", "Test Root 1")
+      assert :ok = Hermes.Client.Base.add_root(client, "file:///test/root2", "Test Root 2")
       Process.sleep(50)
 
       expect(Hermes.MockTransport, :send_message, fn _, message ->
@@ -1013,7 +1013,7 @@ defmodule Hermes.Client.BaseTest do
         :ok
       end)
 
-      assert :ok = Hermes.Client.clear_roots(client)
+      assert :ok = Hermes.Client.Base.clear_roots(client)
 
       _ = :sys.get_state(client)
       Process.sleep(50)
@@ -1021,7 +1021,7 @@ defmodule Hermes.Client.BaseTest do
 
     @tag client_capabilities: %{"roots" => %{"listChanged" => false}}
     test "doesn't send notification when doesn't support listChanged", %{client: client} do
-      assert :ok = Hermes.Client.add_root(client, "file:///test/root", "Test Root")
+      assert :ok = Hermes.Client.Base.add_root(client, "file:///test/root", "Test Root")
       _ = :sys.get_state(client)
     end
   end

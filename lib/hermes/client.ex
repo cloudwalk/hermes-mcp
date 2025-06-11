@@ -118,36 +118,6 @@ defmodule Hermes.Client do
     client_info = %{"name" => name, "version" => version}
 
     quote do
-      @doc """
-      Returns a child specification for supervision tree integration.
-
-      This function is automatically called when adding the client to a supervisor.
-      It inherits the client configuration from the `use` macro and merges it with
-      runtime options.
-
-      ## Options
-        * `:name` - Custom process name (defaults to module name)
-        * `:transport` - Transport configuration (required)
-        * `:transport_name` - Custom transport process name (required when using via tuples)
-        * All other options are passed to the underlying client
-
-      ## Examples
-          # Simple usage
-          children = [
-            {MyClient, transport: {:stdio, command: "mcp", args: ["server"]}}
-          ]
-          
-          # With distributed registry
-          children = [
-            {MyClient, 
-             name: {:via, Horde.Registry, {MyCluster, "client_1"}},
-             transport_name: {:via, Horde.Registry, {MyCluster, "transport_1"}},
-             transport: {:stdio, command: "mcp", args: ["server"]}}
-          ]
-          
-          Supervisor.start_link(children, strategy: :one_for_one)
-      """
-      @spec child_spec(keyword()) :: Supervisor.child_spec()
       def child_spec(opts) do
         inherit = [
           client_info: unquote(client_info),
@@ -167,32 +137,6 @@ defmodule Hermes.Client do
 
       defoverridable child_spec: 1
 
-      @doc """
-      Starts the client and its transport as a supervised process.
-
-      ## Options
-        * `:name` - Process name (defaults to module name)
-        * `:transport_name` - Transport process name (required for via tuples)
-        * `:transport` - Transport configuration (required)
-          * `{:stdio, command: "cmd", args: ["arg1"]}`
-          * `{:sse, base_url: "http://localhost:8000"}`
-          * `{:websocket, url: "ws://localhost:8000/ws"}`
-          * `{:streamable_http, url: "http://localhost:8000/mcp"}`
-
-      ## Examples
-          # Simple usage
-          {:ok, pid} = MyClient.start_link(
-            transport: {:stdio, command: "mcp", args: ["run", "server.py"]}
-          )
-          
-          # With distributed registry
-          {:ok, pid} = MyClient.start_link(
-            name: {:via, Horde.Registry, {MyCluster, "client_1"}},
-            transport_name: {:via, Horde.Registry, {MyCluster, "transport_1"}},
-            transport: {:stdio, command: "mcp", args: ["run", "server.py"]}
-          )
-      """
-      @spec start_link(keyword()) :: {:ok, pid()} | {:error, term()}
       def start_link(opts) do
         Hermes.Client.Supervisor.start_link(__MODULE__, opts)
       end
@@ -206,7 +150,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, :pong} = MyClient.ping()
       """
-      @spec ping(keyword()) :: {:ok, :pong} | {:error, term()}
       def ping(opts \\ []), do: Base.ping(__MODULE__, opts)
 
       @doc """
@@ -219,7 +162,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, resources} = MyClient.list_resources()
       """
-      @spec list_resources(keyword()) :: {:ok, map()} | {:error, term()}
       def list_resources(opts \\ []), do: Base.list_resources(__MODULE__, opts)
 
       @doc """
@@ -228,7 +170,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, content} = MyClient.read_resource("file:///path/to/file")
       """
-      @spec read_resource(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
       def read_resource(uri, opts \\ []), do: Base.read_resource(__MODULE__, uri, opts)
 
       @doc """
@@ -241,7 +182,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, prompts} = MyClient.list_prompts()
       """
-      @spec list_prompts(keyword()) :: {:ok, map()} | {:error, term()}
       def list_prompts(opts \\ []), do: Base.list_prompts(__MODULE__, opts)
 
       @doc """
@@ -250,7 +190,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, prompt} = MyClient.get_prompt("greeting", %{name: "Alice"})
       """
-      @spec get_prompt(String.t(), map() | nil, keyword()) :: {:ok, map()} | {:error, term()}
       def get_prompt(name, args \\ nil, opts \\ []), do: Base.get_prompt(__MODULE__, name, args, opts)
 
       @doc """
@@ -263,7 +202,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, tools} = MyClient.list_tools()
       """
-      @spec list_tools(keyword()) :: {:ok, map()} | {:error, term()}
       def list_tools(opts \\ []), do: Base.list_tools(__MODULE__, opts)
 
       @doc """
@@ -272,7 +210,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, result} = MyClient.call_tool("search", %{query: "elixir"})
       """
-      @spec call_tool(String.t(), map() | nil, keyword()) :: {:ok, map()} | {:error, term()}
       def call_tool(name, args \\ nil, opts \\ []), do: Base.call_tool(__MODULE__, name, args, opts)
 
       @doc """
@@ -281,7 +218,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.merge_capabilities(%{"experimental" => %{}})
       """
-      @spec merge_capabilities(map(), keyword()) :: :ok | {:error, term()}
       def merge_capabilities(add, opts \\ []), do: Base.merge_capabilities(__MODULE__, add, opts)
 
       @doc """
@@ -290,7 +226,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, capabilities} = MyClient.get_server_capabilities()
       """
-      @spec get_server_capabilities(keyword()) :: {:ok, map()} | {:error, term()}
       def get_server_capabilities(opts \\ []), do: Base.get_server_capabilities(__MODULE__, opts)
 
       @doc """
@@ -299,7 +234,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, info} = MyClient.get_server_info()
       """
-      @spec get_server_info(keyword()) :: {:ok, map()} | {:error, term()}
       def get_server_info(opts \\ []), do: Base.get_server_info(__MODULE__, opts)
 
       @doc """
@@ -308,7 +242,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, result} = MyClient.complete(ref, "completed")
       """
-      @spec complete(reference(), term(), keyword()) :: {:ok, term()} | {:error, term()}
       def complete(ref, argument, opts \\ []), do: Base.complete(__MODULE__, ref, argument, opts)
 
       @doc """
@@ -317,7 +250,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.set_log_level("debug")
       """
-      @spec set_log_level(String.t()) :: :ok | {:error, term()}
       def set_log_level(level), do: Base.set_log_level(__MODULE__, level)
 
       @doc """
@@ -326,13 +258,11 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.register_log_callback(fn log -> IO.puts(log) end)
       """
-      @spec register_log_callback(function(), keyword()) :: :ok | {:error, term()}
       def register_log_callback(cb, opts \\ []), do: Base.register_log_callback(__MODULE__, cb, opts)
 
       @doc """
       Unregisters the log callback.
       """
-      @spec unregister_log_callback(keyword()) :: :ok | {:error, term()}
       def unregister_log_callback(opts \\ []), do: Base.unregister_log_callback(__MODULE__, opts)
 
       @doc """
@@ -343,7 +273,6 @@ defmodule Hermes.Client do
             IO.puts("Progress: #{progress}")
           end)
       """
-      @spec register_progress_callback(String.t(), function(), keyword()) :: :ok | {:error, term()}
       def register_progress_callback(token, callback, opts \\ []) do
         Base.register_progress_callback(__MODULE__, token, callback, opts)
       end
@@ -351,7 +280,6 @@ defmodule Hermes.Client do
       @doc """
       Unregisters a progress callback.
       """
-      @spec unregister_progress_callback(String.t(), keyword()) :: :ok | {:error, term()}
       def unregister_progress_callback(token, opts \\ []) do
         Base.unregister_progress_callback(__MODULE__, token, opts)
       end
@@ -362,7 +290,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.send_progress("task-1", 50, 100)
       """
-      @spec send_progress(String.t(), number(), number() | nil, keyword()) :: :ok | {:error, term()}
       def send_progress(token, progress, total \\ nil, opts \\ []) do
         Base.send_progress(__MODULE__, token, progress, total, opts)
       end
@@ -373,7 +300,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.cancel_request("req-123")
       """
-      @spec cancel_request(String.t(), String.t(), keyword()) :: :ok | {:error, term()}
       def cancel_request(request_id, reason \\ "client_cancelled", opts \\ []) do
         Base.cancel_request(__MODULE__, request_id, reason, opts)
       end
@@ -384,7 +310,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.cancel_all_requests("shutting_down")
       """
-      @spec cancel_all_requests(String.t(), keyword()) :: :ok | {:error, term()}
       def cancel_all_requests(reason \\ "client_cancelled", opts \\ []) do
         Base.cancel_all_requests(__MODULE__, reason, opts)
       end
@@ -395,7 +320,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.add_root("file:///project", "My Project")
       """
-      @spec add_root(String.t(), String.t() | nil, keyword()) :: :ok | {:error, term()}
       def add_root(uri, name \\ nil, opts \\ []), do: Base.add_root(__MODULE__, uri, name, opts)
 
       @doc """
@@ -404,7 +328,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.remove_root("file:///project")
       """
-      @spec remove_root(String.t(), keyword()) :: :ok | {:error, term()}
       def remove_root(uri, opts \\ []), do: Base.remove_root(__MODULE__, uri, opts)
 
       @doc """
@@ -413,7 +336,6 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, roots} = MyClient.list_roots()
       """
-      @spec list_roots(keyword()) :: {:ok, list()} | {:error, term()}
       def list_roots(opts \\ []), do: Base.list_roots(__MODULE__, opts)
 
       @doc """
@@ -422,7 +344,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.clear_roots()
       """
-      @spec clear_roots(keyword()) :: :ok | {:error, term()}
       def clear_roots(opts \\ []), do: Base.clear_roots(__MODULE__, opts)
 
       @doc """
@@ -431,7 +352,6 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.close()
       """
-      @spec close() :: :ok
       def close, do: Base.close(__MODULE__)
     end
   end
