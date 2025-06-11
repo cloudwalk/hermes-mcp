@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.8.1...v0.8.2) (2025-06-11)
+
+
+### Code Refactoring
+
+* higher-level client implementation ([#111](https://github.com/cloudwalk/hermes-mcp/issues/111)) ([5de2162](https://github.com/cloudwalk/hermes-mcp/commit/5de2162b166e390b4dacfd7b9960fab59c81b4d7))
+
 ## [0.8.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.8.0...v0.8.1) (2025-06-10)
 
 
