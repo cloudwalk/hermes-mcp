@@ -6,10 +6,6 @@ defmodule Mix.Interactive.CLI do
   It can start SSE, WebSocket, or STDIO interactive shells based on command-line arguments.
   """
 
-  alias Hermes.Client
-  alias Hermes.Transport.SSE
-  alias Hermes.Transport.STDIO
-  alias Hermes.Transport.WebSocket
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI
 
@@ -73,25 +69,18 @@ defmodule Mix.Interactive.CLI do
 
     IO.puts(UI.header("HERMES MCP SSE INTERACTIVE"))
 
-    children = [
-      # Start client first - it will hibernate waiting for transport's :initialize message
-      {Client,
-       name: :sse_test,
-       transport: [layer: SSE],
-       client_info: %{
-         "name" => "Hermes.CLI.SSE",
-         "version" => "1.0.0"
-       }},
-      {SSE, client: :sse_test, server: server_options}
-    ]
+    client_info = %{"name" => "Hermes.CLI.SSE", "version" => "0.1.0"}
+    name = SSETest
+    transport = SSETest.Transport
 
-    Supervisor.start_link(children, strategy: :one_for_all)
+    opts = [name: name, transport: {:sse, server_options}, client_info: client_info]
+    {:ok, _} = Hermes.Client.Supervisor.start_link(name, opts)
 
-    sse = Process.whereis(SSE)
+    sse = Process.whereis(transport)
     IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
     check_sse_connection(sse)
 
-    client = Process.whereis(:sse_test)
+    client = Process.whereis(name)
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
@@ -106,25 +95,19 @@ defmodule Mix.Interactive.CLI do
 
     IO.puts(UI.header("HERMES MCP WEBSOCKET INTERACTIVE"))
 
-    children = [
-      # Start client first - it will hibernate waiting for transport's :initialize message
-      {Client,
-       name: :websocket_test,
-       transport: [layer: WebSocket],
-       client_info: %{
-         "name" => "Hermes.CLI.WebSocket",
-         "version" => "1.0.0"
-       }},
-      {WebSocket, client: :websocket_test, server: server_options}
-    ]
+    client_info = %{"name" => "Hermes.CLI.Websocket", "version" => "0.1.0"}
 
-    Supervisor.start_link(children, strategy: :one_for_all)
+    name = WebsocketTest
+    transport = WebsocketTest.Transport
 
-    ws = Process.whereis(WebSocket)
+    opts = [name: name, transport: {:websocket, server_options}, client_info: client_info]
+    {:ok, _} = Hermes.Client.Supervisor.start_link(name, opts)
+
+    ws = Process.whereis(transport)
     IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
     check_websocket_connection(ws)
 
-    client = Process.whereis(:websocket_test)
+    client = Process.whereis(name)
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
@@ -148,31 +131,18 @@ defmodule Mix.Interactive.CLI do
       System.halt(1)
     end
 
-    {:ok, _} =
-      STDIO.start_link(
-        command: cmd,
-        args: args,
-        client: :stdio_test
-      )
+    client_info = %{"name" => "Hermes.CLI.STDIO", "versoin" => "0.1.0"}
+    name = STDIOTest
+    transport = STDIOTest.Transport
 
-    IO.puts("#{UI.colors().success}✓ STDIO transport started#{UI.colors().reset}")
+    opts = [name: name, transport: {:stdio, command: cmd, args: args}, client_info: client_info]
+    {:ok, _} = Hermes.Client.Supervisor.start_link(name, opts)
 
-    {:ok, client} =
-      Client.start_link(
-        name: :stdio_test,
-        transport: [layer: STDIO],
-        client_info: %{
-          "name" => "Hermes.CLI.STDIO",
-          "version" => "1.0.0"
-        },
-        capabilities: %{
-          "roots" => %{
-            "listChanged" => true
-          },
-          "sampling" => %{}
-        }
-      )
+    if Process.whereis(transport) do
+      IO.puts("#{UI.colors().success}✓ STDIO transport started#{UI.colors().reset}")
+    end
 
+    client = Process.whereis(name)
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
@@ -192,7 +162,7 @@ defmodule Mix.Interactive.CLI do
   def check_client_connection(client, attempt) do
     :timer.sleep(200 * attempt)
 
-    if cap = Client.get_server_capabilities(client) do
+    if cap = Hermes.Client.Base.get_server_capabilities(client) do
       IO.puts("#{UI.colors().info}Server capabilities: #{inspect(cap, pretty: true)}#{UI.colors().reset}")
 
       IO.puts("#{UI.colors().success}✓ Successfully connected to server#{UI.colors().reset}")

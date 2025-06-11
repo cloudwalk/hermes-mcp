@@ -1,4 +1,4 @@
-defmodule Hermes.ClientTest do
+defmodule Hermes.Client.BaseTest do
   use Hermes.MCP.Case, async: true
 
   import Mox

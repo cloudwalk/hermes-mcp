@@ -7,7 +7,6 @@ defmodule Mix.Interactive.SupervisedShell do
   errors.
   """
 
-  alias Hermes.Client
   alias Mix.Interactive.CLI
   alias Mix.Interactive.Commands
   alias Mix.Interactive.UI
@@ -204,7 +203,7 @@ defmodule Mix.Interactive.SupervisedShell do
   defp start_client(%{client_opts: opts}) do
     IO.puts("#{UI.colors().info}• Starting client...#{UI.colors().reset}")
 
-    case Client.start_link(opts) do
+    case Hermes.Client.Base.start_link(opts) do
       {:ok, pid} ->
         IO.puts("#{UI.colors().success}✓ Client started#{UI.colors().reset}")
         {:ok, pid}

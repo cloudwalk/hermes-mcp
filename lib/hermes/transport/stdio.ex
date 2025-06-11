@@ -45,14 +45,7 @@ defmodule Hermes.Transport.STDIO do
 
   defschema(:options_schema, %{
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
-    client:
-      {:required,
-       {:oneof,
-        [
-          {:custom, &Hermes.genserver_name/1},
-          :pid,
-          {:tuple, [:atom, :any]}
-        ]}},
+    client: {:required, Hermes.get_schema(:process_name)},
     command: {:required, :string},
     args: {{:list, :string}, {:default, nil}},
     env: {:map, {:default, nil}},

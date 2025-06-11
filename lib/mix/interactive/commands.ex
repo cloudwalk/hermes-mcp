@@ -16,7 +16,6 @@ defmodule Mix.Interactive.Commands do
   references to enable proper continuation of the interactive shell.
   """
 
-  alias Hermes.Client
   alias Hermes.MCP.Response
   alias Hermes.Transport.SSE
   alias Hermes.Transport.STDIO
@@ -84,7 +83,7 @@ defmodule Mix.Interactive.Commands do
   defp list_tools(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching tools...#{UI.colors().reset}")
 
-    case Client.list_tools(client) do
+    case Hermes.Client.Base.list_tools(client) do
       {:ok, %Response{result: %{"tools" => tools}}} ->
         UI.print_items("tools", tools, "name")
 
@@ -116,7 +115,7 @@ defmodule Mix.Interactive.Commands do
   defp perform_tool_call(client, tool_name, tool_args) do
     IO.puts("\n#{UI.colors().info}Calling tool #{tool_name}...#{UI.colors().reset}")
 
-    case Client.call_tool(client, tool_name, tool_args) do
+    case Hermes.Client.Base.call_tool(client, tool_name, tool_args) do
       {:ok, %Response{result: result}} ->
         IO.puts("#{UI.colors().success}Tool call successful#{UI.colors().reset}")
         IO.puts("\n#{UI.colors().info}Result:#{UI.colors().reset}")
@@ -132,7 +131,7 @@ defmodule Mix.Interactive.Commands do
   defp list_prompts(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching prompts...#{UI.colors().reset}")
 
-    case Client.list_prompts(client) do
+    case Hermes.Client.Base.list_prompts(client) do
       {:ok, %Response{result: %{"prompts" => prompts}}} ->
         UI.print_items("prompts", prompts, "name")
 
@@ -164,7 +163,7 @@ defmodule Mix.Interactive.Commands do
   defp perform_get_prompt(client, prompt_name, prompt_args) do
     IO.puts("\n#{UI.colors().info}Getting prompt #{prompt_name}...#{UI.colors().reset}")
 
-    case Client.get_prompt(client, prompt_name, prompt_args) do
+    case Hermes.Client.Base.get_prompt(client, prompt_name, prompt_args) do
       {:ok, %Response{result: result}} ->
         IO.puts("#{UI.colors().success}Got prompt successfully#{UI.colors().reset}")
         IO.puts("\n#{UI.colors().info}Result:#{UI.colors().reset}")
@@ -180,7 +179,7 @@ defmodule Mix.Interactive.Commands do
   defp list_resources(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching resources...#{UI.colors().reset}")
 
-    case Client.list_resources(client) do
+    case Hermes.Client.Base.list_resources(client) do
       {:ok, %Response{result: %{"resources" => resources}}} ->
         UI.print_items("resources", resources, "uri")
 
@@ -197,7 +196,7 @@ defmodule Mix.Interactive.Commands do
 
     IO.puts("\n#{UI.colors().info}Reading resource #{resource_uri}...#{UI.colors().reset}")
 
-    case Client.read_resource(client, resource_uri) do
+    case Hermes.Client.Base.read_resource(client, resource_uri) do
       {:ok, %Response{result: result}} ->
         IO.puts("#{UI.colors().success}Read resource successfully#{UI.colors().reset}")
         IO.puts("\n#{UI.colors().info}Content:#{UI.colors().reset}")
@@ -218,7 +217,7 @@ defmodule Mix.Interactive.Commands do
 
   defp exit_client(client) do
     IO.puts("\n#{UI.colors().info}Closing connection and exiting...#{UI.colors().reset}")
-    Client.close(client)
+    Hermes.Client.Base.close(client)
     :ok
   end
 
@@ -364,7 +363,7 @@ defmodule Mix.Interactive.Commands do
   defp ping_server(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Pinging server...#{UI.colors().reset}")
 
-    case Client.ping(client) do
+    case Hermes.Client.Base.ping(client) do
       :pong ->
         IO.puts("#{UI.colors().success}✓ Pong! Server is responding#{UI.colors().reset}")
 
