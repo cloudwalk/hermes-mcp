@@ -4,6 +4,21 @@ defmodule Hermes.Logging do
 
   This module provides structured logging functions that automatically manage context
   and format logs appropriately based on log levels.
+
+  ## Configuration
+
+  You can configure logging levels for different event types:
+
+      config :hermes_mcp, :logging,
+        client_events: :info,     # client lifecycle events
+        server_events: :info,     # server lifecycle events
+        transport_events: :debug, # transport layer events
+        protocol_messages: :debug # MCP protocol messages
+
+  Alternatively, you can disable Hermes logging entirely:
+
+      config :hermes_mcp, :log, false
+
   """
 
   require Logger
@@ -20,7 +35,7 @@ defmodule Hermes.Logging do
   """
   def message(direction, type, id, data, metadata \\ []) do
     summary = create_message_summary(type, id, data)
-    level = Keyword.get(metadata, :level, :debug)
+    level = Keyword.get(metadata, :level, default_level(:protocol_messages))
     metadata = Keyword.delete(metadata, :level)
 
     log(level, "[MCP message] #{direction} #{type}: #{summary}", metadata)
@@ -40,7 +55,7 @@ defmodule Hermes.Logging do
       * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def server_event(event, details, metadata \\ []) do
-    level = Keyword.get(metadata, :level, :info)
+    level = Keyword.get(metadata, :level, default_level(:server_events))
     metadata = Keyword.delete(metadata, :level)
 
     log(level, "MCP server event: #{event}", metadata)
@@ -58,7 +73,7 @@ defmodule Hermes.Logging do
       * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def client_event(event, details, metadata \\ []) do
-    level = Keyword.get(metadata, :level, :info)
+    level = Keyword.get(metadata, :level, default_level(:client_events))
     metadata = Keyword.delete(metadata, :level)
 
     log(level, "MCP client event: #{event}", metadata)
@@ -76,7 +91,7 @@ defmodule Hermes.Logging do
       * :level - The log level (:debug, :info, :warning, :error, etc.)
   """
   def transport_event(event, details, metadata \\ []) do
-    level = Keyword.get(metadata, :level, :debug)
+    level = Keyword.get(metadata, :level, default_level(:transport_events))
     metadata = Keyword.delete(metadata, :level)
 
     log(level, "MCP transport event: #{event}", metadata)
@@ -95,6 +110,16 @@ defmodule Hermes.Logging do
   end
 
   defp should_log?, do: Application.get_env(:hermes_mcp, :log, true)
+
+  defp default_level(:client_events), do: get_logging_level(:client_events, :debug)
+  defp default_level(:server_events), do: get_logging_level(:server_events, :debug)
+  defp default_level(:transport_events), do: get_logging_level(:transport_events, :debug)
+  defp default_level(:protocol_messages), do: get_logging_level(:protocol_messages, :debug)
+
+  defp get_logging_level(event_type, default) do
+    logging_config = Application.get_env(:hermes_mcp, :logging, [])
+    Keyword.get(logging_config, event_type, default)
+  end
 
   # Map MCP log levels to Elixir logger levels
   defp log_by_level(:debug, message, metadata), do: Logger.debug(message, metadata)
