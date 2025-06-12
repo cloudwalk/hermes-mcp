@@ -76,7 +76,13 @@ defmodule Hermes.Client.Supervisor do
   """
   @spec start_link(module(), keyword()) :: Supervisor.on_start()
   def start_link(client_module, opts) do
-    Supervisor.start_link(__MODULE__, Keyword.put(opts, :client_module, client_module))
+    opts = Keyword.put(opts, :client_module, client_module)
+
+    if name = Keyword.get(opts, :name) do
+      Supervisor.start_link(__MODULE__, opts, name: name)
+    else
+      Supervisor.start_link(__MODULE__, opts)
+    end
   end
 
   @impl true
@@ -88,7 +94,7 @@ defmodule Hermes.Client.Supervisor do
     capabilities = Keyword.fetch!(opts, :capabilities)
     protocol_version = Keyword.fetch!(opts, :protocol_version)
 
-    client_name = opts[:name] || client_module
+    client_name = opts[:client_name] || client_module
     transport_name = derive_transport_name(opts[:transport_name], client_name)
 
     {layer, transport_opts} = parse_transport_config(transport)
