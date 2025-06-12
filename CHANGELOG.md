@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.9.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.8.2...v0.9.0) (2025-06-12)
+
+
+### Features
+
+* add independently configurable logs ([#113](https://github.com/cloudwalk/hermes-mcp/issues/113)) ([bb0be27](https://github.com/cloudwalk/hermes-mcp/commit/bb0be2716ac41bf43814a16497b209fa55cc811b))
+
+
+### Bug Fixes
+
+* allow registering a name for the client supervisor ([#117](https://github.com/cloudwalk/hermes-mcp/issues/117)) ([d356511](https://github.com/cloudwalk/hermes-mcp/commit/d356511e2fbcf47b6a85ed733671e96d800ac693))
+
 ## [0.8.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.8.1...v0.8.2) (2025-06-11)
 
 
