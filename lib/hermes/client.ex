@@ -120,8 +120,8 @@ defmodule Hermes.Client do
     quote do
       def child_spec(opts) do
         inherit = [
-          client_info: unquote(client_info),
-          capabilities: unquote(capabilities),
+          client_info: unquote(Macro.escape(client_info)),
+          capabilities: unquote(Macro.escape(capabilities)),
           protocol_version: unquote(protocol_version)
         ]
 
@@ -270,7 +270,7 @@ defmodule Hermes.Client do
 
       ## Examples
           :ok = MyClient.register_progress_callback("task-1", fn progress -> 
-            IO.puts("Progress: #{progress}")
+            IO.puts("Progress: #\{progress}")
           end)
       """
       def register_progress_callback(token, callback, opts \\ []) do
