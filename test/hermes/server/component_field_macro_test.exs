@@ -96,9 +96,9 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
 
     test "supports enum fields with type specification" do
       alias TestTools.EnumWithTypeTool
-      
+
       json_schema = EnumWithTypeTool.input_schema()
-      
+
       assert json_schema == %{
                "type" => "object",
                "properties" => %{
@@ -114,17 +114,17 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
                },
                "required" => ["unit", "weight"]
              }
-      
-      assert {:ok, _} = 
+
+      assert {:ok, _} =
                EnumWithTypeTool.mcp_schema(%{
                  weight: 70,
                  unit: "kg",
                  status: "active"
                })
-               
-      assert {:error, _} = 
+
+      assert {:error, _} =
                EnumWithTypeTool.mcp_schema(%{
-                 weight: 70,
+                 weight: 70
                })
     end
 
