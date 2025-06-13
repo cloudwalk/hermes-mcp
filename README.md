@@ -15,7 +15,7 @@ Hermes MCP is a comprehensive Elixir SDK for the [Model Context Protocol](https:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.9.0"}  # x-release-please-version
+    {:hermes_mcp, "~> 0.9"}  # x-release-please-minor
   ]
 end
 ```

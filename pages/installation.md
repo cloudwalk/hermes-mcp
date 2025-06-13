@@ -9,7 +9,7 @@ In `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.8.1"}
+    {:hermes_mcp, "~> 0.8"} # x-release-please-minor
   ]
 end
 ```
@@ -22,6 +22,18 @@ mix deps.get
 
 ## Client Setup
 
+Define a client module:
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0",
+    protocol_version: "2024-11-05",
+    capabilities: [:roots, :sampling]
+end
+```
+
 Add to your supervision tree:
 
 ```elixir
@@ -30,26 +42,9 @@ defmodule MyApp.Application do
 
   def start(_type, _args) do
     children = [
-      # Transport layer
-      {Hermes.Transport.STDIO, [
-        name: MyApp.MCPTransport,
-        client: MyApp.MCPClient,
-        command: "python",
-        args: ["-m", "mcp.server", "my_server.py"]
-      ]},
-
-      # MCP client
-      {Hermes.Client, [
-        name: MyApp.MCPClient,
-        transport: [
-          layer: Hermes.Transport.STDIO,
-          name: MyApp.MCPTransport
-        ],
-        client_info: %{
-          "name" => "MyApp",
-          "version" => "1.0.0"
-        }
-      ]}
+      # MCP client with STDIO transport
+      {MyApp.MCPClient, 
+       transport: {:stdio, command: "python", args: ["-m", "mcp.server", "my_server.py"]}}
     ]
 
     opts = [strategy: :one_for_all, name: MyApp.Supervisor]
@@ -62,16 +57,27 @@ end
 
 For MCP servers, see [Server Quick Start](server_quickstart.md).
 
-## Client Options
+## Client Module Options
 
-| Option | Type | Description | Default |
-|--------|------|-------------|---------|
-| `:name` | atom | Process name | Required |
-| `:transport` | keyword | Transport config | Required |
-| `:client_info` | map | Client metadata | Required |
-| `:capabilities` | map | Client capabilities | `%{}` |
-| `:protocol_version` | string | MCP version | `"2025-03-26"` |
-| `:request_timeout` | integer | Timeout (ms) | `30_000` |
+When defining a client module with `use Hermes.Client`:
+
+| Option | Type | Description | Required |
+|--------|------|-------------|----------|
+| `:name` | string | Client name to advertise | Yes |
+| `:version` | string | Client version | Yes |
+| `:protocol_version` | string | MCP protocol version | Yes |
+| `:capabilities` | list | Client capabilities | Yes |
+
+## Transport Options
+
+When starting the client:
+
+| Transport | Options | Example |
+|-----------|---------|----------|
+| STDIO | `command`, `args` | `{:stdio, command: "python", args: ["-m", "server"]}` |
+| SSE | `base_url` | `{:sse, base_url: "http://localhost:8000"}` |
+| WebSocket | `url` | `{:websocket, url: "ws://localhost:8000/ws"}` |
+| HTTP | `url` | `{:streamable_http, url: "http://localhost:8000/mcp"}` |
 
 ## Next Steps
 
