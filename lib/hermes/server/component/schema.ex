@@ -90,6 +90,7 @@ defmodule Hermes.Server.Component.Schema do
     Enum.reduce(opts, base_schema, fn
       {:format, format}, schema -> Map.put(schema, "format", format)
       {:description, desc}, schema -> Map.put(schema, "description", desc)
+      {:type, json_type}, schema -> Map.put(schema, "type", to_string(json_type))
       _, schema -> schema
     end)
   end
@@ -138,6 +139,11 @@ defmodule Hermes.Server.Component.Schema do
 
   defp convert_type({:enum, values}) when is_list(values) do
     %{"enum" => values}
+  end
+
+  defp convert_type({:enum, values, type}) when is_list(values) do
+    base = convert_type(type)
+    Map.put(base, "enum", values)
   end
 
   defp convert_type({:list, item_type}) do

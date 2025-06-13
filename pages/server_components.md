@@ -506,9 +506,42 @@ schema do
 end
 ```
 
+### Enum Fields with Type
+
+When using enum fields, you can specify the underlying type for proper JSON Schema generation:
+
+```elixir
+schema do
+  field :weight, {:required, :integer}
+  field :unit, {:required, {:enum, ["kg", "lb"]}}, type: :string
+  field :status, {:enum, ["active", "inactive", "pending"]}, type: :string, description: "Current status"
+end
+```
+
+This generates the following JSON Schema:
+
+```json
+{
+  "properties": {
+    "weight": {"type": "integer"},
+    "unit": {
+      "type": "string",
+      "enum": ["kg", "lb"]
+    },
+    "status": {
+      "type": "string", 
+      "enum": ["active", "inactive", "pending"],
+      "description": "Current status"
+    }
+  },
+  "required": ["weight", "unit"]
+}
+```
+
 Supported metadata options:
 - `format`: JSON Schema format hint (email, uri, date, date-time, phone, etc.)
 - `description`: Human-readable field description
+- `type`: Explicit type for enum fields (string, integer, etc.)
 
 Both schema styles work together - choose based on whether you need JSON Schema metadata.
 

@@ -49,7 +49,6 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
                "required" => ["name"]
              }
 
-      # Verify Peri validation still works
       assert {:ok, _} =
                NestedFieldTool.mcp_schema(%{
                  name: "John Doe",
@@ -65,13 +64,11 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
                  }
                })
 
-      # Missing required fields should fail
       assert {:error, _} =
                NestedFieldTool.mcp_schema(%{
                  name: "John Doe",
                  address: %{
                    city: "New York"
-                   # Missing required street
                  }
                })
     end
@@ -97,6 +94,40 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
              }
     end
 
+    test "supports enum fields with type specification" do
+      alias TestTools.EnumWithTypeTool
+      
+      json_schema = EnumWithTypeTool.input_schema()
+      
+      assert json_schema == %{
+               "type" => "object",
+               "properties" => %{
+                 "weight" => %{"type" => "integer"},
+                 "unit" => %{
+                   "type" => "string",
+                   "enum" => ["kg", "lb"]
+                 },
+                 "status" => %{
+                   "type" => "string",
+                   "enum" => ["active", "inactive", "pending"]
+                 }
+               },
+               "required" => ["unit", "weight"]
+             }
+      
+      assert {:ok, _} = 
+               EnumWithTypeTool.mcp_schema(%{
+                 weight: 70,
+                 unit: "kg",
+                 status: "active"
+               })
+               
+      assert {:error, _} = 
+               EnumWithTypeTool.mcp_schema(%{
+                 weight: 70,
+               })
+    end
+
     test "supports deeply nested fields" do
       json_schema = DeeplyNestedTool.input_schema()
 
@@ -119,7 +150,6 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
 
         use Hermes.Server.Component, type: :tool
 
-        # No braces needed!
         schema do
           field(:title, {:required, :string}, description: "Title of the item")
           field(:priority, {:enum, ["low", "medium", "high"]}, description: "Priority level")
@@ -172,7 +202,6 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
     end
 
     test "legacy schema Peri validation works correctly" do
-      # Valid data
       assert {:ok, _} =
                LegacyTool.mcp_schema(%{
                  name: "John Doe",
@@ -185,7 +214,6 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
                  }
                })
 
-      # Default value applied
       assert {:ok, validated} =
                LegacyTool.mcp_schema(%{
                  name: "Jane Doe"
@@ -193,7 +221,6 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
 
       assert validated.age == 25
 
-      # Missing required field
       assert {:error, _} =
                LegacyTool.mcp_schema(%{
                  age: 30,
@@ -202,14 +229,11 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
     end
 
     test "mixing field macros and legacy schemas in different tools" do
-      # Both styles should work independently
       nested_schema = NestedFieldTool.input_schema()
       legacy_schema = LegacyTool.input_schema()
 
-      # Ensure they are different structures
       refute nested_schema == legacy_schema
 
-      # Both should have valid JSON Schema structure
       assert nested_schema["type"] == "object"
       assert legacy_schema["type"] == "object"
       assert is_map(nested_schema["properties"])

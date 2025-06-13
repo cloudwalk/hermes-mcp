@@ -101,6 +101,25 @@ defmodule TestTools.LegacyTool do
   end
 end
 
+defmodule TestTools.EnumWithTypeTool do
+  @moduledoc "Tool demonstrating enum with type specification"
+
+  use Hermes.Server.Component, type: :tool
+
+  alias Hermes.Server.Response
+
+  schema do
+    field :weight, {:required, :integer}
+    field :unit, {:required, {:enum, ["kg", "lb"]}}, type: :string
+    field :status, {:enum, ["active", "inactive", "pending"]}, type: :string
+  end
+
+  @impl true
+  def execute(_params, frame) do
+    {:reply, Response.text(Response.tool(), "executed"), frame}
+  end
+end
+
 defmodule TestPrompts.FieldPrompt do
   @moduledoc "Test prompt with field metadata"
 
