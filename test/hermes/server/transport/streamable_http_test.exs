@@ -44,26 +44,34 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
     end
 
     test "handle_message_for_sse fails when server is not in registry", %{transport: transport} do
+      session_id = "test-session-456"
+
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+      message = build_request("ping", %{})
+
+      StreamableHTTP.handle_message_for_sse(transport, session_id, message, %{})
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        session_id = "test-session-456"
-
-        assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
-        message = build_request("ping", %{})
-
-        StreamableHTTP.handle_message_for_sse(transport, session_id, message, %{})
+        StreamableHTTP.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 
     test "routes messages to sessions", %{transport: transport} do
+      session_id = "test-session-789"
+
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+
+      message = "test message"
+      assert :ok = StreamableHTTP.route_to_session(transport, session_id, message)
+
+      assert_receive {:sse_message, ^message}
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        session_id = "test-session-789"
-
-        assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
-
-        message = "test message"
-        assert :ok = StreamableHTTP.route_to_session(transport, session_id, message)
-
-        assert_receive {:sse_message, ^message}
+        StreamableHTTP.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 

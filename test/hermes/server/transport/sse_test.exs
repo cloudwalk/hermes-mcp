@@ -72,15 +72,19 @@ defmodule Hermes.Server.Transport.SSETest do
     end
 
     test "routes messages to specific sessions", %{transport: transport} do
+      session_id = "test-session-789"
+
+      assert :ok = SSE.register_sse_handler(transport, session_id)
+
+      message = "test message"
+      assert :ok = SSE.route_to_session(transport, session_id, message)
+
+      assert_receive {:sse_message, ^message}
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        session_id = "test-session-789"
-
-        assert :ok = SSE.register_sse_handler(transport, session_id)
-
-        message = "test message"
-        assert :ok = SSE.route_to_session(transport, session_id, message)
-
-        assert_receive {:sse_message, ^message}
+        SSE.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 
@@ -92,33 +96,38 @@ defmodule Hermes.Server.Transport.SSETest do
     end
 
     test "broadcasts messages to all handlers", %{transport: transport} do
+      session1 = "session-1"
+      session2 = "session-2"
+
+      # Register two handlers
+      assert :ok = SSE.register_sse_handler(transport, session1)
+
+      # Second handler in a different process
+      test_pid = self()
+
+      spawn(fn ->
+        SSE.register_sse_handler(transport, session2)
+        send(test_pid, :registered)
+
+        receive do
+          {:sse_message, msg} -> send(test_pid, {:handler2_received, msg})
+        end
+      end)
+
+      assert_receive :registered, 1000
+
+      message = "broadcast message"
+      assert :ok = SSE.send_message(transport, message)
+
+      # Both handlers should receive the message
+      assert_receive {:sse_message, ^message}
+      assert_receive {:handler2_received, ^message}
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        session1 = "session-1"
-        session2 = "session-2"
-
-        # Register two handlers
-        assert :ok = SSE.register_sse_handler(transport, session1)
-
-        # Second handler in a different process
-        test_pid = self()
-
-        spawn(fn ->
-          SSE.register_sse_handler(transport, session2)
-          send(test_pid, :registered)
-
-          receive do
-            {:sse_message, msg} -> send(test_pid, {:handler2_received, msg})
-          end
-        end)
-
-        assert_receive :registered, 1000
-
-        message = "broadcast message"
-        assert :ok = SSE.send_message(transport, message)
-
-        # Both handlers should receive the message
-        assert_receive {:sse_message, ^message}
-        assert_receive {:handler2_received, ^message}
+        SSE.unregister_sse_handler(transport, session1)
+        SSE.unregister_sse_handler(transport, session2)
+        Process.sleep(10)
       end)
     end
 

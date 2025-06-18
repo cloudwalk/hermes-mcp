@@ -54,20 +54,24 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "GET request establishes SSE connection", %{transport: transport} do
+      conn =
+        :get
+        |> conn("/sse")
+        |> put_req_header("accept", "text/event-stream")
+
+      assert conn.method == "GET"
+      assert get_req_header(conn, "accept") == ["text/event-stream"]
+
+      session_id = "test-session-123"
+      assert :ok = SSE.register_sse_handler(transport, session_id)
+
+      endpoint_url = SSE.get_endpoint_url(transport)
+      assert endpoint_url == "/messages"
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        conn =
-          :get
-          |> conn("/sse")
-          |> put_req_header("accept", "text/event-stream")
-
-        assert conn.method == "GET"
-        assert get_req_header(conn, "accept") == ["text/event-stream"]
-
-        session_id = "test-session-123"
-        assert :ok = SSE.register_sse_handler(transport, session_id)
-
-        endpoint_url = SSE.get_endpoint_url(transport)
-        assert endpoint_url == "/messages"
+        SSE.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 
@@ -125,22 +129,26 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "POST request with valid JSON returns response", %{post_opts: post_opts, transport: transport} do
+      session_id = "test-session"
+      :ok = SSE.register_sse_handler(transport, session_id)
+
+      request = build_request("ping", %{})
+      {:ok, body} = Message.encode_request(request, 1)
+
+      conn =
+        :post
+        |> conn("/messages", body)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("x-session-id", session_id)
+        |> SSEPlug.call(post_opts)
+
+      assert conn.status == 202
+      assert conn.resp_body == "{}"
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        session_id = "test-session"
-        :ok = SSE.register_sse_handler(transport, session_id)
-
-        request = build_request("ping", %{})
-        {:ok, body} = Message.encode_request(request, 1)
-
-        conn =
-          :post
-          |> conn("/messages", body)
-          |> put_req_header("content-type", "application/json")
-          |> put_req_header("x-session-id", session_id)
-          |> SSEPlug.call(post_opts)
-
-        assert conn.status == 202
-        assert conn.resp_body == "{}"
+        SSE.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 

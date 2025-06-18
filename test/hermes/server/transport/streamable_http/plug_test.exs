@@ -53,20 +53,24 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "GET request establishes SSE connection", %{transport: transport} do
+      conn =
+        :get
+        |> conn("/")
+        |> put_req_header("accept", "text/event-stream")
+
+      assert conn.method == "GET"
+      assert get_req_header(conn, "accept") == ["text/event-stream"]
+
+      session_id = "test-session-123"
+      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+
+      # Note: We don't actually call the plug here because it would
+      # establish a persistent connection and hang the test
+
+      # Clean up to avoid logs after test ends
       capture_log(fn ->
-        conn =
-          :get
-          |> conn("/")
-          |> put_req_header("accept", "text/event-stream")
-
-        assert conn.method == "GET"
-        assert get_req_header(conn, "accept") == ["text/event-stream"]
-
-        session_id = "test-session-123"
-        assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
-
-        # Note: We don't actually call the plug here because it would
-        # establish a persistent connection and hang the test
+        StreamableHTTP.unregister_sse_handler(transport, session_id)
+        Process.sleep(10)
       end)
     end
 
