@@ -481,7 +481,7 @@ defmodule Hermes.Client.BaseTest do
       expect(Hermes.MockTransport, :send_message, fn _, message ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
-        assert get_in(decoded, ["params", "_meta", "progressToken"]) == progress_token
+        assert decoded["params"] == %{"_meta" => %{"progressToken" => progress_token}}
         :ok
       end)
 

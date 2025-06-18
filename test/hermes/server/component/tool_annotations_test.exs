@@ -76,7 +76,7 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
   describe "tool annotations" do
     test "tool with annotations in use macro" do
-      protocol = Tool.to_protocol(ToolWithAnnotations)
+      protocol = Tool.to_protocol(ToolWithAnnotations, nil, "2025-03-26")
 
       assert protocol["name"] == "tool_with_annotations"
       assert protocol["description"] == "A tool with annotations"
@@ -90,7 +90,7 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
     end
 
     test "tool without annotations" do
-      protocol = Tool.to_protocol(ToolWithoutAnnotations)
+      protocol = Tool.to_protocol(ToolWithoutAnnotations, nil, "2025-03-26")
 
       assert protocol["name"] == "tool_without_annotations"
       assert protocol["description"] == "A tool without annotations"
@@ -99,7 +99,7 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
     end
 
     test "tool with custom annotations implementation" do
-      protocol = Tool.to_protocol(ToolWithCustomAnnotations)
+      protocol = Tool.to_protocol(ToolWithCustomAnnotations, nil, "2025-03-26")
 
       assert protocol["name"] == "tool_with_custom_annotations"
       assert protocol["description"] == "A tool with custom annotations implementation"

@@ -74,34 +74,37 @@ defmodule Hermes.MCP.Message do
     "argument" => {:required, @completion_argument_schema}
   }
 
+  @progress_params %{
+    "_meta" => %{
+      "progressToken" => {:either, {:string, :integer}}
+    }
+  }
+
   defschema :request_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" => {:required, {:enum, @request_methods}},
-    "params" => {:dependent, &parse_request_params_by_method/1},
+    "params" => {:dependent, &params_with_progress_token/1},
     "id" => {:required, {:either, {:string, :integer}}}
   }
 
+  defp params_with_progress_token(attrs) do
+    with {:ok, %{} = schema} <- parse_request_params_by_method(attrs) do
+      schema = if get_in(attrs, ["params", "_meta"]), do: Map.merge(schema, @progress_params), else: schema
+      {:ok, schema}
+    end
+  end
+
   defp parse_request_params_by_method(%{"method" => "initialize"}), do: {:ok, @init_params_schema}
   defp parse_request_params_by_method(%{"method" => "ping"}), do: {:ok, @ping_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "resources/list"}), do: {:ok, @resources_list_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "resources/read"}), do: {:ok, @resources_read_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "prompts/list"}), do: {:ok, @prompts_list_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "prompts/get"}), do: {:ok, @prompts_get_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "tools/list"}), do: {:ok, @tools_list_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "logging/setLevel"}), do: {:ok, @set_log_level_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "completion/complete"}), do: {:ok, @completion_complete_params_schema}
-
   defp parse_request_params_by_method(%{"method" => "roots/list"}), do: {:ok, :map}
-
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
   @init_noti_params_schema :map

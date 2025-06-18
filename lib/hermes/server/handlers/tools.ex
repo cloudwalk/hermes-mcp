@@ -96,7 +96,6 @@ defmodule Hermes.Server.Handlers.Tools do
       "inputSchema" => module.input_schema()
     }
 
-    # Only include annotations if protocol version supports it
     if Hermes.Protocol.supports_feature?(protocol_version, :tool_annotations) and
          Code.ensure_loaded?(module) and function_exported?(module, :annotations, 0) do
       Map.put(base, "annotations", module.annotations())

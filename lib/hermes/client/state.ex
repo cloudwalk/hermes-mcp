@@ -167,14 +167,16 @@ defmodule Hermes.Client.State do
   Helper function to add progress token to params if provided.
   """
   @spec add_progress_token_to_params(map(), keyword() | nil) :: map()
-  def add_progress_token_to_params(params, progress_opts) do
-    with {:ok, opts} when not is_nil(opts) <- {:ok, progress_opts},
-         {:ok, token} when not is_nil(token) and (is_binary(token) or is_integer(token)) <-
-           {:ok, Keyword.get(opts, :token)} do
-      meta = %{"progressToken" => token}
-      Map.put(params, "_meta", meta)
+  def add_progress_token_to_params(params, nil), do: params
+  def add_progress_token_to_params(params, []), do: params
+
+  def add_progress_token_to_params(params, progress_opts) when is_list(progress_opts) do
+    token = Keyword.get(progress_opts, :token)
+
+    if is_binary(token) or is_integer(token) do
+      Map.put(params, "_meta", %{"progressToken" => token})
     else
-      _ -> params
+      params
     end
   end
 
