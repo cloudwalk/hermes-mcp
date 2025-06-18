@@ -1,5 +1,5 @@
 defmodule Hermes.Server.Transport.SSE.PlugTest do
-  use Hermes.MCP.Case, async: true
+  use Hermes.MCP.Case, async: false
 
   import Plug.Conn
   import Plug.Test

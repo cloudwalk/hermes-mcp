@@ -81,7 +81,7 @@ defmodule Hermes.Server.Transport.STDIOTest do
   describe "batch message handling" do
     setup :initialized_base_server
 
-    test "handles batch of messages correctly", %{server: server, transport: transport} do
+    test "handles batch of messages correctly", %{server: _server, transport: transport} do
       # Send a batch of messages
       batch = [
         build_request("ping", %{}, 1),

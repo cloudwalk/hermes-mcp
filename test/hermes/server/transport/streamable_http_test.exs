@@ -1,9 +1,9 @@
 defmodule Hermes.Server.Transport.StreamableHTTPTest do
-  use Hermes.MCP.Case, async: true
+  use Hermes.MCP.Case, async: false
 
   alias Hermes.Server.Transport.StreamableHTTP
 
-  @moduletag skip: true
+  setup :with_default_registry
 
   describe "start_link/1" do
     test "starts with valid options" do

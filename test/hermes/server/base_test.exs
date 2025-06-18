@@ -1,5 +1,5 @@
 defmodule Hermes.Server.BaseTest do
-  use Hermes.MCP.Case, async: true
+  use Hermes.MCP.Case, async: false
 
   alias Hermes.MCP.Message
   alias Hermes.Server.Base

@@ -1,9 +1,7 @@
 defmodule Hermes.Server.Transport.SSETest do
-  use Hermes.MCP.Case, async: true
+  use Hermes.MCP.Case, async: false
 
   alias Hermes.Server.Transport.SSE
-
-  @moduletag skip: true
 
   setup :with_default_registry
 
