@@ -293,6 +293,8 @@ defmodule Hermes.MCP.Message do
   @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.
 
+  Handles both single messages and batch messages (arrays).
+
   Returns either:
   - `{:ok, messages}` where messages is a list of parsed JSON-RPC messages
   - `{:error, reason}` if parsing fails
@@ -300,19 +302,39 @@ defmodule Hermes.MCP.Message do
   def decode(data) when is_binary(data) do
     data
     |> String.split("\n", trim: true)
-    |> Enum.reduce_while({:ok, []}, &parse_message/2)
-    |> then(fn
-      {:ok, messages} -> {:ok, Enum.reverse(messages)}
-      {:error, reason} -> {:error, reason}
-    end)
+    |> decode_lines()
   end
 
-  defp parse_message(line, {:ok, acc}) do
-    with {:ok, message} <- JSON.decode(line),
-         {:ok, message} <- validate_message(message) do
-      {:cont, {:ok, [message | acc]}}
-    else
-      err -> {:halt, err}
+  defp decode_lines(lines) do
+    lines
+    |> Enum.flat_map(&decode_line/1)
+    |> validate_all_messages()
+  end
+
+  defp decode_line(line) do
+    case JSON.decode(line) do
+      {:ok, messages} when is_list(messages) -> messages
+      {:ok, message} when is_map(message) -> [message]
+      {:ok, _} -> [:invalid]
+      {:error, _} -> [:invalid]
+    end
+  end
+
+  defp validate_all_messages(messages) do
+    messages
+    |> Enum.reduce_while({:ok, []}, fn
+      :invalid, _acc ->
+        {:halt, {:error, :invalid_message}}
+
+      message, {:ok, acc} ->
+        case validate_message(message) do
+          {:ok, validated} -> {:cont, {:ok, [validated | acc]}}
+          error -> {:halt, error}
+        end
+    end)
+    |> case do
+      {:ok, validated} -> {:ok, Enum.reverse(validated)}
+      error -> error
     end
   end
 

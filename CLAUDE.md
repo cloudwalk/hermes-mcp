@@ -9,10 +9,10 @@ mix deps.get
 mix compile --force --warnings-as-errors
 
 # Run all tests
-mix test
+mix test --trace
 
 # Run a single test
-mix test test/path/to/test_file.exs:line_number
+mix test test/path/to/test_file.exs:line_number --trace
 
 # Format code
 mix format

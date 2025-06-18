@@ -142,8 +142,8 @@ defmodule Hermes.Client.State do
       iex> map_size(updated_state.pending_requests) > map_size(state.pending_requests)
       true
   """
-  @spec add_request_from_operation(t(), Operation.t(), GenServer.from()) :: {String.t(), t()}
-  def add_request_from_operation(state, %Operation{} = operation, from) do
+  @spec add_request_from_operation(t(), Operation.t(), GenServer.from(), String.t() | nil) :: {String.t(), t()}
+  def add_request_from_operation(state, %Operation{} = operation, from, batch_id \\ nil) do
     state = register_progress_callback_from_opts(state, operation.progress_opts)
 
     request_id = ID.generate_request_id()
@@ -154,7 +154,8 @@ defmodule Hermes.Client.State do
         id: request_id,
         method: operation.method,
         from: from,
-        timer_ref: timer_ref
+        timer_ref: timer_ref,
+        batch_id: batch_id
       })
 
     pending_requests = Map.put(state.pending_requests, request_id, request)
@@ -636,6 +637,45 @@ defmodule Hermes.Client.State do
     else
       state
     end
+  end
+
+  @doc """
+  Gets all requests for a specific batch ID.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `batch_id` - The batch ID to filter by
+
+  ## Examples
+
+      iex> requests = Hermes.Client.State.get_batch_requests(state, "batch_123")
+      iex> Enum.all?(requests, &(&1.batch_id == "batch_123"))
+      true
+  """
+  @spec get_batch_requests(t(), String.t()) :: [Request.t()]
+  def get_batch_requests(state, batch_id) do
+    state.pending_requests
+    |> Map.values()
+    |> Enum.filter(&(&1.batch_id == batch_id))
+  end
+
+  @doc """
+  Checks if all requests in a batch have been completed.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `batch_id` - The batch ID to check
+
+  ## Examples
+
+      iex> Hermes.Client.State.batch_complete?(state, "batch_123")
+      true
+  """
+  @spec batch_complete?(t(), String.t()) :: boolean()
+  def batch_complete?(state, batch_id) do
+    get_batch_requests(state, batch_id) == []
   end
 
   # Helper functions

@@ -21,6 +21,7 @@ defmodule Hermes.Client.Base do
   alias Hermes.Client.State
   alias Hermes.Logging
   alias Hermes.MCP.Error
+  alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
   alias Hermes.Protocol
@@ -633,6 +634,41 @@ defmodule Hermes.Client.Base do
   end
 
   @doc """
+  Sends a batch of operations to the server.
+
+  ## Parameters
+
+    * `client` - The client process
+    * `operations` - List of Operation structs to send as a batch
+
+  ## Returns
+
+    * `{:ok, results}` - A map of results keyed by request ID
+    * `{:error, reason}` - If the batch fails
+
+  ## Example
+
+      operations = [
+        Operation.new(%{method: "ping", params: %{}}),
+        Operation.new(%{method: "tools/list", params: %{}})
+      ]
+      
+      {:ok, results} = Hermes.Client.send_batch(client, operations)
+      # results is a map: %{request_id1 => result1, request_id2 => result2}
+  """
+  @spec send_batch(t, [Operation.t()]) :: {:ok, %{String.t() => any()}} | {:error, Error.t()}
+  def send_batch(client, [_ | _] = operations) do
+    max_timeout = Enum.max_by(operations, & &1.timeout).timeout
+    buffer_timeout = max_timeout + to_timeout(second: 1)
+
+    GenServer.call(client, {:batch_operations, operations}, buffer_timeout)
+  end
+
+  def send_batch(_client, []) do
+    {:error, Error.protocol(:invalid_request, %{message: "Batch cannot be empty"})}
+  end
+
+  @doc """
   Closes the client connection and terminates the process.
   """
   @spec close(t) :: :ok
@@ -809,6 +845,18 @@ defmodule Hermes.Client.Base do
     end
   end
 
+  def handle_call({:batch_operations, operations}, from, state) do
+    batch_id = ID.generate_batch_id()
+
+    case prepare_batch(operations, from, batch_id, state) do
+      {:ok, batch_data, updated_state} ->
+        handle_batch_send(batch_data, batch_id, operations, updated_state)
+
+      {:error, _} = error ->
+        {:reply, error, state}
+    end
+  end
+
   @impl true
   def handle_continue(:roots_list_changed, state) do
     Task.start(fn -> send_roots_list_changed_notification(state) end)
@@ -854,21 +902,8 @@ defmodule Hermes.Client.Base do
   @impl true
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
-      {:ok, [error]} when Message.is_error(error) ->
-        Logging.message("incoming", "error", error["id"], error)
-        {:noreply, handle_error_response(error, error["id"], state)}
-
-      {:ok, [response]} when Message.is_response(response) ->
-        Logging.message("incoming", "response", response["id"], response)
-        {:noreply, handle_success_response(response, response["id"], state)}
-
-      {:ok, [notification]} when Message.is_notification(notification) ->
-        Logging.message("incoming", "notification", nil, notification)
-        {:noreply, handle_notification(notification, state)}
-
-      {:ok, [request]} when Message.is_request(request) ->
-        Logging.message("incoming", "request", request["id"], request)
-        handle_server_request(request, state)
+      {:ok, messages} when is_list(messages) ->
+        {:noreply, handle_messages(messages, state)}
 
       {:error, error} ->
         Logging.client_event("decode_failed", %{error: error}, level: :warning)
@@ -946,9 +981,12 @@ defmodule Hermes.Client.Base do
             message: "Request timed out after #{elapsed_ms}ms"
           })
 
-        GenServer.reply(request.from, {:error, error})
+        if is_nil(request.batch_id) do
+          GenServer.reply(request.from, {:error, error})
+        else
+          check_batch_completion(request.batch_id, request.from, updated_state)
+        end
 
-        # Send cancellation notification when a request times out
         _ = send_cancellation(updated_state, request_id, "timeout")
 
         {:noreply, updated_state}
@@ -982,7 +1020,6 @@ defmodule Hermes.Client.Base do
     )
 
     for request <- pending_requests do
-      # Reply to the pending request with an error
       error =
         Error.transport(:request_cancelled, %{
           message: "Request cancelled by client",
@@ -991,7 +1028,6 @@ defmodule Hermes.Client.Base do
 
       GenServer.reply(request.from, {:error, error})
 
-      # Also send the cancellation notification
       send_notification(state, "notifications/cancelled", %{
         "requestId" => request.id,
         "reason" => "client closed"
@@ -1001,45 +1037,157 @@ defmodule Hermes.Client.Base do
     state.transport.layer.shutdown(state.transport.name)
   end
 
+  # Message handling
+
+  defp handle_messages(messages, state) do
+    batch_ids =
+      messages
+      |> Enum.map(&get_message_batch_id(&1, state))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    case batch_ids do
+      [batch_id] -> handle_batch_response(messages, batch_id, state)
+      _ -> Enum.reduce(messages, state, &handle_single_message/2)
+    end
+  end
+
+  defp get_message_batch_id(%{"id" => id}, state) when not is_nil(id) do
+    case State.get_request(state, id) do
+      %{batch_id: batch_id} when not is_nil(batch_id) -> batch_id
+      _ -> nil
+    end
+  end
+
+  defp get_message_batch_id(_, _), do: nil
+
+  defp handle_single_message(message, state) do
+    cond do
+      Message.is_error(message) ->
+        Logging.message("incoming", "error", message["id"], message)
+        handle_error_response(message, message["id"], state)
+
+      Message.is_response(message) ->
+        Logging.message("incoming", "response", message["id"], message)
+        handle_success_response(message, message["id"], state)
+
+      Message.is_notification(message) ->
+        Logging.message("incoming", "notification", nil, message)
+        handle_notification(message, state)
+
+      Message.is_request(message) ->
+        Logging.message("incoming", "request", message["id"], message)
+        {_, state} = handle_server_request(message, state)
+        state
+
+      true ->
+        state
+    end
+  end
+
+  defp handle_batch_response(messages, batch_id, state) do
+    batch_from =
+      case get_batch_from(batch_id, state) do
+        {:ok, from} -> from
+        _ -> nil
+      end
+
+    {results, updated_state} = collect_batch_results(messages, state)
+
+    if State.batch_complete?(updated_state, batch_id) and not is_nil(batch_from) do
+      GenServer.reply(batch_from, {:ok, results})
+    end
+
+    updated_state
+  end
+
+  defp collect_batch_results(messages, state) do
+    Enum.reduce(messages, {%{}, state}, fn message, {results, current_state} ->
+      case message do
+        %{"id" => id} = msg when Message.is_error(msg) ->
+          {_request, new_state} = State.remove_request(current_state, id)
+          error = Error.from_json_rpc(msg["error"])
+          {Map.put(results, id, {:error, error}), new_state}
+
+        %{"id" => id} = msg when Message.is_response(msg) ->
+          {_request, new_state} = State.remove_request(current_state, id)
+          response = Response.from_json_rpc(msg)
+          {Map.put(results, id, {:ok, response}), new_state}
+
+        _ ->
+          {results, current_state}
+      end
+    end)
+  end
+
+  defp get_batch_from(batch_id, state) do
+    case State.get_batch_requests(state, batch_id) do
+      [request | _] -> {:ok, request.from}
+      [] -> :error
+    end
+  end
+
+  defp check_batch_completion(batch_id, from, state) do
+    if State.batch_complete?(state, batch_id) do
+      GenServer.reply(from, {:ok, %{}})
+    end
+  end
+
   # Response handling
 
   defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
-        error_code = json_error["code"]
-        error_msg = json_error["message"]
-
-        Logging.client_event("unknown_error_response", %{
-          id: id,
-          code: error_code,
-          message: error_msg
-        })
-
+        log_unknown_error_response(id, json_error)
         state
 
       {request, updated_state} ->
-        error = Error.from_json_rpc(json_error)
-        elapsed_ms = Request.elapsed_time(request)
-
-        Logging.client_event("error_response", %{
-          id: id,
-          method: request.method
-        })
-
-        Telemetry.execute(
-          Telemetry.event_client_error(),
-          %{duration: elapsed_ms, system_time: System.system_time()},
-          %{
-            id: id,
-            method: request.method,
-            error_code: json_error["code"],
-            error_message: json_error["message"]
-          }
-        )
-
-        GenServer.reply(request.from, {:error, error})
-        updated_state
+        process_error_response(request, json_error, id, updated_state)
     end
+  end
+
+  defp log_unknown_error_response(id, json_error) do
+    Logging.client_event("unknown_error_response", %{
+      id: id,
+      code: json_error["code"],
+      message: json_error["message"]
+    })
+  end
+
+  defp process_error_response(request, json_error, id, state) do
+    error = Error.from_json_rpc(json_error)
+    elapsed_ms = Request.elapsed_time(request)
+
+    log_error_response(request, id, elapsed_ms, json_error)
+    maybe_reply_error(request, error)
+
+    state
+  end
+
+  defp log_error_response(request, id, elapsed_ms, json_error) do
+    Logging.client_event("error_response", %{
+      id: id,
+      method: request.method
+    })
+
+    Telemetry.execute(
+      Telemetry.event_client_error(),
+      %{duration: elapsed_ms, system_time: System.system_time()},
+      %{
+        id: id,
+        method: request.method,
+        error_code: json_error["code"],
+        error_message: json_error["message"]
+      }
+    )
+  end
+
+  defp maybe_reply_error(%{batch_id: nil, from: from}, error) do
+    GenServer.reply(from, {:error, error})
+  end
+
+  defp maybe_reply_error(%{batch_id: _batch_id}, _error) do
+    :ok
   end
 
   defp handle_success_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
@@ -1060,38 +1208,47 @@ defmodule Hermes.Client.Base do
     case State.remove_request(state, id) do
       {nil, state} ->
         Logging.client_event("unknown_response", %{id: id})
-
         state
 
       {request, updated_state} ->
-        response = Response.from_json_rpc(%{"result" => result, "id" => id})
-        elapsed_ms = Request.elapsed_time(request)
-
-        Logging.client_event("success_response", %{id: id, method: request.method})
-
-        Telemetry.execute(
-          Telemetry.event_client_response(),
-          %{duration: elapsed_ms, system_time: System.system_time()},
-          %{
-            id: id,
-            method: request.method,
-            status: :success
-          }
-        )
-
-        if request.method == "ping" do
-          GenServer.reply(request.from, :pong)
-        else
-          GenServer.reply(request.from, {:ok, response})
-        end
-
-        updated_state
+        process_successful_response(request, result, id, updated_state)
     end
   end
 
-  defp handle_success_response(%{"id" => id}, _id, state) do
-    Logging.client_event("malformed_response", %{id: id})
+  defp process_successful_response(request, result, id, state) do
+    response = Response.from_json_rpc(%{"result" => result, "id" => id})
+    elapsed_ms = Request.elapsed_time(request)
+
+    log_success_response(request, id, elapsed_ms)
+    maybe_reply_to_request(request, response)
+
     state
+  end
+
+  defp log_success_response(request, id, elapsed_ms) do
+    Logging.client_event("success_response", %{id: id, method: request.method})
+
+    Telemetry.execute(
+      Telemetry.event_client_response(),
+      %{duration: elapsed_ms, system_time: System.system_time()},
+      %{
+        id: id,
+        method: request.method,
+        status: :success
+      }
+    )
+  end
+
+  defp maybe_reply_to_request(%{batch_id: nil, method: "ping", from: from}, _response) do
+    GenServer.reply(from, :pong)
+  end
+
+  defp maybe_reply_to_request(%{batch_id: nil, from: from}, response) do
+    GenServer.reply(from, {:ok, response})
+  end
+
+  defp maybe_reply_to_request(%{batch_id: _batch_id}, _response) do
+    :ok
   end
 
   # Notification handling
@@ -1211,5 +1368,70 @@ defmodule Hermes.Client.Base do
   defp send_roots_list_changed_notification(state) do
     Logging.client_event("sending_roots_list_changed", nil)
     send_notification(state, "notifications/roots/list_changed")
+  end
+
+  # Batch operation helpers
+
+  defp prepare_batch(operations, from, batch_id, state) do
+    {messages, updated_state} = build_batch_messages(operations, from, batch_id, state)
+
+    case Message.encode_batch(messages) do
+      {:ok, batch_data} -> {:ok, batch_data, updated_state}
+      error -> error
+    end
+  end
+
+  defp build_batch_messages(operations, from, batch_id, state) do
+    operations
+    |> Enum.reduce({[], state}, fn operation, {msgs, current_state} ->
+      {message, new_state} = build_batch_message(operation, from, batch_id, current_state)
+      {[message | msgs], new_state}
+    end)
+    |> then(fn {msgs, final_state} -> {Enum.reverse(msgs), final_state} end)
+  end
+
+  defp build_batch_message(operation, from, batch_id, state) do
+    params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
+    {request_id, new_state} = State.add_request_from_operation(state, operation, from, batch_id)
+
+    message = %{
+      "jsonrpc" => "2.0",
+      "method" => operation.method,
+      "params" => params_with_token,
+      "id" => request_id
+    }
+
+    {message, new_state}
+  end
+
+  defp handle_batch_send(batch_data, batch_id, operations, state) do
+    case send_to_transport(state.transport, batch_data) do
+      :ok ->
+        log_batch_request(batch_id, operations)
+        {:noreply, state}
+
+      error ->
+        cleanup_batch_requests(batch_id, state, error)
+    end
+  end
+
+  defp log_batch_request(batch_id, operations) do
+    Telemetry.execute(
+      Telemetry.event_client_request(),
+      %{system_time: System.system_time()},
+      %{method: "batch", batch_id: batch_id, size: length(operations)}
+    )
+  end
+
+  defp cleanup_batch_requests(batch_id, state, error) do
+    batch_requests = State.get_batch_requests(state, batch_id)
+
+    final_state =
+      Enum.reduce(batch_requests, state, fn request, acc_state ->
+        {_, new_state} = State.remove_request(acc_state, request.id)
+        new_state
+      end)
+
+    {:reply, error, final_state}
   end
 end

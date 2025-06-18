@@ -25,8 +25,8 @@ defmodule Hermes.Client.Operation do
 
   defstruct [
     :method,
-    :params,
-    :progress_opts,
+    params: %{},
+    progress_opts: [],
     timeout: @default_timeout
   ]
 
