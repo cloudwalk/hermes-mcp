@@ -236,13 +236,42 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case Message.decode(data) do
       {:ok, messages} ->
-        Enum.each(messages, fn message ->
-          process_message(message, state)
-        end)
+        process_messages(messages, state)
 
       {:error, reason} ->
         Logging.transport_event("parse_error", %{reason: reason}, level: :error)
     end
+  end
+
+  defp process_messages([message], state) do
+    process_message(message, state)
+  end
+
+  defp process_messages([_ | _] = messages, %{server: server_name, registry: registry}) do
+    server = registry.whereis_server(server_name)
+
+    context = %{
+      type: :stdio,
+      env: System.get_env(),
+      pid: System.pid()
+    }
+
+    case GenServer.call(server, {:batch_request, messages, "stdio", context}) do
+      {:batch, responses} ->
+        case Message.encode_batch(responses) do
+          {:ok, batch_response} -> send_message(self(), batch_response)
+          {:error, reason} -> Logging.transport_event("batch_encode_error", %{reason: reason}, level: :error)
+        end
+
+      {:error, error} ->
+        case Error.to_json_rpc(error) do
+          {:ok, error_response} -> send_message(self(), error_response)
+          _ -> Logging.transport_event("batch_error", %{error: error}, level: :error)
+        end
+    end
+  catch
+    :exit, reason ->
+      Logging.transport_event("server_batch_call_failed", %{reason: reason}, level: :error)
   end
 
   defp process_message(message, %{server: server_name, registry: registry}) do

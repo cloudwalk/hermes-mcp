@@ -237,6 +237,13 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
+  def handle_call({:batch_request, messages, session_id, context}, _from, state) when is_list(messages) do
+    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
+      handle_batch_request(messages, session, state)
+    end
+  end
+
+  @impl GenServer
   def handle_call({:send_notification, method, params}, _from, state) do
     case encode_notification(method, params) do
       {:ok, notification_data} ->
@@ -319,6 +326,57 @@ defmodule Hermes.Server.Base do
     )
 
     {:reply, Error.to_json_rpc(error), state}
+  end
+
+  defp handle_batch_request([], _session, state) do
+    error = Error.protocol(:invalid_request, %{message: "Batch cannot be empty"})
+    {:reply, {:error, error}, state}
+  end
+
+  defp handle_batch_request(messages, session, state) do
+    if Enum.any?(messages, &Message.is_initialize/1) do
+      error = Error.protocol(:invalid_request, %{message: "Initialize request cannot be part of a batch"})
+      {:reply, {:error, error}, state}
+    else
+      {responses, updated_state} = process_batch_messages(messages, session, state)
+      {:reply, {:batch, responses}, updated_state}
+    end
+  end
+
+  defp process_batch_messages(messages, session, state) do
+    {responses, final_state} = 
+      Enum.reduce(messages, {[], state}, fn message, {acc_responses, acc_state} ->
+        case process_single_message(message, session, acc_state) do
+          {nil, new_state} -> {acc_responses, new_state}
+          {response, new_state} -> {[response | acc_responses], new_state}
+        end
+      end)
+
+    {Enum.reverse(responses), final_state}
+  end
+
+  defp process_single_message(message, session, state) do
+    cond do
+      Message.is_notification(message) ->
+        {:noreply, new_state} = handle_notification(message, session, state)
+        {nil, new_state}
+
+      Message.is_ping(message) ->
+        {:reply, {:ok, response}, new_state} = handle_server_ping(message, state)
+        {decode_json_response(response), new_state}
+
+      not Session.is_initialized(session) ->
+        error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
+        {Error.to_json_rpc!(error, message["id"]), state}
+
+      Message.is_request(message) ->
+        {:reply, {:ok, response}, new_state} = handle_request(message, session, state)
+        {decode_json_response(response), new_state}
+
+      true ->
+        error = Error.protocol(:invalid_request, %{message: "Invalid message in batch"})
+        {Error.to_json_rpc!(error, Map.get(message, "id")), state}
+    end
   end
 
   # Request handling
