@@ -148,6 +148,41 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "POST request with batch returns batch response", %{opts: opts} do
+      # First initialize a session to establish protocol version
+      init_request =
+        build_request("initialize", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "test", "version" => "1.0.0"}
+        })
+
+      {:ok, init_body} = Message.encode_request(init_request, "init-1")
+
+      # Send initialization request - it will generate its own session ID
+      init_conn =
+        :post
+        |> conn("/", init_body)
+        |> put_req_header("content-type", "application/json")
+        |> StreamableHTTPPlug.call(opts)
+
+      assert init_conn.status == 200
+
+      # Extract the session ID from the response header
+      [session_id] = get_resp_header(init_conn, "mcp-session-id")
+
+      # Send initialized notification with the actual session ID
+      init_notification = build_notification("notifications/initialized", %{})
+      {:ok, notification_body} = Message.encode_notification(init_notification)
+
+      notification_conn =
+        :post
+        |> conn("/", notification_body)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-session-id", session_id)
+        |> StreamableHTTPPlug.call(opts)
+
+      assert notification_conn.status == 202
+
+      # Now send the batch request with the established session
       batch = [
         build_request("ping", %{}, "1"),
         build_request("ping", %{}, "2")
@@ -159,6 +194,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 200
@@ -181,6 +217,41 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "handles Phoenix JSON array parsing", %{opts: opts} do
+      # First initialize a session to establish protocol version
+      init_request =
+        build_request("initialize", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "test", "version" => "1.0.0"}
+        })
+
+      {:ok, init_body} = Message.encode_request(init_request, "init-2")
+
+      # Send initialization request - it will generate its own session ID
+      init_conn =
+        :post
+        |> conn("/", init_body)
+        |> put_req_header("content-type", "application/json")
+        |> StreamableHTTPPlug.call(opts)
+
+      assert init_conn.status == 200
+
+      # Extract the session ID from the response header
+      [session_id] = get_resp_header(init_conn, "mcp-session-id")
+
+      # Send initialized notification with the actual session ID
+      init_notification = build_notification("notifications/initialized", %{})
+      {:ok, notification_body} = Message.encode_notification(init_notification)
+
+      notification_conn =
+        :post
+        |> conn("/", notification_body)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-session-id", session_id)
+        |> StreamableHTTPPlug.call(opts)
+
+      assert notification_conn.status == 202
+
+      # Now test Phoenix array parsing with established session
       batch = [
         build_request("ping", %{}, "1"),
         build_request("ping", %{}, "2")
@@ -192,6 +263,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         |> conn("/", "")
         |> Map.put(:body_params, %{"_json" => batch})
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 200

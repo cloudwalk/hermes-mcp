@@ -134,9 +134,10 @@ defmodule Hermes.Server.Component.Tool do
   ## Parameters
     * `tool_module` - The tool module
     * `name` - The tool name (optional, defaults to deriving from module name)
+    * `protocol_version` - The protocol version (optional, defaults to "2024-11-05")
   """
-  @spec to_protocol(module(), String.t() | nil) :: map()
-  def to_protocol(tool_module, name \\ nil) do
+  @spec to_protocol(module(), String.t() | nil, String.t()) :: map()
+  def to_protocol(tool_module, name \\ nil, protocol_version \\ "2024-11-05") do
     name = name || derive_tool_name(tool_module)
 
     base = %{
@@ -145,7 +146,9 @@ defmodule Hermes.Server.Component.Tool do
       "inputSchema" => tool_module.input_schema()
     }
 
-    if Code.ensure_loaded?(tool_module) and function_exported?(tool_module, :annotations, 0) do
+    # Only include annotations if protocol version supports it
+    if Hermes.Protocol.supports_feature?(protocol_version, :tool_annotations) and
+         Code.ensure_loaded?(tool_module) and function_exported?(tool_module, :annotations, 0) do
       Map.put(base, "annotations", tool_module.annotations())
     else
       base

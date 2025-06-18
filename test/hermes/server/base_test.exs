@@ -188,23 +188,17 @@ defmodule Hermes.Server.BaseTest do
     end
 
     test "returns error when protocol version doesn't support batching", %{server: server, session_id: session_id} do
-      # First initialize a session with the current protocol version
+      alias Hermes.Server.Session
+
       init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
       assert {:ok, response} = GenServer.call(server, {:request, init_msg, session_id, %{}})
-      assert {:ok, response_data} = response
-      assert {:ok, [decoded]} = Message.decode(response_data)
+      assert {:ok, [decoded]} = Message.decode(response)
       assert decoded["result"]["protocolVersion"] == "2025-03-26"
 
-      # Now manually create a session with old protocol version
       session_name = {:via, Registry, {Hermes.Server.Registry, {:session, StubServer, "old_protocol_session"}}}
 
-      {:ok, session} =
-        Hermes.Server.Session.start_link(
-          session_id: "old_protocol_session",
-          name: session_name
-        )
+      {:ok, session} = Session.start_link(session_id: "old_protocol_session", name: session_name)
 
-      # Update the session with old protocol version
       Agent.update(session, fn state ->
         %{
           state

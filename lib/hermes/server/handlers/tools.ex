@@ -47,7 +47,8 @@ defmodule Hermes.Server.Handlers.Tools do
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_list(frame, server_module) do
     tools = server_module.__components__(:tool)
-    response = %{"tools" => Enum.map(tools, &parse_tool_definition/1)}
+    protocol_version = Frame.get_protocol_version(frame) || "2024-11-05"
+    response = %{"tools" => Enum.map(tools, &parse_tool_definition(&1, protocol_version))}
 
     {:reply, response, frame}
   end
@@ -88,14 +89,16 @@ defmodule Hermes.Server.Handlers.Tools do
     end)
   end
 
-  defp parse_tool_definition({name, module}) do
+  defp parse_tool_definition({name, module}, protocol_version) do
     base = %{
       "name" => name,
       "description" => Component.get_description(module),
       "inputSchema" => module.input_schema()
     }
 
-    if Code.ensure_loaded?(module) and function_exported?(module, :annotations, 0) do
+    # Only include annotations if protocol version supports it
+    if Hermes.Protocol.supports_feature?(protocol_version, :tool_annotations) and
+         Code.ensure_loaded?(module) and function_exported?(module, :annotations, 0) do
       Map.put(base, "annotations", module.annotations())
     else
       base

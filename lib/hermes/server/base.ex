@@ -347,24 +347,28 @@ defmodule Hermes.Server.Base do
   end
 
   defp handle_batch_request(messages, session, state) do
-    if Protocol.supports_feature?(session.protocol_version, :json_rpc_batching) do
-      if Enum.any?(messages, &Message.is_initialize/1) do
+    cond do
+      Enum.any?(messages, &Message.is_initialize/1) ->
         error = Error.protocol(:invalid_request, %{message: "Initialize request cannot be part of a batch"})
         {:reply, {:error, error}, state}
-      else
+
+      is_nil(session.protocol_version) or not Session.is_initialized(session) ->
         {responses, updated_state} = process_batch_messages(messages, session, state)
         {:reply, {:batch, responses}, updated_state}
-      end
-    else
-      error =
-        Error.protocol(:invalid_request, %{
-          message: "Batch operations require protocol version 2025-03-26 or later",
-          feature: "batch operations",
-          protocol_version: session.protocol_version,
-          required_version: "2025-03-26"
-        })
 
-      {:reply, {:error, error}, state}
+      Protocol.supports_feature?(session.protocol_version, :json_rpc_batching) ->
+        {responses, updated_state} = process_batch_messages(messages, session, state)
+        {:reply, {:batch, responses}, updated_state}
+
+      true ->
+        {:reply,
+         {:error,
+          Error.protocol(:invalid_request, %{
+            message: "Batch operations require protocol version 2025-03-26 or later",
+            feature: "batch operations",
+            protocol_version: session.protocol_version,
+            required_version: "2025-03-26"
+          })}, state}
     end
   end
 
