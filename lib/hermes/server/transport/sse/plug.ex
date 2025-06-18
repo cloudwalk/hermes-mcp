@@ -187,7 +187,7 @@ if Code.ensure_loaded?(Plug) do
 
         messages
         |> prepare_message_or_batch()
-        |> SSE.handle_message(transport, session_id, context)
+        |> then(fn msg -> SSE.handle_message(transport, session_id, msg, context) end)
         |> send_response(conn)
       else
         {:error, :invalid_json} ->
@@ -277,6 +277,10 @@ if Code.ensure_loaded?(Plug) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}
       end
+    end
+
+    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _) when is_list(json_array) do
+      {:ok, json_array, conn}
     end
 
     defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}

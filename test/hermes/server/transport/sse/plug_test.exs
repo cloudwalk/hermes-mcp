@@ -5,10 +5,9 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
   import Plug.Test
 
   alias Hermes.MCP.Message
+  alias Hermes.Server.Base
   alias Hermes.Server.Transport.SSE
   alias Hermes.Server.Transport.SSE.Plug, as: SSEPlug
-
-  @moduletag skip: true
 
   setup :with_default_registry
 
@@ -46,8 +45,7 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
 
   describe "SSE endpoint" do
     setup %{registry: registry} do
-      server_name = :"test_server_#{System.unique_integer([:positive])}"
-      name = registry.transport(server_name, :sse)
+      name = registry.transport(StubServer, :sse)
       {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       sse_opts = SSEPlug.init(server: StubServer, mode: :sse)
@@ -94,15 +92,35 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
 
   describe "POST endpoint" do
     setup %{registry: registry} do
-      server_name = :"test_server_#{System.unique_integer([:positive])}"
-      name = registry.transport(server_name, :sse)
+      # Start the session supervisor
+      {:ok, _session_sup} =
+        start_supervised({
+          Hermes.Server.Session.Supervisor,
+          server: StubServer, registry: registry
+        })
+
+      # Start a stub transport for the server
+      stub_transport = start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
+
+      # Start the Base server with stub transport
+      {:ok, _server} =
+        start_supervised({
+          Base,
+          module: StubServer,
+          name: registry.server(StubServer),
+          init_arg: :ok,
+          transport: [layer: StubTransport, name: stub_transport],
+          registry: registry
+        })
+
+      # Now start the SSE transport
+      name = registry.transport(StubServer, :sse)
       {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       post_opts = SSEPlug.init(server: StubServer, mode: :post)
-      %{post_opts: post_opts, transport: transport}
+      %{post_opts: post_opts, transport: transport, registry: registry}
     end
 
-    @tag :skip
     test "POST request with valid JSON returns response", %{post_opts: post_opts, transport: transport} do
       session_id = "test-session"
       :ok = SSE.register_sse_handler(transport, session_id)
@@ -162,8 +180,7 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
 
   describe "session ID extraction" do
     setup %{registry: registry} do
-      server_name = :"test_server_#{System.unique_integer([:positive])}"
-      name = registry.transport(server_name, :sse)
+      name = registry.transport(StubServer, :sse)
       {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       post_opts = SSEPlug.init(server: StubServer, mode: :post)
