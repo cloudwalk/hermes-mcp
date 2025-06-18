@@ -137,6 +137,7 @@ defmodule Hermes.Server.Component do
 
     uri = Keyword.get(opts, :uri)
     mime_type = Keyword.get(opts, :mime_type, "text/plain")
+    annotations = Keyword.get(opts, :annotations)
 
     quote do
       @behaviour unquote(behaviour_module)
@@ -155,6 +156,11 @@ defmodule Hermes.Server.Component do
           alias Hermes.Server.Component.Schema
 
           Schema.to_json_schema(__mcp_raw_schema__())
+        end
+
+        if unquote(annotations) != nil do
+          @impl true
+          def annotations, do: unquote(annotations)
         end
       end
 

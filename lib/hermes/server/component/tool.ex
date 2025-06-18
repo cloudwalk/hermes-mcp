@@ -56,12 +56,14 @@ defmodule Hermes.Server.Component.Tool do
   """
 
   alias Hermes.MCP.Error
+  alias Hermes.Server.Component
   alias Hermes.Server.Frame
   alias Hermes.Server.Response
 
   @type params :: map()
   @type result :: term()
   @type schema :: map()
+  @type annotations :: map() | nil
 
   @doc """
   Returns the JSON Schema for the tool's input parameters.
@@ -70,6 +72,25 @@ defmodule Hermes.Server.Component.Tool do
   The schema should follow the JSON Schema specification.
   """
   @callback input_schema() :: schema()
+
+  @doc """
+  Returns optional annotations for the tool.
+
+  Annotations provide additional metadata about the tool that may be used
+  by clients for enhanced functionality. This is an optional callback.
+
+  ## Examples
+
+      def annotations do
+        %{
+          "confidence" => 0.95,
+          "category" => "text-processing",
+          "tags" => ["nlp", "text"]
+        }
+      end
+  """
+  @callback annotations() :: annotations()
+  @optional_callbacks annotations: 0
 
   @doc """
   Executes the tool with the given parameters.
@@ -109,14 +130,33 @@ defmodule Hermes.Server.Component.Tool do
 
   @doc """
   Converts a tool module into the MCP protocol format.
+
+  ## Parameters
+    * `tool_module` - The tool module
+    * `name` - The tool name (optional, defaults to deriving from module name)
   """
-  @spec to_protocol(module()) :: map()
-  def to_protocol(tool_module) do
-    %{
-      "name" => tool_module.name(),
-      "description" => tool_module.description(),
+  @spec to_protocol(module(), String.t() | nil) :: map()
+  def to_protocol(tool_module, name \\ nil) do
+    name = name || derive_tool_name(tool_module)
+
+    base = %{
+      "name" => name,
+      "description" => Component.get_description(tool_module),
       "inputSchema" => tool_module.input_schema()
     }
+
+    if Code.ensure_loaded?(tool_module) and function_exported?(tool_module, :annotations, 0) do
+      Map.put(base, "annotations", tool_module.annotations())
+    else
+      base
+    end
+  end
+
+  defp derive_tool_name(module) do
+    module
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
   end
 
   @doc """

@@ -244,5 +244,31 @@ defmodule Hermes.Client.BatchTest do
 
       assert {:ok, [_]} = Task.await(task)
     end
+
+    test "returns error when protocol version doesn't support batching", %{} do
+      # Setup a client with an older protocol version
+      {:ok, client} =
+        GenServer.start_link(
+          Hermes.Client.Base,
+          %{
+            name: :test_client_old_protocol,
+            client_info: %{"name" => "test_client", "version" => "1.0.0"},
+            transport: %{layer: Hermes.MockTransport, name: MockTransport},
+            capabilities: %{},
+            # This version doesn't support batching
+            protocol_version: "2024-11-05"
+          }
+        )
+
+      operations = [
+        Operation.new(%{method: "ping", params: %{}})
+      ]
+
+      assert {:error, %Error{reason: :invalid_request, data: data}} =
+               Hermes.Client.Base.send_batch(client, operations)
+
+      assert data.feature == "batch operations"
+      assert data.required_version == "2025-03-26"
+    end
   end
 end

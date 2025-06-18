@@ -89,11 +89,17 @@ defmodule Hermes.Server.Handlers.Tools do
   end
 
   defp parse_tool_definition({name, module}) do
-    %{
+    base = %{
       "name" => name,
       "description" => Component.get_description(module),
       "inputSchema" => module.input_schema()
     }
+
+    if Code.ensure_loaded?(module) and function_exported?(module, :annotations, 0) do
+      Map.put(base, "annotations", module.annotations())
+    else
+      base
+    end
   end
 
   defp validate_params(params, module, frame) do

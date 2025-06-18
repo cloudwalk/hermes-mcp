@@ -847,14 +847,26 @@ defmodule Hermes.Client.Base do
   end
 
   def handle_call({:batch_operations, operations}, from, state) do
-    batch_id = ID.generate_batch_id()
+    if Protocol.supports_feature?(state.protocol_version, :json_rpc_batching) do
+      batch_id = ID.generate_batch_id()
 
-    case prepare_batch(operations, from, batch_id, state) do
-      {:ok, batch_data, updated_state} ->
-        handle_batch_send(batch_data, batch_id, operations, updated_state)
+      case prepare_batch(operations, from, batch_id, state) do
+        {:ok, batch_data, updated_state} ->
+          handle_batch_send(batch_data, batch_id, operations, updated_state)
 
-      {:error, _} = error ->
-        {:reply, error, state}
+        {:error, _} = error ->
+          {:reply, error, state}
+      end
+    else
+      error =
+        Error.protocol(:invalid_request, %{
+          message: "Batch operations require protocol version 2025-03-26 or later",
+          feature: "batch operations",
+          protocol_version: state.protocol_version,
+          required_version: "2025-03-26"
+        })
+
+      {:reply, {:error, error}, state}
     end
   end
 
