@@ -301,12 +301,18 @@ defmodule Hermes.Server.Base do
     with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
       case handle_single_request(decoded, session, state) do
         {:reply, {:ok, %{"result" => result} = response}, new_state} ->
+          request_id = response["id"]
+          if request_id, do: Session.complete_request(session.name, request_id)
           {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
 
         {:reply, {:ok, %{"error" => error} = response}, new_state} ->
+          request_id = response["id"]
+          if request_id, do: Session.complete_request(session.name, request_id)
           {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
 
         {:reply, {:error, error}, new_state} ->
+          request_id = decoded["id"]
+          if request_id, do: Session.complete_request(session.name, request_id)
           {:reply, {:error, error}, new_state}
       end
     end
@@ -529,8 +535,10 @@ defmodule Hermes.Server.Base do
     {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
-  defp handle_request(%{"id" => request_id, "method" => method} = request, _session, state) do
+  defp handle_request(%{"id" => request_id, "method" => method} = request, session, state) do
     Logging.server_event("handling_request", %{id: request_id, method: method})
+
+    :ok = Session.track_request(session.name, request_id, method)
 
     Telemetry.execute(
       Telemetry.event_server_request(),
@@ -557,10 +565,38 @@ defmodule Hermes.Server.Base do
     {:noreply, %{state | frame: %{state.frame | initialized: true}}}
   end
 
-  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, _session, state) do
-    # TODO(zoedsoupe): we need to actually keep track of running requests...
-    Logging.server_event("handling_notiifcation_cancellation", %{params: notification["params"]})
-    {:noreply, state}
+  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, session, state) do
+    params = notification["params"] || %{}
+    request_id = params["requestId"]
+    reason = Map.get(params, "reason", "cancelled")
+
+    if Session.has_pending_request?(session.name, request_id) do
+      request_info = Session.complete_request(session.name, request_id)
+
+      Logging.server_event("request_cancelled", %{
+        session_id: session.id,
+        request_id: request_id,
+        reason: reason,
+        method: request_info[:method],
+        duration_ms: System.system_time(:millisecond) - request_info[:started_at]
+      })
+
+      Telemetry.execute(
+        Telemetry.event_server_notification(),
+        %{system_time: System.system_time()},
+        %{method: "cancelled", session_id: session.id, request_id: request_id}
+      )
+
+      {:noreply, state}
+    else
+      Logging.server_event("cancellation_for_unknown_request", %{
+        session_id: session.id,
+        request_id: request_id,
+        reason: reason
+      })
+
+      {:noreply, state}
+    end
   end
 
   defp handle_notification(%{"method" => "notifications/roots/list_changed"} = notification, session, state) do

@@ -24,7 +24,8 @@ defmodule Hermes.Server.Session do
           client_info: map() | nil,
           client_capabilities: map() | nil,
           log_level: String.t(),
-          id: String.t() | nil
+          id: String.t() | nil,
+          pending_requests: %{String.t() => %{started_at: integer(), method: String.t()}}
         }
 
   defstruct [
@@ -34,7 +35,8 @@ defmodule Hermes.Server.Session do
     :name,
     initialized: false,
     client_info: nil,
-    client_capabilities: nil
+    client_capabilities: nil,
+    pending_requests: %{}
   ]
 
   @doc """
@@ -133,5 +135,93 @@ defmodule Hermes.Server.Session do
   @spec set_log_level(GenServer.name(), String.t()) :: :ok
   def set_log_level(session, level) do
     Agent.update(session, fn state -> %{state | log_level: level} end)
+  end
+
+  @doc """
+  Tracks a new pending request in the session.
+
+  ## Parameters
+
+    * `session` - The session agent name or PID
+    * `request_id` - The unique request ID
+    * `method` - The MCP method being called
+
+  ## Examples
+
+      iex> Session.track_request(session, "req_123", "tools/call")
+      :ok
+  """
+  @spec track_request(GenServer.name(), String.t(), String.t()) :: :ok
+  def track_request(session, request_id, method) do
+    Agent.update(session, fn state ->
+      request_info = %{
+        started_at: System.system_time(:millisecond),
+        method: method
+      }
+
+      %{state | pending_requests: Map.put(state.pending_requests, request_id, request_info)}
+    end)
+  end
+
+  @doc """
+  Removes a completed request from tracking.
+
+  ## Parameters
+
+    * `session` - The session agent name or PID
+    * `request_id` - The request ID to remove
+
+  ## Returns
+
+  The request info if found, nil otherwise.
+
+  ## Examples
+
+      iex> Session.complete_request(session, "req_123")
+      %{started_at: 1234567890, method: "tools/call"}
+  """
+  @spec complete_request(GenServer.name(), String.t()) :: map() | nil
+  def complete_request(session, request_id) do
+    Agent.get_and_update(session, fn state ->
+      {request_info, pending_requests} = Map.pop(state.pending_requests, request_id)
+      {request_info, %{state | pending_requests: pending_requests}}
+    end)
+  end
+
+  @doc """
+  Checks if a request is currently pending.
+
+  ## Parameters
+
+    * `session` - The session agent name or PID
+    * `request_id` - The request ID to check
+
+  ## Examples
+
+      iex> Session.has_pending_request?(session, "req_123")
+      true
+  """
+  @spec has_pending_request?(GenServer.name(), String.t()) :: boolean()
+  def has_pending_request?(session, request_id) do
+    Agent.get(session, fn state ->
+      Map.has_key?(state.pending_requests, request_id)
+    end)
+  end
+
+  @doc """
+  Gets all pending requests for a session.
+
+  ## Parameters
+
+    * `session` - The session agent name or PID
+
+  ## Examples
+
+      iex> Session.get_pending_requests(session)
+      %{"req_123" => %{started_at: 1234567890, method: "tools/call"}}
+  """
+  @spec get_pending_requests(GenServer.name()) :: map()
+  def get_pending_requests(session) do
+    Agent.get(session, & &1.pending_requests)
   end
 end
