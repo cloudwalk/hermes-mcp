@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.9.1...v0.10.0) (2025-06-18)
+
+
+### Features
+
+* batch operations on server-side ([#125](https://github.com/cloudwalk/hermes-mcp/issues/125)) ([28eea7c](https://github.com/cloudwalk/hermes-mcp/commit/28eea7cd15f72c4effccc8475e6b301b2cd9745c))
+* missing notifications handlers ([#129](https://github.com/cloudwalk/hermes-mcp/issues/129)) ([34d5934](https://github.com/cloudwalk/hermes-mcp/commit/34d593499fdd846f430b93b4c52ca986f345646d))
+* support batch operations on client side ([#101](https://github.com/cloudwalk/hermes-mcp/issues/101)) ([fadf28d](https://github.com/cloudwalk/hermes-mcp/commit/fadf28d80068f3f1e77835fd46a276338048f0bc))
+* tools annotations ([#127](https://github.com/cloudwalk/hermes-mcp/issues/127)) ([c83e8f1](https://github.com/cloudwalk/hermes-mcp/commit/c83e8f1b0e721b1a03960ac67cdd0774337675dc))
+
+
+### Miscellaneous Chores
+
+* release please correct version on readme ([#128](https://github.com/cloudwalk/hermes-mcp/issues/128)) ([d0125c6](https://github.com/cloudwalk/hermes-mcp/commit/d0125c664b5190b560bb988ff01d17cbdba814bd))
+* update peri ([#126](https://github.com/cloudwalk/hermes-mcp/issues/126)) ([7292615](https://github.com/cloudwalk/hermes-mcp/commit/7292615cf57da0185006df2f6221f8ab93aacd30))
+
 ## [0.9.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.9.0...v0.9.1) (2025-06-13)
 
 
