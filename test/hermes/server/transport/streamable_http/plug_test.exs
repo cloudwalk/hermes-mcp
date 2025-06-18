@@ -1,6 +1,7 @@
 defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   use Hermes.MCP.Case, async: false
 
+  import ExUnit.CaptureLog
   import Plug.Conn
   import Plug.Test
 
@@ -52,19 +53,21 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "GET request establishes SSE connection", %{transport: transport} do
-      conn =
-        :get
-        |> conn("/")
-        |> put_req_header("accept", "text/event-stream")
+      capture_log(fn ->
+        conn =
+          :get
+          |> conn("/")
+          |> put_req_header("accept", "text/event-stream")
 
-      assert conn.method == "GET"
-      assert get_req_header(conn, "accept") == ["text/event-stream"]
+        assert conn.method == "GET"
+        assert get_req_header(conn, "accept") == ["text/event-stream"]
 
-      session_id = "test-session-123"
-      assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+        session_id = "test-session-123"
+        assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)
 
-      # Note: We don't actually call the plug here because it would
-      # establish a persistent connection and hang the test
+        # Note: We don't actually call the plug here because it would
+        # establish a persistent connection and hang the test
+      end)
     end
 
     test "GET request without SSE accept header returns error", %{opts: opts} do

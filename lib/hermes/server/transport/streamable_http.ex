@@ -154,7 +154,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), map(), map()) ::
+  @spec handle_message(GenServer.server(), String.t(), map() | list(map), map()) ::
           {:ok, binary() | nil} | {:error, term()}
   def handle_message(transport, session_id, message, context) do
     GenServer.call(transport, {:handle_message, session_id, message, context})

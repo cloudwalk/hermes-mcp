@@ -396,7 +396,6 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp extract_request_id(%{"id" => request_id}), do: request_id
-    defp extract_request_id([%{"id" => request_id} | _]), do: request_id
     defp extract_request_id(_), do: nil
 
     defp build_request_context(conn) do

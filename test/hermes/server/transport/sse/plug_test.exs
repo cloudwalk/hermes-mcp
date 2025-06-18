@@ -1,6 +1,7 @@
 defmodule Hermes.Server.Transport.SSE.PlugTest do
   use Hermes.MCP.Case, async: false
 
+  import ExUnit.CaptureLog
   import Plug.Conn
   import Plug.Test
 
@@ -53,19 +54,21 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "GET request establishes SSE connection", %{transport: transport} do
-      conn =
-        :get
-        |> conn("/sse")
-        |> put_req_header("accept", "text/event-stream")
+      capture_log(fn ->
+        conn =
+          :get
+          |> conn("/sse")
+          |> put_req_header("accept", "text/event-stream")
 
-      assert conn.method == "GET"
-      assert get_req_header(conn, "accept") == ["text/event-stream"]
+        assert conn.method == "GET"
+        assert get_req_header(conn, "accept") == ["text/event-stream"]
 
-      session_id = "test-session-123"
-      assert :ok = SSE.register_sse_handler(transport, session_id)
+        session_id = "test-session-123"
+        assert :ok = SSE.register_sse_handler(transport, session_id)
 
-      endpoint_url = SSE.get_endpoint_url(transport)
-      assert endpoint_url == "/messages"
+        endpoint_url = SSE.get_endpoint_url(transport)
+        assert endpoint_url == "/messages"
+      end)
     end
 
     test "GET request without SSE accept header returns error", %{sse_opts: sse_opts} do
@@ -122,21 +125,23 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "POST request with valid JSON returns response", %{post_opts: post_opts, transport: transport} do
-      session_id = "test-session"
-      :ok = SSE.register_sse_handler(transport, session_id)
+      capture_log(fn ->
+        session_id = "test-session"
+        :ok = SSE.register_sse_handler(transport, session_id)
 
-      request = build_request("ping", %{})
-      {:ok, body} = Message.encode_request(request, 1)
+        request = build_request("ping", %{})
+        {:ok, body} = Message.encode_request(request, 1)
 
-      conn =
-        :post
-        |> conn("/messages", body)
-        |> put_req_header("content-type", "application/json")
-        |> put_req_header("x-session-id", session_id)
-        |> SSEPlug.call(post_opts)
+        conn =
+          :post
+          |> conn("/messages", body)
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("x-session-id", session_id)
+          |> SSEPlug.call(post_opts)
 
-      assert conn.status == 202
-      assert conn.resp_body == "{}"
+        assert conn.status == 202
+        assert conn.resp_body == "{}"
+      end)
     end
 
     test "POST request with notification returns 202", %{post_opts: post_opts} do

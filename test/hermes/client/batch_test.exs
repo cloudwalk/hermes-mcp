@@ -45,19 +45,25 @@ defmodule Hermes.Client.BatchTest do
       Process.sleep(50)
 
       pending_requests = :sys.get_state(client).pending_requests
-      request_ids = Map.keys(pending_requests)
+      request_ids = pending_requests |> Map.keys() |> Enum.sort()
       assert length(request_ids) == 2
+
+      request_method_map =
+        Map.new(pending_requests, fn {id, request} -> {id, request.method} end)
+
+      ping_id = Enum.find(request_ids, fn id -> request_method_map[id] == "ping" end)
+      tools_id = Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
 
       batch_response = [
         %{
           "jsonrpc" => "2.0",
           "result" => %{},
-          "id" => Enum.at(request_ids, 0)
+          "id" => ping_id
         },
         %{
           "jsonrpc" => "2.0",
           "result" => %{"tools" => [%{"name" => "test_tool"}]},
-          "id" => Enum.at(request_ids, 1)
+          "id" => tools_id
         }
       ]
 
@@ -73,25 +79,36 @@ defmodule Hermes.Client.BatchTest do
         Operation.new(%{method: "tools/list", params: %{}})
       ]
 
-      expect(Hermes.MockTransport, :send_message, fn _, _message -> :ok end)
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        {:ok, decoded} = JSON.decode(message)
+        assert is_list(decoded)
+        assert length(decoded) == 2
+        :ok
+      end)
 
       task = Task.async(fn -> Hermes.Client.Base.send_batch(client, operations) end)
       Process.sleep(50)
 
       pending_requests = :sys.get_state(client).pending_requests
-      request_ids = Map.keys(pending_requests)
+      request_ids = pending_requests |> Map.keys() |> Enum.sort()
       assert length(request_ids) == 2
+
+      request_method_map =
+        Map.new(pending_requests, fn {id, request} -> {id, request.method} end)
+
+      ping_id = Enum.find(request_ids, fn id -> request_method_map[id] == "ping" end)
+      tools_id = Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
 
       batch_response = [
         %{
           "jsonrpc" => "2.0",
           "result" => %{},
-          "id" => Enum.at(request_ids, 0)
+          "id" => ping_id
         },
         %{
           "jsonrpc" => "2.0",
           "error" => %{"code" => -32_601, "message" => "Method not found"},
-          "id" => Enum.at(request_ids, 1)
+          "id" => tools_id
         }
       ]
 
@@ -99,8 +116,10 @@ defmodule Hermes.Client.BatchTest do
       GenServer.cast(client, {:response, encoded_batch})
 
       assert {:ok, results} = Task.await(task)
-      assert Enum.any?(results, &match?({:ok, %Response{result: :pong}}, &1))
-      assert Enum.any?(results, &match?({:error, %Error{}}, &1))
+      assert length(results) == 2
+
+      assert Enum.count(results, &match?({:ok, %Response{result: :pong}}, &1)) == 1
+      assert Enum.count(results, &match?({:error, %Error{code: -32_601}}, &1)) == 1
     end
 
     test "returns error for empty batch", %{client: client} do
