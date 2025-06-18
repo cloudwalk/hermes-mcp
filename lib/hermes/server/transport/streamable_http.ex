@@ -233,17 +233,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, messages, context}, _from, state) when is_list(messages) do
-    server = state.registry.whereis_server(state.server)
-
-    case messages do
-      [message] -> handle_single_message(server, message, session_id, context, state)
-      messages -> handle_batch(server, messages, session_id, context, state)
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:handle_message, session_id, message, context}, _from, state) do
+  def handle_call({:handle_message, session_id, message, context}, _from, state) when is_map(message) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
@@ -254,8 +244,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     end
   end
 
-  @impl GenServer
-  def handle_call({:handle_message_for_sse, session_id, messages, context}, _from, state) when is_list(messages) do
+  def handle_call({:handle_message, session_id, messages, context}, _from, state) when is_list(messages) do
     server = state.registry.whereis_server(state.server)
 
     case messages do
@@ -265,7 +254,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state) do
+  def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state) when is_map(message) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
@@ -274,6 +263,15 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     else
       sse_handler? = Map.has_key?(state.sse_handlers, session_id)
       {:reply, forward_request_to_server(server, message, session_id, context, sse_handler?), state}
+    end
+  end
+
+  def handle_call({:handle_message_for_sse, session_id, messages, context}, _from, state) when is_list(messages) do
+    server = state.registry.whereis_server(state.server)
+
+    case messages do
+      [message] -> handle_single_message(server, message, session_id, context, state)
+      messages -> handle_batch(server, messages, session_id, context, state)
     end
   end
 

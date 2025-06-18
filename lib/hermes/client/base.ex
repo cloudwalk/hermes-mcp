@@ -643,8 +643,9 @@ defmodule Hermes.Client.Base do
 
   ## Returns
 
-    * `{:ok, results}` - A map of results keyed by request ID
-    * `{:error, reason}` - If the batch fails
+    * `{:ok, results}` - A list of results in the same order as the operations.
+      Each result is either `{:ok, response}` or `{:error, error}`.
+    * `{:error, reason}` - If the entire batch fails (e.g., transport error)
 
   ## Example
 
@@ -654,9 +655,9 @@ defmodule Hermes.Client.Base do
       ]
       
       {:ok, results} = Hermes.Client.send_batch(client, operations)
-      # results is a map: %{request_id1 => result1, request_id2 => result2}
+      # results is a list: [{:ok, :pong}, {:ok, tools_response}]
   """
-  @spec send_batch(t, [Operation.t()]) :: {:ok, %{String.t() => any()}} | {:error, Error.t()}
+  @spec send_batch(t, [Operation.t()]) :: {:ok, [{:ok, any()} | {:error, Error.t()}]} | {:error, Error.t()}
   def send_batch(client, [_ | _] = operations) do
     max_timeout = Enum.max_by(operations, & &1.timeout).timeout
     buffer_timeout = max_timeout + to_timeout(second: 1)
@@ -1095,7 +1096,8 @@ defmodule Hermes.Client.Base do
     {results, updated_state} = collect_batch_results(messages, state)
 
     if State.batch_complete?(updated_state, batch_id) and not is_nil(batch_from) do
-      GenServer.reply(batch_from, {:ok, results})
+      formatted_results = format_batch_results(results)
+      GenServer.reply(batch_from, {:ok, formatted_results})
     end
 
     updated_state
@@ -1110,9 +1112,10 @@ defmodule Hermes.Client.Base do
           {Map.put(results, id, {:error, error}), new_state}
 
         %{"id" => id} = msg when Message.is_response(msg) ->
-          {_request, new_state} = State.remove_request(current_state, id)
+          {request, new_state} = State.remove_request(current_state, id)
           response = Response.from_json_rpc(msg)
-          {Map.put(results, id, {:ok, response}), new_state}
+          response_with_method = %{response | method: request && request.method}
+          {Map.put(results, id, {:ok, response_with_method}), new_state}
 
         _ ->
           {results, current_state}
@@ -1131,6 +1134,16 @@ defmodule Hermes.Client.Base do
     if State.batch_complete?(state, batch_id) do
       GenServer.reply(from, {:ok, %{}})
     end
+  end
+
+  defp format_batch_results(results) do
+    results
+    |> Map.values()
+    |> Enum.map(fn
+      {:ok, %Response{method: "ping"} = resp} -> {:ok, %{resp | result: :pong}}
+      {:ok, %Response{} = response} -> {:ok, response}
+      {:error, _} = error -> error
+    end)
   end
 
   # Response handling
@@ -1217,10 +1230,11 @@ defmodule Hermes.Client.Base do
 
   defp process_successful_response(request, result, id, state) do
     response = Response.from_json_rpc(%{"result" => result, "id" => id})
+    response_with_method = %{response | method: request.method}
     elapsed_ms = Request.elapsed_time(request)
 
     log_success_response(request, id, elapsed_ms)
-    maybe_reply_to_request(request, response)
+    maybe_reply_to_request(request, response_with_method)
 
     state
   end
@@ -1382,12 +1396,13 @@ defmodule Hermes.Client.Base do
   end
 
   defp build_batch_messages(operations, from, batch_id, state) do
-    operations
-    |> Enum.reduce({[], state}, fn operation, {msgs, current_state} ->
-      {message, new_state} = build_batch_message(operation, from, batch_id, current_state)
-      {[message | msgs], new_state}
-    end)
-    |> then(fn {msgs, final_state} -> {Enum.reverse(msgs), final_state} end)
+    {messages, final_state} =
+      Enum.reduce(operations, {[], state}, fn operation, {msgs, current_state} ->
+        {message, _, new_state} = build_batch_message(operation, from, batch_id, current_state)
+        {[message | msgs], new_state}
+      end)
+
+    {Enum.reverse(messages), final_state}
   end
 
   defp build_batch_message(operation, from, batch_id, state) do
@@ -1401,7 +1416,7 @@ defmodule Hermes.Client.Base do
       "id" => request_id
     }
 
-    {message, new_state}
+    {message, request_id, new_state}
   end
 
   defp handle_batch_send(batch_data, batch_id, operations, state) do

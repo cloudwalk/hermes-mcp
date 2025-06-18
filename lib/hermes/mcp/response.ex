@@ -46,10 +46,11 @@ defmodule Hermes.MCP.Response do
   @type t :: %__MODULE__{
           result: map(),
           id: String.t(),
-          is_error: boolean()
+          is_error: boolean(),
+          method: String.t() | nil
         }
 
-  defstruct [:result, :id, is_error: false]
+  defstruct [:result, :id, :method, is_error: false]
 
   @doc """
   Creates a Response struct from a JSON-RPC response.

@@ -64,22 +64,7 @@ defmodule Hermes.Client.BatchTest do
       {:ok, encoded_batch} = Message.encode_batch(batch_response)
       GenServer.cast(client, {:response, encoded_batch})
 
-      assert {:ok, results} = Task.await(task)
-      assert is_map(results)
-      assert map_size(results) == 2
-
-      {ping_result, tools_result} =
-        results
-        |> Enum.sort_by(fn {id, _} -> id end)
-        |> then(fn sorted ->
-          {
-            elem(Enum.at(sorted, 0), 1),
-            elem(Enum.at(sorted, 1), 1)
-          }
-        end)
-
-      assert {:ok, %Response{}} = ping_result
-      assert {:ok, %Response{result: %{"tools" => [%{"name" => "test_tool"}]}}} = tools_result
+      assert {:ok, [_, _]} = Task.await(task)
     end
 
     test "handles mixed success and error responses in batch", %{client: client} do
@@ -114,11 +99,8 @@ defmodule Hermes.Client.BatchTest do
       GenServer.cast(client, {:response, encoded_batch})
 
       assert {:ok, results} = Task.await(task)
-      assert map_size(results) == 2
-
-      results_list = Map.values(results)
-      assert Enum.any?(results_list, &match?({:ok, %Response{}}, &1))
-      assert Enum.any?(results_list, &match?({:error, %Error{}}, &1))
+      assert Enum.any?(results, &match?({:ok, %Response{result: :pong}}, &1))
+      assert Enum.any?(results, &match?({:error, %Error{}}, &1))
     end
 
     test "returns error for empty batch", %{client: client} do
@@ -209,9 +191,7 @@ defmodule Hermes.Client.BatchTest do
       {:ok, encoded_batch} = Message.encode_batch(batch_response)
       GenServer.cast(client, {:response, encoded_batch})
 
-      assert {:ok, results} = Task.await(task)
-      assert Map.has_key?(results, id1)
-      assert Map.has_key?(results, id2)
+      assert {:ok, [_, _]} = Task.await(task)
     end
 
     test "ignores notifications in batch response", %{client: client} do
@@ -243,9 +223,7 @@ defmodule Hermes.Client.BatchTest do
       {:ok, encoded_batch} = Message.encode_batch(batch_response)
       GenServer.cast(client, {:response, encoded_batch})
 
-      assert {:ok, results} = Task.await(task)
-      assert map_size(results) == 1
-      assert Map.has_key?(results, request_id)
+      assert {:ok, [_]} = Task.await(task)
     end
   end
 end

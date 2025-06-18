@@ -3,6 +3,7 @@ defmodule Hermes.Server.Transport.STDIOTest do
 
   import ExUnit.CaptureIO
 
+  alias Hermes.MCP.Message
   alias Hermes.Server.Transport.STDIO
 
   @moduletag capture_log: true, capture_io: true, skip: true
