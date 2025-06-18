@@ -176,6 +176,91 @@ defmodule Hermes.Server.Base do
     GenServer.call(server, {:send_notification, method, params})
   end
 
+  @doc """
+  Sends a resources list changed notification to the client.
+
+  This notification informs the client that the list of available resources has changed.
+  The server must have declared the `resources.listChanged` capability.
+  """
+  @spec send_resources_list_changed(GenServer.name()) :: :ok | {:error, term()}
+  def send_resources_list_changed(server) do
+    send_notification(server, "notifications/resources/list_changed", %{})
+  end
+
+  @doc """
+  Sends a resource updated notification to the client.
+
+  This notification informs the client that a specific resource has been updated.
+
+  ## Parameters
+    * `server` - The server process
+    * `uri` - The URI of the updated resource
+    * `title` - Optional human-readable title for the resource
+  """
+  @spec send_resource_updated(GenServer.name(), String.t(), String.t() | nil) :: :ok | {:error, term()}
+  def send_resource_updated(server, uri, title \\ nil) do
+    params = %{"uri" => uri}
+    params = if title, do: Map.put(params, "title", title), else: params
+    send_notification(server, "notifications/resources/updated", params)
+  end
+
+  @doc """
+  Sends a prompts list changed notification to the client.
+
+  This notification informs the client that the list of available prompts has changed.
+  The server must have declared the `prompts.listChanged` capability.
+  """
+  @spec send_prompts_list_changed(GenServer.name()) :: :ok | {:error, term()}
+  def send_prompts_list_changed(server) do
+    send_notification(server, "notifications/prompts/list_changed", %{})
+  end
+
+  @doc """
+  Sends a tools list changed notification to the client.
+
+  This notification informs the client that the list of available tools has changed.
+  The server must have declared the `tools.listChanged` capability.
+  """
+  @spec send_tools_list_changed(GenServer.name()) :: :ok | {:error, term()}
+  def send_tools_list_changed(server) do
+    send_notification(server, "notifications/tools/list_changed", %{})
+  end
+
+  @doc """
+  Sends a log message notification to the client.
+
+  ## Parameters
+    * `server` - The server process
+    * `level` - Log level (debug, info, notice, warning, error, critical, alert, emergency)
+    * `data` - The log message data
+    * `logger` - Optional logger name
+  """
+  @spec send_log_message(GenServer.name(), String.t(), String.t(), String.t() | nil) :: :ok | {:error, term()}
+  def send_log_message(server, level, data, logger \\ nil) do
+    params = %{"level" => level, "data" => data}
+    params = if logger, do: Map.put(params, "logger", logger), else: params
+    send_notification(server, "notifications/message", params)
+  end
+
+  @doc """
+  Sends a progress notification to the client.
+
+  ## Parameters
+    * `server` - The server process
+    * `progress_token` - The progress token (string or integer)
+    * `progress` - The current progress value
+    * `total` - Optional total value for the operation
+    * `message` - Optional message describing the current progress (2025-03-26 spec)
+  """
+  @spec send_progress(GenServer.name(), String.t() | integer(), number(), number() | nil, String.t() | nil) ::
+          :ok | {:error, term()}
+  def send_progress(server, progress_token, progress, total \\ nil, message \\ nil) do
+    params = %{"progressToken" => progress_token, "progress" => progress}
+    params = if total, do: Map.put(params, "total", total), else: params
+    params = if message, do: Map.put(params, "message", message), else: params
+    send_notification(server, "notifications/progress", params)
+  end
+
   # GenServer callbacks
 
   @impl GenServer
@@ -476,6 +561,37 @@ defmodule Hermes.Server.Base do
     # TODO(zoedsoupe): we need to actually keep track of running requests...
     Logging.server_event("handling_notiifcation_cancellation", %{params: notification["params"]})
     {:noreply, state}
+  end
+
+  defp handle_notification(%{"method" => "notifications/roots/list_changed"} = notification, session, state) do
+    Logging.server_event("client_roots_list_changed", %{session_id: session.id})
+
+    Telemetry.execute(
+      Telemetry.event_server_notification(),
+      %{system_time: System.system_time()},
+      %{method: "roots/list_changed", session_id: session.id}
+    )
+
+    server_notification(notification, state)
+  end
+
+  defp handle_notification(%{"method" => "notifications/progress"} = notification, session, state) do
+    params = notification["params"] || %{}
+
+    Logging.server_event("client_progress", %{
+      session_id: session.id,
+      progress_token: params["progressToken"],
+      progress: params["progress"],
+      total: params["total"]
+    })
+
+    Telemetry.execute(
+      Telemetry.event_server_notification(),
+      %{system_time: System.system_time()},
+      %{method: "progress", session_id: session.id, progress_token: params["progressToken"]}
+    )
+
+    server_notification(notification, state)
   end
 
   defp handle_notification(notification, _session, state) do

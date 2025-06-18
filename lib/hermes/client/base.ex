@@ -1291,6 +1291,22 @@ defmodule Hermes.Client.Base do
     handle_cancelled_notification(notification, state)
   end
 
+  defp handle_notification(%{"method" => "notifications/resources/list_changed"} = notification, state) do
+    handle_resources_list_changed_notification(notification, state)
+  end
+
+  defp handle_notification(%{"method" => "notifications/resources/updated"} = notification, state) do
+    handle_resource_updated_notification(notification, state)
+  end
+
+  defp handle_notification(%{"method" => "notifications/prompts/list_changed"} = notification, state) do
+    handle_prompts_list_changed_notification(notification, state)
+  end
+
+  defp handle_notification(%{"method" => "notifications/tools/list_changed"} = notification, state) do
+    handle_tools_list_changed_notification(notification, state)
+  end
+
   defp handle_notification(_, state), do: state
 
   defp handle_cancelled_notification(%{"params" => params}, state) do
@@ -1354,6 +1370,56 @@ defmodule Hermes.Client.Base do
       end
 
     Logging.client_event("server_log", %{level: level, data: data, logger: logger}, level: elixir_level)
+  end
+
+  defp handle_resources_list_changed_notification(_notification, state) do
+    Logging.client_event("resources_list_changed", nil)
+
+    Telemetry.execute(
+      Telemetry.event_client_notification(),
+      %{system_time: System.system_time()},
+      %{method: "resources/list_changed"}
+    )
+
+    state
+  end
+
+  defp handle_resource_updated_notification(%{"params" => params}, state) do
+    uri = params["uri"]
+
+    Logging.client_event("resource_updated", %{uri: uri})
+
+    Telemetry.execute(
+      Telemetry.event_client_notification(),
+      %{system_time: System.system_time()},
+      %{method: "resources/updated", uri: uri}
+    )
+
+    state
+  end
+
+  defp handle_prompts_list_changed_notification(_notification, state) do
+    Logging.client_event("prompts_list_changed", nil)
+
+    Telemetry.execute(
+      Telemetry.event_client_notification(),
+      %{system_time: System.system_time()},
+      %{method: "prompts/list_changed"}
+    )
+
+    state
+  end
+
+  defp handle_tools_list_changed_notification(_notification, state) do
+    Logging.client_event("tools_list_changed", nil)
+
+    Telemetry.execute(
+      Telemetry.event_client_notification(),
+      %{system_time: System.system_time()},
+      %{method: "tools/list_changed"}
+    )
+
+    state
   end
 
   # Helper functions

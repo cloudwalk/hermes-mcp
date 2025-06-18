@@ -117,6 +117,20 @@ defmodule Hermes.Server do
       @behaviour Hermes.Server.Behaviour
 
       import Hermes.Server, only: [component: 1, component: 2]
+
+      import Hermes.Server.Base,
+        only: [
+          send_resources_list_changed: 1,
+          send_resource_updated: 2,
+          send_resource_updated: 3,
+          send_prompts_list_changed: 1,
+          send_tools_list_changed: 1,
+          send_log_message: 3,
+          send_log_message: 4,
+          send_progress: 4,
+          send_progress: 5
+        ]
+
       import Hermes.Server.Frame
 
       require Hermes.MCP.Message

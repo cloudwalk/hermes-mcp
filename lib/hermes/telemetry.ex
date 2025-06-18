@@ -58,6 +58,7 @@ defmodule Hermes.Telemetry do
   def event_client_response, do: [:client, :response]
   def event_client_terminate, do: [:client, :terminate]
   def event_client_error, do: [:client, :error]
+  def event_client_notification, do: [:client, :notification]
 
   # Server events
   def event_server_init, do: [:server, :init]
