@@ -51,6 +51,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
@@ -328,7 +329,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       if sse_handler?, do: {:reply, {:sse, batch_response}, state}, else: {:reply, {:ok, batch_response}, state}
     else
       {:error, %Error{} = error} -> {:reply, Error.to_json_rpc(error), state}
-        {:error, reason} -> {:reply, {:error, Error.protocol(:internal_error, %{reason: reason})}, state}
+      {:error, reason} -> {:reply, {:error, Error.protocol(:internal_error, %{reason: reason})}, state}
     end
   end
 

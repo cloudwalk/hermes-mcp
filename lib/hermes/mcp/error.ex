@@ -250,6 +250,17 @@ defmodule Hermes.MCP.Error do
     Message.encode_error(%{"error" => error_payload}, id)
   end
 
+  def build_json_rpc(%__MODULE__{} = error, id \\ ID.generate_error_id()) do
+    %{
+      "code" => error.code,
+      "message" => error.message || default_message(error.reason),
+      "data" => if(map_size(error.data) > 0, do: error.data)
+    }
+    |> Enum.reject(fn {_, v} -> is_nil(v) end)
+    |> Map.new()
+    |> then(&%{"error" => &1, "id" => id})
+  end
+
   # Private helpers
 
   defp reason_from_code(@parse_error), do: :parse_error

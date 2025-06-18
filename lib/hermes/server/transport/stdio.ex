@@ -13,6 +13,7 @@ defmodule Hermes.Server.Transport.STDIO do
   import Peri
 
   alias Hermes.Logging
+  alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport

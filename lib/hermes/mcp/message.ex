@@ -558,4 +558,64 @@ defmodule Hermes.MCP.Message do
   Returns the standard progress notification parameters schema for 2024-11-05.
   """
   def progress_params_schema, do: @progress_notif_params_schema
+
+  @doc """
+  Builds a response message map without encoding to JSON.
+
+  This is useful for batch processing where we need the raw map.
+
+  ## Parameters
+
+    * `result` - The result data
+    * `id` - The response ID
+    
+  ## Examples
+
+      iex> Message.build_response(%{"value" => 42}, "req_123")
+      %{"jsonrpc" => "2.0", "result" => %{"value" => 42}, "id" => "req_123"}
+  """
+  @spec build_response(map(), String.t() | integer()) :: map()
+  def build_response(result, id) do
+    %{"jsonrpc" => "2.0", "result" => result, "id" => id}
+  end
+
+  @doc """
+  Builds an error message map without encoding to JSON.
+
+  This is useful for batch processing where we need the raw map.
+
+  ## Parameters
+
+    * `error` - The error map with code, message, and optional data
+    * `id` - The error response ID
+    
+  ## Examples
+
+      iex> Message.build_error(%{"code" => -32600, "message" => "Invalid Request"}, "req_123")
+      %{"jsonrpc" => "2.0", "error" => %{"code" => -32600, "message" => "Invalid Request"}, "id" => "req_123"}
+  """
+  @spec build_error(map(), String.t() | integer() | nil) :: map()
+  def build_error(error, id) do
+    %{"jsonrpc" => "2.0", "error" => error, "id" => id}
+  end
+
+  @doc """
+  Builds a notification message map without encoding to JSON.
+
+  This is useful for batch processing where we need the raw map.
+
+  ## Parameters
+
+    * `method` - The notification method
+    * `params` - The notification parameters
+    
+  ## Examples
+
+      iex> Message.build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      %{"jsonrpc" => "2.0", "method" => "notifications/message", "params" => %{"level" => "info", "data" => "test"}}
+  """
+  @spec build_notification(String.t(), map()) :: map()
+  def build_notification(method, params) do
+    %{"jsonrpc" => "2.0", "method" => method, "params" => params}
+  end
 end

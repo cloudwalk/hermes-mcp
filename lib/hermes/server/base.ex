@@ -213,30 +213,19 @@ defmodule Hermes.Server.Base do
   @impl GenServer
   def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
     with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
-      cond do
-        Message.is_ping(decoded) ->
-          handle_server_ping(decoded, state)
+      case handle_single_request(decoded, session, state) do
+        {:reply, {:ok, %{"result" => result} = response}, new_state} ->
+          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
 
-        not (Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session)) ->
-          Logging.server_event("session_not_initialized_check", %{
-            session_id: session.id,
-            initialized: session.initialized,
-            method: decoded["method"]
-          })
+        {:reply, {:ok, %{"error" => error} = response}, new_state} ->
+          {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
 
-          handle_server_not_initialized(state)
-
-        Message.is_request(decoded) ->
-          handle_request(decoded, session, state)
-
-        true ->
-          error = Error.protocol(:invalid_request, %{message: "Expected request but got different message type"})
-          {:reply, {:error, error}, state}
+        {:reply, {:error, error}, new_state} ->
+          {:reply, {:error, error}, new_state}
       end
     end
   end
 
-  @impl GenServer
   def handle_call({:batch_request, messages, session_id, context}, _from, state) when is_list(messages) do
     with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
       handle_batch_request(messages, session, state)
@@ -312,8 +301,31 @@ defmodule Hermes.Server.Base do
     :ok
   end
 
+  defp handle_single_request(decoded, session, state) do
+    cond do
+      Message.is_ping(decoded) ->
+        handle_server_ping(decoded, state)
+
+      not (Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session)) ->
+        Logging.server_event("session_not_initialized_check", %{
+          session_id: session.id,
+          initialized: session.initialized,
+          method: decoded["method"]
+        })
+
+        handle_server_not_initialized(state)
+
+      Message.is_request(decoded) ->
+        handle_request(decoded, session, state)
+
+      true ->
+        error = Error.protocol(:invalid_request, %{message: "Expected request but got different message type"})
+        {:reply, {:error, error}, state}
+    end
+  end
+
   defp handle_server_ping(%{"id" => request_id}, state) do
-    {:reply, encode_response(%{}, request_id), state}
+    {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
   defp handle_server_not_initialized(state) do
@@ -325,7 +337,7 @@ defmodule Hermes.Server.Base do
       level: :warning
     )
 
-    {:reply, Error.to_json_rpc(error), state}
+    {:reply, {:ok, Error.build_json_rpc(error)}, state}
   end
 
   defp handle_batch_request([], _session, state) do
@@ -344,7 +356,7 @@ defmodule Hermes.Server.Base do
   end
 
   defp process_batch_messages(messages, session, state) do
-    {responses, final_state} = 
+    {responses, final_state} =
       Enum.reduce(messages, {[], state}, fn message, {acc_responses, acc_state} ->
         case process_single_message(message, session, acc_state) do
           {nil, new_state} -> {acc_responses, new_state}
@@ -363,19 +375,19 @@ defmodule Hermes.Server.Base do
 
       Message.is_ping(message) ->
         {:reply, {:ok, response}, new_state} = handle_server_ping(message, state)
-        {decode_json_response(response), new_state}
+        {response, new_state}
 
       not Session.is_initialized(session) ->
-        error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
-        {Error.to_json_rpc!(error, message["id"]), state}
+        {:reply, {:ok, response}, new_state} = handle_server_not_initialized(state)
+        {response, new_state}
 
       Message.is_request(message) ->
         {:reply, {:ok, response}, new_state} = handle_request(message, session, state)
-        {decode_json_response(response), new_state}
+        {response, new_state}
 
       true ->
         error = Error.protocol(:invalid_request, %{message: "Invalid message in batch"})
-        {Error.to_json_rpc!(error, Map.get(message, "id")), state}
+        {Error.build_json_rpc(error, Map.get(message, "id")), state}
     end
   end
 
@@ -387,7 +399,7 @@ defmodule Hermes.Server.Base do
     protocol_version = negotiate_protocol_version(state.supported_versions, requested_version)
     :ok = Session.update_from_initialization(session.name, protocol_version, client_info, client_capabilities)
 
-    response = %{
+    result = %{
       "protocolVersion" => protocol_version,
       "serverInfo" => state.server_info,
       "capabilities" => state.capabilities
@@ -405,14 +417,14 @@ defmodule Hermes.Server.Base do
       %{method: "initialize", status: :success}
     )
 
-    {:reply, encode_response(response, request["id"]), state}
+    {:reply, {:ok, Message.build_response(result, request["id"])}, state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
     :ok = Session.set_log_level(session.name, level)
-    {:reply, encode_response(%{}, request_id), state}
+    {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => method} = request, _session, state) do
@@ -489,7 +501,7 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, encode_response(response, request_id), %{state | frame: frame}}
+        {:reply, {:ok, Message.build_response(response, request_id)}, %{state | frame: frame}}
 
       {:noreply, %Frame{} = frame} ->
         Telemetry.execute(
@@ -515,7 +527,7 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, Error.to_json_rpc(error, request_id), %{state | frame: frame}}
+        {:reply, {:ok, Error.build_json_rpc(error, request_id)}, %{state | frame: frame}}
     end
   end
 
@@ -587,15 +599,9 @@ defmodule Hermes.Server.Base do
   end
 
   defp encode_notification(method, params) do
-    notification = %{"method" => method, "params" => params}
+    notification = Message.build_notification(method, params)
     Logging.message("outgoing", "notification", nil, notification)
     Message.encode_notification(notification)
-  end
-
-  defp encode_response(result, id) do
-    response = %{"result" => result, "id" => id}
-    Logging.message("outgoing", "response", id, response)
-    Message.encode_response(%{"result" => result}, id)
   end
 
   defp send_to_transport(nil, _data) do
