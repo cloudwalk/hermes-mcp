@@ -42,6 +42,17 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
 
       assert transport == registry.transport(StubServer, :sse)
     end
+
+    test "uses custom registry when provided" do
+      start_supervised!(MockCustomRegistry)
+      assert Process.whereis(MockCustomRegistry)
+
+      opts = SSEPlug.init(server: StubServer, mode: :sse, registry: MockCustomRegistry)
+
+      expected_transport = MockCustomRegistry.transport(StubServer, :sse)
+
+      assert opts.transport == expected_transport
+    end
   end
 
   describe "SSE endpoint" do

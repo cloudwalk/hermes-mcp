@@ -35,6 +35,7 @@ if Code.ensure_loaded?(Plug) do
     - `:server` - The server process name (required)
     - `:session_header` - Custom header name for session ID (default: "mcp-session-id")
     - `:timeout` - Request timeout in milliseconds (default: 30000)
+    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: `Hermes.Server.Registry`)
 
     ## Security Features
 
@@ -61,7 +62,6 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.MCP.Error
     alias Hermes.MCP.ID
     alias Hermes.MCP.Message
-    alias Hermes.Server.Registry, as: ServerRegistry
     alias Hermes.Server.Transport.StreamableHTTP
     alias Hermes.SSE.Streaming
     alias Plug.Conn.Unfetched
@@ -76,7 +76,8 @@ if Code.ensure_loaded?(Plug) do
     @impl Plug
     def init(opts) do
       server = Keyword.fetch!(opts, :server)
-      transport = ServerRegistry.transport(server, :streamable_http)
+      registry = Keyword.get(opts, :registry, Hermes.Server.Registry)
+      transport = registry.transport(server, :streamable_http)
       session_header = Keyword.get(opts, :session_header, @default_session_header)
       timeout = Keyword.get(opts, :timeout, @default_timeout)
 

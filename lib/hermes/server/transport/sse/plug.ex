@@ -22,11 +22,11 @@ if Code.ensure_loaded?(Plug) do
 
         scope "/mcp" do
           pipe_through :mcp
-          
+
           # SSE endpoint
-          get "/sse", Hermes.Server.Transport.SSE.Plug, 
+          get "/sse", Hermes.Server.Transport.SSE.Plug,
             server: :your_server_name, mode: :sse
-          
+
           # POST endpoint
           post "/messages", Hermes.Server.Transport.SSE.Plug,
             server: :your_server_name, mode: :post
@@ -40,7 +40,7 @@ if Code.ensure_loaded?(Plug) do
           mode: :sse,
           at: "/sse",
           method_whitelist: ["GET"]
-          
+
         plug Hermes.Server.Transport.SSE.Plug,
           server: :your_server_name,
           mode: :post,
@@ -52,6 +52,7 @@ if Code.ensure_loaded?(Plug) do
     - `:server` - The server process name (required)
     - `:mode` - Either `:sse` or `:post` to determine endpoint behavior (required)
     - `:timeout` - Request timeout in milliseconds (default: 30000)
+    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: `Hermes.Server.Registry`)
 
     ## Security Features
 
@@ -76,7 +77,6 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.MCP.Error
     alias Hermes.MCP.ID
     alias Hermes.MCP.Message
-    alias Hermes.Server.Registry, as: ServerRegistry
     alias Hermes.Server.Transport.SSE
     alias Hermes.SSE.Streaming
     alias Plug.Conn.Unfetched
@@ -96,7 +96,8 @@ if Code.ensure_loaded?(Plug) do
         raise ArgumentError, "SSE.Plug requires :mode to be either :sse or :post"
       end
 
-      transport = ServerRegistry.transport(server, :sse)
+      registry = Keyword.get(opts, :registry, Hermes.Server.Registry)
+      transport = registry.transport(server, :sse)
       timeout = Keyword.get(opts, :timeout, @default_timeout)
 
       %{

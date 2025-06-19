@@ -726,7 +726,7 @@ defmodule Hermes.Server.Base do
   defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
     session_name = registry.server_session(state.module, session_id)
 
-    case SessionSupervisor.create_session(state.module, session_id) do
+    case SessionSupervisor.create_session(registry, state.module, session_id) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}

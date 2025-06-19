@@ -41,6 +41,17 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       assert transport == registry.transport(StubServer, :streamable_http)
     end
+
+    test "uses custom registry when provided" do
+      start_supervised!(MockCustomRegistry)
+      assert Process.whereis(MockCustomRegistry)
+
+      opts = StreamableHTTPPlug.init(server: StubServer, mode: :streamable_http, registry: MockCustomRegistry)
+
+      expected_transport = MockCustomRegistry.transport(StubServer, :streamable_http)
+
+      assert opts.transport == expected_transport
+    end
   end
 
   describe "GET endpoint" do
