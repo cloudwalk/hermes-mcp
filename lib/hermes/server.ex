@@ -99,20 +99,6 @@ defmodule Hermes.Server do
 
   @doc false
   defmacro __using__(opts) do
-    module = __CALLER__.module
-
-    capabilities = Enum.reduce(opts[:capabilities] || [], %{}, &parse_capability/2)
-    protocol_versions = opts[:protocol_versions] || @protocol_versions
-    name = opts[:name]
-    version = opts[:version]
-
-    if is_nil(name) and is_nil(version) do
-      raise ConfigurationError, module: module, missing_key: :both
-    end
-
-    if is_nil(name), do: raise(ConfigurationError, module: module, missing_key: :name)
-    if is_nil(version), do: raise(ConfigurationError, module: module, missing_key: :version)
-
     quote do
       @behaviour Hermes.Server.Behaviour
 
@@ -136,7 +122,11 @@ defmodule Hermes.Server do
       require Hermes.MCP.Message
 
       Module.register_attribute(__MODULE__, :components, accumulate: true)
+      Module.register_attribute(__MODULE__, :hermes_server_opts, persist: true)
+      Module.put_attribute(__MODULE__, :hermes_server_opts, unquote(opts))
+
       @before_compile Hermes.Server
+      @after_compile Hermes.Server
 
       def child_spec(opts) do
         %{
@@ -147,44 +137,8 @@ defmodule Hermes.Server do
         }
       end
 
-      @impl Hermes.Server.Behaviour
-      def server_info do
-        %{"name" => unquote(name), "version" => unquote(version)}
-      end
-
-      @impl Hermes.Server.Behaviour
-      def server_capabilities, do: unquote(Macro.escape(capabilities))
-
-      @impl Hermes.Server.Behaviour
-      def supported_protocol_versions, do: unquote(protocol_versions)
-
-      defoverridable server_info: 0,
-                     server_capabilities: 0,
-                     supported_protocol_versions: 0,
-                     child_spec: 1
+      defoverridable child_spec: 1
     end
-  end
-
-  defp parse_capability(capability, %{} = capabilities) when is_server_capability(capability) do
-    Map.put(capabilities, to_string(capability), %{})
-  end
-
-  defp parse_capability({:resources, opts}, %{} = capabilities) do
-    subscribe? = opts[:subscribe?]
-    list_changed? = opts[:list_changed?]
-
-    capabilities
-    |> Map.put("resources", %{})
-    |> then(&if(is_nil(subscribe?), do: &1, else: Map.put(&1, :subscribe, subscribe?)))
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
-  end
-
-  defp parse_capability({capability, opts}, %{} = capabilities) when is_server_capability(capability) do
-    list_changed? = opts[:list_changed?]
-
-    capabilities
-    |> Map.put(to_string(capability), %{})
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
   end
 
   @doc """
@@ -223,9 +177,25 @@ defmodule Hermes.Server do
   defmacro __before_compile__(env) do
     components = Module.get_attribute(env.module, :components, [])
 
+    opts =
+      case Module.get_attribute(env.module, :hermes_server_opts, []) do
+        [opts] when is_list(opts) -> opts
+        opts when is_list(opts) -> opts
+        _ -> []
+      end
+
+    capabilities = Enum.reduce(opts[:capabilities] || [], %{}, &parse_capability/2)
+    protocol_versions = opts[:protocol_versions] || @protocol_versions
+    name = opts[:name]
+    version = opts[:version]
+
     tools = for {:tool, name, mod} <- components, do: {name, mod}
     prompts = for {:prompt, name, mod} <- components, do: {name, mod}
     resources = for {:resource, name, mod} <- components, do: {name, mod}
+
+    has_server_info = Module.defines?(env.module, {:server_info, 0})
+    has_server_capabilities = Module.defines?(env.module, {:server_capabilities, 0})
+    has_supported_protocol_versions = Module.defines?(env.module, {:supported_protocol_versions, 0})
 
     quote do
       def __components__(:tool), do: unquote(Macro.escape(tools))
@@ -238,7 +208,79 @@ defmodule Hermes.Server do
         Handlers.handle(request, __MODULE__, frame)
       end
 
+      if not unquote(has_server_info) do
+        @impl Hermes.Server.Behaviour
+        def server_info do
+          %{"name" => unquote(name), "version" => unquote(version)}
+        end
+      end
+
+      if not unquote(has_server_capabilities) do
+        @impl Hermes.Server.Behaviour
+        def server_capabilities, do: unquote(Macro.escape(capabilities))
+      end
+
+      if not unquote(has_supported_protocol_versions) do
+        @impl Hermes.Server.Behaviour
+        def supported_protocol_versions, do: unquote(protocol_versions)
+      end
+
       defoverridable handle_request: 2
     end
   end
+
+  def parse_capability(capability, %{} = capabilities) when is_server_capability(capability) do
+    Map.put(capabilities, to_string(capability), %{})
+  end
+
+  def parse_capability({:resources, opts}, %{} = capabilities) do
+    subscribe? = opts[:subscribe?]
+    list_changed? = opts[:list_changed?]
+
+    capabilities
+    |> Map.put("resources", %{})
+    |> then(&if(is_nil(subscribe?), do: &1, else: Map.put(&1, :subscribe, subscribe?)))
+    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
+  end
+
+  def parse_capability({capability, opts}, %{} = capabilities) when is_server_capability(capability) do
+    list_changed? = opts[:list_changed?]
+
+    capabilities
+    |> Map.put(to_string(capability), %{})
+    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
+  end
+
+  @doc false
+  def __after_compile__(env, _bytecode) do
+    module = env.module
+
+    opts =
+      case Module.get_attribute(module, :hermes_server_opts, []) do
+        [opts] when is_list(opts) -> opts
+        opts when is_list(opts) -> opts
+        _ -> []
+      end
+
+    name = opts[:name]
+    version = opts[:version]
+
+    if not Module.defines?(env.module, {:server_info, 0}) do
+      validate_server_info!(module, name, version)
+    end
+  end
+
+  def validate_server_info!(module, nil, nil) do
+    raise ConfigurationError, module: module, missing_key: :both
+  end
+
+  def validate_server_info!(module, nil, _) do
+    raise ConfigurationError, module: module, missing_key: :name
+  end
+
+  def validate_server_info!(module, _, nil) do
+    raise ConfigurationError, module: module, missing_key: :version
+  end
+
+  def validate_server_info!(_, name, version) when is_binary(name) and is_binary(version), do: :ok
 end
