@@ -116,7 +116,8 @@ if Code.ensure_loaded?(Plug) do
     # POST request handler - processes MCP messages
 
     defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
-      with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
+      with :ok <- validate_accept_header(conn),
+           {:ok, body, conn} <- maybe_read_request_body(conn, opts),
            {:ok, messages} <- maybe_parse_messages(body) do
         session_id = determine_session_id(conn, session_header, messages)
         context = build_request_context(conn)
@@ -131,6 +132,9 @@ if Code.ensure_loaded?(Plug) do
         |> prepare_message_or_batch()
         |> process_message(conn, transport, session_id, context, session_header)
       else
+        {:error, :invalid_accept_header} ->
+          send_error(conn, 406, "Not Acceptable: Client must accept both application/json and text/event-stream")
+
         {:error, :invalid_json} ->
           send_jsonrpc_error(conn, Error.protocol(:parse_error, %{message: "Invalid JSON"}), nil)
 
@@ -300,6 +304,20 @@ if Code.ensure_loaded?(Plug) do
       |> get_req_header("accept")
       |> List.first("")
       |> String.contains?("text/event-stream")
+    end
+
+    defp validate_accept_header(conn) do
+      accept_header =
+        conn
+        |> get_req_header("accept")
+        |> List.first("")
+
+      if String.contains?(accept_header, "application/json") and
+           String.contains?(accept_header, "text/event-stream") do
+        :ok
+      else
+        {:error, :invalid_accept_header}
+      end
     end
 
     defp get_or_create_session_id(conn, session_header) do
