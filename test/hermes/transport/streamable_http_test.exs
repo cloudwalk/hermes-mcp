@@ -316,7 +316,7 @@ defmodule Hermes.Transport.StreamableHTTPTest do
 
       Bypass.expect(bypass, "POST", "/mcp", fn conn ->
         assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
-        assert "application/json" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
+        assert "application/json, text/event-stream" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
 
         conn = Plug.Conn.put_resp_header(conn, "content-type", "application/json")
         Plug.Conn.resp(conn, 200, ~s|{"jsonrpc":"2.0","id":"1","result":{}}|)

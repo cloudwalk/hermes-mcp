@@ -137,6 +137,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 202
@@ -151,6 +152,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 200
@@ -173,6 +175,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", init_body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert init_conn.status == 200
@@ -188,6 +191,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", notification_body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
@@ -205,6 +209,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
@@ -220,6 +225,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", "invalid json")
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 400
@@ -242,6 +248,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", init_body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert init_conn.status == 200
@@ -257,6 +264,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", notification_body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
@@ -274,6 +282,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         |> conn("/", "")
         |> Map.put(:body_params, %{"_json" => batch})
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", session_id)
         |> StreamableHTTPPlug.call(opts)
 
@@ -376,6 +385,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", "header-session-123")
         |> StreamableHTTPPlug.call(opts)
 
@@ -390,6 +400,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
       assert conn.status == 202
@@ -408,6 +419,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         :post
         |> conn("/", body)
         |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
         |> put_req_header("mcp-session-id", "should-be-ignored")
         |> StreamableHTTPPlug.call(opts)
 
