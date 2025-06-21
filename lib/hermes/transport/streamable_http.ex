@@ -224,7 +224,7 @@ defmodule Hermes.Transport.StreamableHTTP do
   defp send_http_request(state, message) do
     headers =
       state.headers
-      |> Map.put("accept", "application/json")
+      |> Map.put("accept", "application/json, text/event-stream")
       |> Map.put("content-type", "application/json")
       |> put_session_header(state.session_id)
 

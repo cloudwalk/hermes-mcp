@@ -45,6 +45,7 @@
           (zig pkgs)
           _7zz
           xz
+          nodejs
         ];
       };
     });
