@@ -176,26 +176,11 @@ defmodule Hermes.Server do
   @doc false
   defmacro __before_compile__(env) do
     components = Module.get_attribute(env.module, :components, [])
-
-    opts =
-      case Module.get_attribute(env.module, :hermes_server_opts, []) do
-        [opts] when is_list(opts) -> opts
-        opts when is_list(opts) -> opts
-        _ -> []
-      end
-
-    capabilities = Enum.reduce(opts[:capabilities] || [], %{}, &parse_capability/2)
-    protocol_versions = opts[:protocol_versions] || @protocol_versions
-    name = opts[:name]
-    version = opts[:version]
+    opts = get_server_opts(env.module)
 
     tools = for {:tool, name, mod} <- components, do: {name, mod}
     prompts = for {:prompt, name, mod} <- components, do: {name, mod}
     resources = for {:resource, name, mod} <- components, do: {name, mod}
-
-    has_server_info = Module.defines?(env.module, {:server_info, 0})
-    has_server_capabilities = Module.defines?(env.module, {:server_capabilities, 0})
-    has_supported_protocol_versions = Module.defines?(env.module, {:supported_protocol_versions, 0})
 
     quote do
       def __components__(:tool), do: unquote(Macro.escape(tools))
@@ -208,24 +193,50 @@ defmodule Hermes.Server do
         Handlers.handle(request, __MODULE__, frame)
       end
 
-      if not unquote(has_server_info) do
-        @impl Hermes.Server.Behaviour
-        def server_info do
-          %{"name" => unquote(name), "version" => unquote(version)}
-        end
-      end
+      unquote(maybe_define_server_info(env.module, opts[:name], opts[:version]))
+      unquote(maybe_define_server_capabilities(env.module, opts[:capabilities]))
+      unquote(maybe_define_protocol_versions(env.module, opts[:protocol_versions]))
 
-      if not unquote(has_server_capabilities) do
+      defoverridable handle_request: 2
+    end
+  end
+
+  defp get_server_opts(module) do
+    case Module.get_attribute(module, :hermes_server_opts, []) do
+      [opts] when is_list(opts) -> opts
+      opts when is_list(opts) -> opts
+      _ -> []
+    end
+  end
+
+  defp maybe_define_server_info(module, name, version) do
+    if not Module.defines?(module, {:server_info, 0}) or is_nil(name) or is_nil(version) do
+      quote do
+        @impl Hermes.Server.Behaviour
+        def server_info, do: %{"name" => unquote(name), "version" => unquote(version)}
+      end
+    end
+  end
+
+  defp maybe_define_server_capabilities(module, capabilities_config) do
+    if not Module.defines?(module, {:server_capabilities, 0}) do
+      capabilities = Enum.reduce(capabilities_config || [], %{}, &parse_capability/2)
+
+      quote do
         @impl Hermes.Server.Behaviour
         def server_capabilities, do: unquote(Macro.escape(capabilities))
       end
+    end
+  end
 
-      if not unquote(has_supported_protocol_versions) do
+  defp maybe_define_protocol_versions(module, protocol_versions) do
+    if not Module.defines?(module, {:supported_protocol_versions, 0}) do
+      versions = protocol_versions || @protocol_versions
+
+      quote do
         @impl Hermes.Server.Behaviour
-        def supported_protocol_versions, do: unquote(protocol_versions)
+        def supported_protocol_versions, do: unquote(versions)
       end
-
-      defoverridable handle_request: 2
     end
   end
 
