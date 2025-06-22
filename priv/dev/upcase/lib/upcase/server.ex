@@ -33,9 +33,4 @@ defmodule Upcase.Server do
   def init(:ok, frame) do
     {:ok, frame}
   end
-
-  @impl true
-  def handle_notification(_notification, state) do
-    {:noreply, state}
-  end
 end

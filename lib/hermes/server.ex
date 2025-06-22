@@ -193,11 +193,16 @@ defmodule Hermes.Server do
         Handlers.handle(request, __MODULE__, frame)
       end
 
+      @impl Hermes.Server.Behaviour
+      def handle_notification(_notification, frame) do
+        {:noreply, frame}
+      end
+
       unquote(maybe_define_server_info(env.module, opts[:name], opts[:version]))
       unquote(maybe_define_server_capabilities(env.module, opts[:capabilities]))
       unquote(maybe_define_protocol_versions(env.module, opts[:protocol_versions]))
 
-      defoverridable handle_request: 2
+      defoverridable handle_request: 2, handle_notification: 2
     end
   end
 
