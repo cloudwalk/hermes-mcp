@@ -186,7 +186,6 @@ defmodule Hermes.Server do
       def __components__(:tool), do: unquote(Macro.escape(tools))
       def __components__(:prompt), do: unquote(Macro.escape(prompts))
       def __components__(:resource), do: unquote(Macro.escape(resources))
-      def __components__(_), do: []
 
       @impl Hermes.Server.Behaviour
       def handle_request(%{} = request, frame) do
@@ -194,9 +193,7 @@ defmodule Hermes.Server do
       end
 
       @impl Hermes.Server.Behaviour
-      def handle_notification(_notification, frame) do
-        {:noreply, frame}
-      end
+      def handle_notification(_notif, frame), do: {:noreply, frame}
 
       unquote(maybe_define_server_info(env.module, opts[:name], opts[:version]))
       unquote(maybe_define_server_capabilities(env.module, opts[:capabilities]))
