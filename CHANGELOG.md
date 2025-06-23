@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.1...v0.10.2) (2025-06-23)
+
+
+### Bug Fixes
+
+* default implementation for server handle_notification ([#135](https://github.com/cloudwalk/hermes-mcp/issues/135)) ([c958041](https://github.com/cloudwalk/hermes-mcp/commit/c9580410162c31a62190631f6702024ea3458beb))
+
+
+### Code Refactoring
+
+* cleaner peri integration ([#137](https://github.com/cloudwalk/hermes-mcp/issues/137)) ([43226cc](https://github.com/cloudwalk/hermes-mcp/commit/43226cc9fb2f49edfbf8685fe181eb3093304308)), closes [#123](https://github.com/cloudwalk/hermes-mcp/issues/123)
+
 ## [0.10.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.0...v0.10.1) (2025-06-21)
 
 
