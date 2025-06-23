@@ -17,10 +17,8 @@ defmodule MyServer.Tools.Calculator do
   alias Hermes.Server.Response
 
   schema do
-    %{
-      a: {:required, :number},
-      b: {:required, :number}
-    }
+    field :a, :float, required: true
+    field :b, :float, required: true
   end
 
   @impl true
@@ -43,13 +41,13 @@ defmodule MyServer.Tools.UserManager do
   alias Hermes.Server.Response
 
   schema do
-    field :email, {:required, :string}, format: "email", description: "User's email address"
+    field :email, :string, required: true, format: "email", description: "User's email address"
     field :age, {:integer, {:range, {0, 150}}}, description: "Age in years"
     field :website, :string, format: "uri"
     
     field :address, description: "Mailing address" do
-      field :street, {:required, :string}
-      field :city, {:required, :string}
+      field :street, :string, required: true
+      field :city, :string, required: true
       field :postal_code, :string, format: "postal-code"
       field :country, :string, description: "ISO 3166-1 alpha-2 code"
     end
@@ -75,10 +73,8 @@ defmodule MyServer.Tools.Divider do
   alias Hermes.Server.Response
 
   schema do
-    %{
-      a: {:required, :number},
-      b: {:required, :number}
-    }
+    field :a, :float, required: true
+    field :b, :float, required: true
   end
 
   @impl true
@@ -130,7 +126,7 @@ defmodule MyServer.Prompts.Assistant do
   alias Hermes.Server.Response
 
   schema do
-    %{style: {:required, {:enum, ["formal", "casual"]}}}
+    field :style, {:enum, ["formal", "casual"]}, required: true, type: :string
   end
 
   @impl true
@@ -163,7 +159,7 @@ defmodule MyServer.Prompts.CodeReview do
   use Hermes.Server.Component, type: :prompt
 
   schema do
-    %{language: {:required, :string}}
+    field :language, :string, required: true, description: "Programming language"
   end
 
   @impl true
@@ -191,9 +187,9 @@ defmodule MyServer.Prompts.DocumentAnalyzer do
   alias Hermes.Server.Response
 
   schema do
-    field :document, {:required, :string}, description: "The document text to analyze"
-    field :language, {:required, :string}, description: "Document language (e.g., 'en', 'es', 'fr')"
-    field :analysis_type, {:enum, ["summary", "sentiment", "keywords"]}, 
+    field :document, :string, required: true, description: "The document text to analyze"
+    field :language, :string, required: true, description: "Document language (e.g., 'en', 'es', 'fr')"
+    field :analysis_type, {:enum, ["summary", "sentiment", "keywords"]}, type: :string,
           description: "Type of analysis to perform"
     field :max_length, {:integer, {:default, 500}}, 
           description: "Maximum length of the summary in characters"
@@ -495,12 +491,12 @@ For richer JSON Schema output, use the `field` macro:
 
 ```elixir
 schema do
-  field :email, {:required, :string}, format: "email", description: "Contact email"
+  field :email, :string, required: true, format: "email", description: "Contact email"
   field :phone, :string, format: "phone"
-  field :birth_date, :string, format: "date", description: "YYYY-MM-DD"
+  field :birth_date, :date, required: true, description: "Date of birth"
   
   field :preferences do
-    field :theme, {:enum, ["light", "dark"]}, description: "UI theme"
+    field :theme, {:enum, ["light", "dark"]}, type: :string, description: "UI theme"
     field :notifications, :boolean, description: "Email notifications"
   end
 end
@@ -512,8 +508,8 @@ When using enum fields, you can specify the underlying type for proper JSON Sche
 
 ```elixir
 schema do
-  field :weight, {:required, :integer}
-  field :unit, {:required, {:enum, ["kg", "lb"]}}, type: :string
+  field :weight, :integer, required: true
+  field :unit, {:enum, ["kg", "lb"]}, required: true, type: :string
   field :status, {:enum, ["active", "inactive", "pending"]}, type: :string, description: "Current status"
 end
 ```
@@ -542,8 +538,92 @@ Supported metadata options:
 - `format`: JSON Schema format hint (email, uri, date, date-time, phone, etc.)
 - `description`: Human-readable field description
 - `type`: Explicit type for enum fields (string, integer, etc.)
+- `required`: Boolean indicating if field is required (cleaner than `{:required, type}`)
 
 Both schema styles work together - choose based on whether you need JSON Schema metadata.
+
+## Supported Types
+
+Hermes provides automatic type conversion between JSON and Elixir types through its schema system.
+
+### Basic Types
+
+| Type | JSON Input | Elixir Output | Example |
+|------|------------|---------------|---------|
+| `:string` | `"hello"` | `"hello"` | Basic string |
+| `:integer` | `42` | `42` | Number without decimals |
+| `:float` | `3.14` | `3.14` | Number with decimals |
+| `:boolean` | `true` | `true` | Boolean value |
+| `:any` | Any valid JSON | As-is | Accepts any value |
+
+### Date and Time Types
+
+Hermes automatically parses ISO 8601 formatted strings into Elixir date/time structs:
+
+| Type | JSON Input | Elixir Output | Example |
+|------|------------|---------------|---------|
+| `:date` | `"2024-01-15"` | `~D[2024-01-15]` | ISO 8601 date |
+| `:time` | `"14:30:00"` | `~T[14:30:00]` | ISO 8601 time |
+| `:datetime` | `"2024-01-15T14:30:00Z"` | `~U[2024-01-15 14:30:00Z]` | ISO 8601 datetime with timezone |
+| `:naive_datetime` | `"2024-01-15T14:30:00"` | `~N[2024-01-15 14:30:00]` | ISO 8601 datetime without timezone |
+
+Example usage:
+
+```elixir
+defmodule MyServer.Tools.EventScheduler do
+  use Hermes.Server.Component, type: :tool
+
+  schema do
+    field :event_date, :date, required: true, description: "Date of the event"
+    field :start_time, :time, required: true, description: "Event start time"
+    field :created_at, :datetime, description: "When the event was created"
+  end
+
+  @impl true
+  def execute(%{event_date: date, start_time: time} = params, frame) do
+    # date is already a Date struct: ~D[2024-01-15]
+    # time is already a Time struct: ~T[14:30:00]
+    
+    {:reply, Response.text(Response.tool(), "Event scheduled for #{date} at #{time}"), frame}
+  end
+end
+```
+
+### Collection Types
+
+| Type | JSON Input | Elixir Output | Example |
+|------|------------|---------------|---------|
+| `{:list, type}` | `[...]` | `[...]` | List of specified type |
+| `{:map, type}` | `{...}` | `%{...}` | Map with string keys |
+
+### Constraint Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `{:enum, choices}` | Value must be one of the choices | `{:enum, ["active", "inactive"]}` * |
+| `{:string, {:min, n}}` | String with minimum length | `{:string, {:min, 3}}` |
+| `{:string, {:max, n}}` | String with maximum length | `{:string, {:max, 100}}` |
+| `{:integer, {:min, n}}` | Integer >= n | `{:integer, {:min, 0}}` |
+| `{:integer, {:max, n}}` | Integer <= n | `{:integer, {:max, 100}}` |
+| `{:integer, {:range, {min, max}}}` | Integer in range | `{:integer, {:range, {1, 100}}}` |
+
+\* Note: When using enum with the field macro, add `type: :string` for proper JSON Schema generation.
+
+### Error Handling
+
+When validation fails, Hermes provides clear error messages:
+
+- Invalid date format: `"invalid ISO 8601 date format"`
+- Missing required field: `"is required"`
+- Type mismatch: Detailed error with expected type
+
+### Best Practices
+
+1. Use specific types (`:date`, `:datetime`) instead of generic `:string` when dealing with temporal data
+2. Add descriptions to fields for better API documentation
+3. Use the `required: true` option instead of wrapping types with `{:required, type}`
+4. Leverage enums for fields with known valid values
+5. Use appropriate format hints for strings (email, uri, etc.)
 
 ## Next Steps
 

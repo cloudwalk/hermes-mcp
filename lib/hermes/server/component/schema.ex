@@ -101,6 +101,11 @@ defmodule Hermes.Server.Component.Schema do
   defp convert_type(:boolean), do: %{"type" => "boolean"}
   defp convert_type(:any), do: %{}
 
+  defp convert_type(:date), do: %{"type" => "string", "format" => "date"}
+  defp convert_type(:time), do: %{"type" => "string", "format" => "time"}
+  defp convert_type(:datetime), do: %{"type" => "string", "format" => "date-time"}
+  defp convert_type(:naive_datetime), do: %{"type" => "string", "format" => "date-time"}
+
   defp convert_type({:string, {:regex, %Regex{source: pattern}}}) do
     %{"type" => "string", "pattern" => pattern}
   end

@@ -278,8 +278,11 @@ defmodule Hermes.Server.Component do
   end
 
   defmacro field(name, type, opts) when not is_nil(type) and is_list(opts) do
+    {required, remaining_opts} = Keyword.pop(opts, :required, false)
+    type = if required, do: {:required, type}, else: type
+
     quote do
-      {unquote(name), {:mcp_field, unquote(type), unquote(opts)}}
+      {unquote(name), {:mcp_field, unquote(type), unquote(remaining_opts)}}
     end
   end
 
@@ -385,9 +388,80 @@ defmodule Hermes.Server.Component do
     Map.new(schema, fn
       {key, {:mcp_field, type, _opts}} -> {key, __clean_schema_for_peri__(type)}
       {key, nested} when is_map(nested) -> {key, __clean_schema_for_peri__(nested)}
-      {key, value} -> {key, value}
+      {key, value} -> {key, __inject_transforms__(value)}
     end)
   end
 
-  def __clean_schema_for_peri__(schema), do: schema
+  def __clean_schema_for_peri__(schema), do: __inject_transforms__(schema)
+
+  defp __inject_transforms__(:date) do
+    {:custom, &__validate_date__/1}
+  end
+
+  defp __inject_transforms__(:time) do
+    {:custom, &__validate_time__/1}
+  end
+
+  defp __inject_transforms__(:datetime) do
+    {:custom, &__validate_datetime__/1}
+  end
+
+  defp __inject_transforms__(:naive_datetime) do
+    {:custom, &__validate_naive_datetime__/1}
+  end
+
+  defp __inject_transforms__({:required, type}) do
+    {:required, __inject_transforms__(type)}
+  end
+
+  defp __inject_transforms__({:list, type}) do
+    {:list, __inject_transforms__(type)}
+  end
+
+  defp __inject_transforms__(type), do: type
+
+  defp __validate_date__(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> {:ok, date}
+      {:error, _} -> {:error, "invalid ISO 8601 date format", []}
+    end
+  end
+
+  defp __validate_date__(%Date{} = date), do: {:ok, date}
+  defp __validate_date__(_), do: {:error, "expected ISO 8601 date string or Date struct", []}
+
+  defp __validate_time__(value) when is_binary(value) do
+    case Time.from_iso8601(value) do
+      {:ok, time} -> {:ok, time}
+      {:error, _} -> {:error, "invalid ISO 8601 time format", []}
+    end
+  end
+
+  defp __validate_time__(%Time{} = time), do: {:ok, time}
+  defp __validate_time__(_), do: {:error, "expected ISO 8601 time string or Time struct", []}
+
+  defp __validate_datetime__(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, datetime, _} -> {:ok, datetime}
+      {:error, _} -> {:error, "invalid ISO 8601 datetime format", []}
+    end
+  end
+
+  defp __validate_datetime__(%DateTime{} = datetime), do: {:ok, datetime}
+  defp __validate_datetime__(_), do: {:error, "expected ISO 8601 datetime string or DateTime struct", []}
+
+  defp __validate_naive_datetime__(value) when is_binary(value) do
+    # NaiveDateTime.from_iso8601 accepts Z suffix but we want to reject it
+    if String.ends_with?(value, "Z") or String.match?(value, ~r/[+-]\d{2}:\d{2}$/) do
+      {:error, "NaiveDateTime cannot have timezone information", []}
+    else
+      case NaiveDateTime.from_iso8601(value) do
+        {:ok, naive_datetime} -> {:ok, naive_datetime}
+        {:error, _} -> {:error, "invalid ISO 8601 naive datetime format", []}
+      end
+    end
+  end
+
+  defp __validate_naive_datetime__(%NaiveDateTime{} = naive_datetime), do: {:ok, naive_datetime}
+  defp __validate_naive_datetime__(_), do: {:error, "expected ISO 8601 naive datetime string or NaiveDateTime struct", []}
 end
