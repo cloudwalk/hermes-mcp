@@ -89,7 +89,7 @@ defmodule Hermes.MixProject do
         "GitHub" => @source_url,
         "Docs" => "https://hexdocs.pm/hermes_mcp"
       },
-      files: ~w[lib mix.exs README.md CHANGELOG.md LICENSE]
+      files: ~w[lib mix.exs README.md CHANGELOG.md LICENSE .formatter.exs]
     }
   end
 
