@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.2...v0.10.3) (2025-06-23)
+
+
+### Bug Fixes
+
+* include formatter on hex release ([#139](https://github.com/cloudwalk/hermes-mcp/issues/139)) ([d91b244](https://github.com/cloudwalk/hermes-mcp/commit/d91b244aeed4211a6653a82705b03da2247db9a3))
+
 ## [0.10.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.1...v0.10.2) (2025-06-23)
 
 
