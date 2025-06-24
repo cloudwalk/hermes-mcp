@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.4](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.3...v0.10.4) (2025-06-24)
+
+
+### Bug Fixes
+
+* server session expiration on idle (configurable) ([#143](https://github.com/cloudwalk/hermes-mcp/issues/143)) ([d9f7164](https://github.com/cloudwalk/hermes-mcp/commit/d9f7164028b2b6e8ff3d697f888adf655110bc1f))
+
 ## [0.10.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.2...v0.10.3) (2025-06-23)
 
 
