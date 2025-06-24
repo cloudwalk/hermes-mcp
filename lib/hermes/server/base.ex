@@ -69,6 +69,8 @@ defmodule Hermes.Server.Base do
   require Server
   require Session
 
+  @default_session_idle_timeout to_timeout(minute: 30)
+
   @type t :: %{
           module: module,
           server_info: map,
@@ -78,7 +80,9 @@ defmodule Hermes.Server.Base do
           transport: [layer: module, name: GenServer.name()],
           init_arg: term,
           registry: module,
-          sessions: %{required(String.t()) => {GenServer.name(), reference()}}
+          sessions: %{required(String.t()) => {GenServer.name(), reference()}},
+          session_idle_timeout: pos_integer(),
+          expiry_timers: %{required(String.t()) => reference()}
         }
 
   @typedoc """
@@ -87,11 +91,13 @@ defmodule Hermes.Server.Base do
   - `:module` - The module implementing the server behavior (required)
   - `:init_args` - Arguments passed to the module's init/1 callback
   - `:name` - Optional name for registering the GenServer
+  - `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
   """
   @type option ::
           {:module, GenServer.name()}
           | {:init_arg, keyword}
           | {:name, GenServer.name()}
+          | {:session_idle_timeout, pos_integer()}
           | GenServer.option()
 
   defschema :parse_options, [
@@ -99,7 +105,8 @@ defmodule Hermes.Server.Base do
     {:init_arg, {:required, :any}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
-    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}},
+    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
   ]
 
   @doc """
@@ -110,7 +117,8 @@ defmodule Hermes.Server.Base do
       * `:module` - (required) The module implementing the `Hermes.Server.Behaviour`
       * `:init_arg` - Argument to pass to the module's `init/2` callback
       * `:name` - (required) Name for the GenServer process
-      * `registry` - The custom registry module to use to call related processes
+      * `:registry` - The custom registry module to use to call related processes
+      * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
       * `:transport` - (required) Transport configuration
         * `:layer` - The transport module (e.g., `Hermes.Server.Transport.STDIO`)
         * `:name` - The registered name of the transport process
@@ -125,6 +133,18 @@ defmodule Hermes.Server.Base do
         transport: [
           layer: Hermes.Server.Transport.STDIO,
           name: {:via, Registry, {MyRegistry, :my_transport}}
+        ]
+      )
+
+      # With custom session timeout (15 minutes)
+      Hermes.Server.Base.start_link(
+        module: MyServer,
+        init_arg: [],
+        name: :my_server,
+        session_idle_timeout: :timer.minutes(15),
+        transport: [
+          layer: Hermes.Server.Transport.StreamableHTTP,
+          name: :my_http_transport
         ]
       )
 
@@ -282,6 +302,8 @@ defmodule Hermes.Server.Base do
       init_arg: opts.init_arg,
       registry: opts.registry,
       sessions: %{},
+      session_idle_timeout: opts.session_idle_timeout,
+      expiry_timers: %{},
       frame: Frame.new()
     }
 
@@ -365,6 +387,7 @@ defmodule Hermes.Server.Base do
         Logging.server_event("session_terminated", %{session_id: session_id, reason: reason})
 
         sessions = Map.delete(state.sessions, session_id)
+        state = cancel_session_expiry(session_id, state)
 
         frame =
           if state.frame.private[:session_id] == session_id do
@@ -377,6 +400,17 @@ defmodule Hermes.Server.Base do
 
       nil ->
         {:noreply, state}
+    end
+  end
+
+  @impl GenServer
+  def handle_info({:session_expired, session_id}, state) do
+    if Map.get(state.sessions, session_id) do
+      Logging.server_event("session_expired", %{session_id: session_id})
+      SessionSupervisor.close_session(state.registry, state.module, session_id)
+      {:noreply, %{state | sessions: Map.delete(state.sessions, session_id)}}
+    else
+      {:noreply, state}
     end
   end
 
@@ -720,6 +754,8 @@ defmodule Hermes.Server.Base do
   defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
     {session_name, _ref} = sessions[session_id]
     session = Session.get(session_name)
+    state = reset_session_expiry(session_id, state)
+
     {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
   end
 
@@ -730,12 +766,16 @@ defmodule Hermes.Server.Base do
       {:ok, pid} ->
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
+        state = reset_session_expiry(session_id, state)
+
         session = Session.get(session_name)
         {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
         state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
+        state = reset_session_expiry(session_id, state)
+
         session = Session.get(session_name)
         {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
@@ -780,6 +820,28 @@ defmodule Hermes.Server.Base do
   defp send_to_transport(%{layer: layer, name: name}, data) do
     with {:error, reason} <- layer.send_message(name, data) do
       {:error, Error.transport(:send_failure, %{original_reason: reason})}
+    end
+  end
+
+  # Session expiry timer management
+
+  defp schedule_session_expiry(session_id, timeout) do
+    Process.send_after(self(), {:session_expired, session_id}, timeout)
+  end
+
+  defp reset_session_expiry(session_id, %{expiry_timers: timers, session_idle_timeout: timeout} = state) do
+    if timer = Map.get(timers, session_id), do: Process.cancel_timer(timer)
+
+    timer = schedule_session_expiry(session_id, timeout)
+    %{state | expiry_timers: Map.put(timers, session_id, timer)}
+  end
+
+  defp cancel_session_expiry(session_id, %{expiry_timers: timers} = state) do
+    if timer = Map.get(timers, session_id) do
+      Process.cancel_timer(timer)
+      %{state | expiry_timers: Map.delete(timers, session_id)}
+    else
+      state
     end
   end
 end

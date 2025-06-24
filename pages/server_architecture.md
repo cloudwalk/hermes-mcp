@@ -139,7 +139,25 @@ For HTTP transports, Hermes implements a sophisticated session management system
 2. **Association**: Session ID returned in `Mcp-Session-Id` header
 3. **Persistence**: Client includes session ID in subsequent requests
 4. **Isolation**: Each session maintains independent state
-5. **Termination**: Explicit close, timeout, or transport failure
+5. **Expiration**: Sessions expire after 30 minutes of inactivity (configurable)
+6. **Termination**: Explicit close, timeout, or transport failure
+
+### Session Expiration
+
+Sessions automatically expire after a period of inactivity to prevent resource leaks:
+
+- **Default timeout**: 30 minutes
+- **Configuration**: Set `session_idle_timeout` when starting server
+- **Timer reset**: Each request/notification resets the session's expiry timer
+- **Cleanup**: Expired sessions are terminated gracefully
+
+```elixir
+# Configure custom session timeout
+{MyServer, 
+  transport: {:streamable_http, port: 8080},
+  session_idle_timeout: :timer.minutes(15)
+}
+```
 
 ### Why Sessions Matter
 

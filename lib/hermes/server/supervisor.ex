@@ -68,7 +68,7 @@ defmodule Hermes.Server.Supervisor do
 
   @type transport :: :stdio | stream_http | sse | StubTransport
 
-  @type start_option :: {:transport, transport} | {:name, Supervisor.name()}
+  @type start_option :: {:transport, transport} | {:name, Supervisor.name()} | {:session_idle_timeout, pos_integer()}
 
   @doc """
   Starts the server supervisor.
@@ -81,6 +81,7 @@ defmodule Hermes.Server.Supervisor do
       * `:transport` - Transport configuration (required)
       * `:name` - Supervisor name (optional, defaults to registered name)
       * `:registry` - The custom registry to use to manage processes names (defaults to `Hermes.Server.Registry`)
+      * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
 
   ## Examples
 
@@ -90,6 +91,12 @@ defmodule Hermes.Server.Supervisor do
       # Start with StreamableHTTP transport
       Hermes.Server.Supervisor.start_link(MyServer, [],
         transport: {:streamable_http, port: 8080}
+      )
+      
+      # With custom session timeout (15 minutes)
+      Hermes.Server.Supervisor.start_link(MyServer, [],
+        transport: {:streamable_http, port: 8080},
+        session_idle_timeout: :timer.minutes(15)
       )
   """
   @spec start_link(server :: module, init_arg :: term, list(start_option)) :: Supervisor.on_start()
@@ -120,6 +127,13 @@ defmodule Hermes.Server.Supervisor do
         init_arg: init_arg,
         registry: registry
       ]
+
+      server_opts =
+        if timeout = Keyword.get(opts, :session_idle_timeout) do
+          Keyword.put(server_opts, :session_idle_timeout, timeout)
+        else
+          server_opts
+        end
 
       children = [
         {Session.Supervisor, server: server, registry: registry},

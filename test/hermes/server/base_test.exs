@@ -3,6 +3,7 @@ defmodule Hermes.Server.BaseTest do
 
   alias Hermes.MCP.Message
   alias Hermes.Server.Base
+  alias Hermes.Server.Session
 
   require Message
 
@@ -80,6 +81,121 @@ defmodule Hermes.Server.BaseTest do
       params = %{"logger" => "database", "level" => "error", "data" => %{}}
       assert :ok = Base.send_notification(server, "notifications/message", params)
       # TODO(zoedsoupe): assert on StubTransport
+    end
+  end
+
+  describe "session expiration" do
+    setup do
+      start_supervised!(Hermes.Server.Registry)
+      start_supervised!({Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry})
+      :ok
+    end
+
+    test "session expires after idle timeout" do
+      transport = start_supervised!(StubTransport)
+
+      server =
+        start_supervised!({Base,
+         [
+           module: StubServer,
+           name: :expiry_test_server,
+           init_arg: :ok,
+           transport: [layer: StubTransport, name: transport],
+           # 100ms for testing
+           session_idle_timeout: 100
+         ]})
+
+      session_id = "test_session_#{System.unique_integer()}"
+      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+      assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
+
+      init_notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
+      assert Session.get(session_name)
+
+      Process.sleep(150)
+
+      # After expiration, the session should no longer be accessible
+      # The session process has been terminated by the supervisor
+      assert catch_exit(Session.get(session_name))
+    end
+
+    test "session timer resets on activity" do
+      transport = start_supervised!(StubTransport)
+
+      server =
+        start_supervised!(
+          {Base,
+           [
+             module: StubServer,
+             name: :reset_test_server,
+             init_arg: :ok,
+             transport: [layer: StubTransport, name: transport],
+             session_idle_timeout: 200
+           ]}
+        )
+
+      session_id = "reset_session_#{System.unique_integer()}"
+      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+      assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
+
+      init_notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
+
+      for _ <- 1..3 do
+        Process.sleep(100)
+        ping = build_request("ping", %{}, System.unique_integer())
+        assert {:ok, _} = GenServer.call(server, {:request, ping, session_id, %{}})
+        assert Session.get(session_name)
+      end
+
+      Process.sleep(250)
+
+      # After expiration, the session should no longer be accessible
+      # The session process has been terminated by the supervisor
+      assert catch_exit(Session.get(session_name))
+    end
+
+    test "notifications reset expiry timer" do
+      transport = start_supervised!(StubTransport)
+
+      server =
+        start_supervised!(
+          {Base,
+           [
+             module: StubServer,
+             name: :notification_reset_server,
+             init_arg: :ok,
+             transport: [layer: StubTransport, name: transport],
+             session_idle_timeout: 200
+           ]}
+        )
+
+      session_id = "notif_session_#{System.unique_integer()}"
+      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+      assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
+
+      init_notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
+
+      for _ <- 1..3 do
+        Process.sleep(100)
+        notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+        assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+        assert Session.get(session_name)
+      end
+
+      Process.sleep(250)
+
+      # After expiration, the session should no longer be accessible
+      # The session process has been terminated by the supervisor
+      assert catch_exit(Session.get(session_name))
     end
   end
 
