@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.10.5](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.4...v0.10.5) (2025-06-25)
+
+
+### Bug Fixes
+
+* normalize transport api ([#146](https://github.com/cloudwalk/hermes-mcp/issues/146)) ([8a30a34](https://github.com/cloudwalk/hermes-mcp/commit/8a30a34c944ca4d85de622f9063a558bd495c6fc)), closes [#145](https://github.com/cloudwalk/hermes-mcp/issues/145)
+
 ## [0.10.4](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.3...v0.10.4) (2025-06-24)
 
 
