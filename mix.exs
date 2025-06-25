@@ -102,10 +102,10 @@ defmodule Hermes.MixProject do
 
   defp docs do
     [
-      main: "home",
+      main: "readme",
       before_closing_head_tag: &before_closing_head_tag/1,
       extras: [
-        "pages/home.md",
+        "README.md",
         "pages/installation.md",
         "pages/transport.md",
         "pages/client_usage.md",
@@ -114,22 +114,17 @@ defmodule Hermes.MixProject do
         "pages/server_transport.md",
         "pages/server_architecture.md",
         "pages/message_handling.md",
-        "pages/rfc.md",
         "pages/progress_tracking.md",
         "pages/logging.md",
         "pages/error_handling.md",
-        "pages/protocol_upgrade_2025_03_26.md",
         "pages/cli_usage.md",
-        "pages/server_implementation_rfc.md",
-        "README.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
-        "ROADMAP.md",
         "LICENSE"
       ],
       groups_for_extras: [
         "Getting Started": [
-          "pages/home.md",
+          "README.md",
           "pages/installation.md"
         ],
         "Client Development": [
@@ -148,14 +143,8 @@ defmodule Hermes.MixProject do
           "pages/progress_tracking.md",
           "pages/logging.md"
         ],
-        Tools: [
+        "Additional Tools": [
           "pages/cli_usage.md"
-        ],
-        References: [
-          "pages/rfc.md",
-          "pages/server_implementation_rfc.md",
-          "pages/protocol_upgrade_2025_03_26.md",
-          "ROADMAP.md"
         ]
       ]
     ]

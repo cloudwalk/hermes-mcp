@@ -1,11 +1,6 @@
 if Code.ensure_loaded?(Plug) do
   defmodule Hermes.SSE.Streaming do
-    @moduledoc """
-    Handles Server-Sent Events streaming for MCP connections.
-
-    This module provides the core SSE streaming functionality,
-    managing the event loop and message formatting.
-    """
+    @moduledoc false
 
     alias Hermes.Logging
     alias Hermes.SSE.Event

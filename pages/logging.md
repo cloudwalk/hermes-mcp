@@ -12,7 +12,7 @@ Clients can specify the minimum log level they want to receive from servers:
 
 ```elixir
 # Configure the client to receive logs at "info" level or higher
-{:ok, _} = Hermes.Client.set_log_level(client, "info")
+{:ok, _} = MyApp.MCPClient.set_log_level("info")
 ```
 
 Available log levels, in order of increasing severity:
@@ -35,7 +35,7 @@ You can register a callback function to process log messages as they are receive
 
 ```elixir
 # Register a callback to handle incoming log messages
-Hermes.Client.register_log_callback(client, fn level, data, logger ->
+MyApp.MCPClient.register_log_callback(fn level, data, logger ->
   IO.puts("[#{level}] #{if logger, do: "[#{logger}] ", else: ""}#{inspect(data)}")
 end)
 ```
@@ -51,7 +51,7 @@ When you no longer need to process log messages, unregister the callback:
 
 ```elixir
 # Unregister a previously registered callback
-Hermes.Client.unregister_log_callback(client)
+MyApp.MCPClient.unregister_log_callback()
 # :ok
 ```
 

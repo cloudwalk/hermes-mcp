@@ -1,7 +1,5 @@
 defmodule Hermes.SSE do
-  @moduledoc """
-  Server-Sent Events (SSE) utilities, HTTP client abstraction and HTTP streaming handling.
-  """
+  @moduledoc false
 
   alias Hermes.SSE.Parser
 

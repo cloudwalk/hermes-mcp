@@ -1,13 +1,5 @@
 defmodule Mix.Interactive.UI do
-  @moduledoc """
-  Common UI elements and formatting functions for interactive MCP shells.
-
-  This module provides consistent UI components and formatting helpers for
-  the interactive CLI interfaces used by the Hermes MCP mix tasks.
-
-  It includes functions for displaying colored text, formatted headers,
-  pretty-printing of data structures, and consistent output formatting.
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Error
   alias IO.ANSI

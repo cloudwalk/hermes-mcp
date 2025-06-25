@@ -34,6 +34,53 @@ defmodule Hermes.Client.Base do
   @type t :: GenServer.server()
 
   @typedoc """
+  Progress callback function type.
+
+  Called when progress notifications are received for a specific progress token.
+
+  ## Parameters
+    - `progress_token` - String or integer identifier for the progress operation
+    - `progress` - Current progress value
+    - `total` - Total expected value (nil if unknown)
+
+  ## Returns
+    - The return value is ignored
+  """
+  @type progress_callback ::
+          (progress_token :: String.t() | integer(), progress :: number(), total :: number() | nil ->
+             any())
+
+  @typedoc """
+  Log callback function type.
+
+  Called when log message notifications are received from the server.
+
+  ## Parameters
+    - `level` - Log level as a string (e.g., "debug", "info", "warning", "error")
+    - `data` - Log message data, typically a map with message details
+    - `logger` - Optional logger name identifying the source
+
+  ## Returns
+    - The return value is ignored
+  """
+  @type log_callback ::
+          (level :: String.t(), data :: term(), logger :: String.t() | nil -> any())
+
+  @typedoc """
+  Root directory specification.
+
+  Represents a root directory that the client has access to.
+
+  ## Fields
+    - `:uri` - File URI for the root directory (e.g., "file:///home/user/project")
+    - `:name` - Optional human-readable name for the root
+  """
+  @type root :: %{
+          uri: String.t(),
+          name: String.t() | nil
+        }
+
+  @typedoc """
   MCP client transport options
 
   - `:layer` - The transport layer to use, either `Hermes.Transport.STDIO`, `Hermes.Transport.SSE`, `Hermes.Transport.WebSocket`, or `Hermes.Transport.StreamableHTTP` (required)
@@ -427,7 +474,7 @@ defmodule Hermes.Client.Base do
 
   The callback function will be called whenever a log message notification is received.
   """
-  @spec register_log_callback(t, State.log_callback(), opts :: Keyword.t()) :: :ok
+  @spec register_log_callback(t, log_callback(), opts :: Keyword.t()) :: :ok
   def register_log_callback(client, callback, opts \\ []) when is_function(callback, 3) do
     timeout = opts[:timeout] || to_timeout(second: 5)
     GenServer.call(client, {:register_log_callback, callback}, timeout)
@@ -463,7 +510,7 @@ defmodule Hermes.Client.Base do
   @spec register_progress_callback(
           t,
           String.t() | integer(),
-          State.progress_callback(),
+          progress_callback(),
           opts :: Keyword.t()
         ) ::
           :ok
@@ -607,7 +654,7 @@ defmodule Hermes.Client.Base do
       iex> Hermes.Client.list_roots(client)
       [%{uri: "file:///home/user/project", name: "My Project"}]
   """
-  @spec list_roots(t, opts :: Keyword.t()) :: [State.root()]
+  @spec list_roots(t, opts :: Keyword.t()) :: [map()]
   def list_roots(client, opts \\ []) do
     timeout = opts[:timeout] || to_timeout(second: 5)
     GenServer.call(client, :list_roots, timeout)

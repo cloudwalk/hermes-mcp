@@ -1,54 +1,12 @@
 defmodule Hermes.Client.State do
-  @moduledoc """
-  Manages state for the Hermes MCP client.
+  @moduledoc false
 
-  This module provides a structured representation of client state,
-  including capabilities, server info, and request tracking.
-
-  ## State Structure
-
-  Each client state includes:
-  - `client_info`: Information about the client
-  - `capabilities`: Client capabilities
-  - `server_capabilities`: Server capabilities received during initialization
-  - `server_info`: Server information received during initialization
-  - `protocol_version`: MCP protocol version being used
-  - `request_timeout`: Default timeout for requests
-  - `transport`: Transport module or transport info
-  - `pending_requests`: Map of pending requests with details and timers
-  - `progress_callbacks`: Map of callbacks for progress tracking
-  - `log_callback`: Callback for handling log messages
-
-  ## Examples
-
-  ```elixir
-  # Create a new client state
-  state = Hermes.Client.State.new(%{
-    client_info: %{"name" => "MyClient", "version" => "1.0.0"},
-    capabilities: %{"resources" => %{}},
-    protocol_version: "2024-11-05",
-    request_timeout: 30000,
-    transport: %{layer: Hermes.Transport.SSE, name: MyTransport}
-  })
-
-  # Add a request to the state
-  {request_id, updated_state} = Hermes.Client.State.add_request(state, "ping", %{}, from)
-
-  # Get server capabilities
-  server_capabilities = Hermes.Client.State.get_server_capabilities(state)
-  ```
-  """
-
+  alias Hermes.Client.Base
   alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
   alias Hermes.Telemetry
-
-  @type progress_callback :: (String.t() | integer(), number(), number() | nil -> any())
-  @type log_callback :: (String.t(), term(), String.t() | nil -> any())
-
-  @type root :: %{uri: String.t(), name: String.t() | nil}
 
   @type t :: %__MODULE__{
           client_info: map(),
@@ -58,10 +16,10 @@ defmodule Hermes.Client.State do
           protocol_version: String.t(),
           transport: map(),
           pending_requests: %{String.t() => Request.t()},
-          progress_callbacks: %{String.t() => progress_callback()},
-          log_callback: log_callback() | nil,
+          progress_callbacks: %{String.t() => Base.progress_callback()},
+          log_callback: Base.log_callback() | nil,
           # Use a map with URI as key for faster access
-          roots: %{String.t() => root()}
+          roots: %{String.t() => Base.root()}
         }
 
   defstruct [
@@ -281,7 +239,7 @@ defmodule Hermes.Client.State do
       iex> Map.has_key?(updated_state.progress_callbacks, "token123")
       true
   """
-  @spec register_progress_callback(t(), String.t(), progress_callback()) :: t()
+  @spec register_progress_callback(t(), String.t(), Base.progress_callback()) :: t()
   def register_progress_callback(state, token, callback) when is_function(callback, 3) do
     progress_callbacks = Map.put(state.progress_callbacks, token, callback)
     %{state | progress_callbacks: progress_callbacks}
@@ -301,7 +259,7 @@ defmodule Hermes.Client.State do
       iex> is_function(callback, 3)
       true
   """
-  @spec get_progress_callback(t(), String.t()) :: progress_callback() | nil
+  @spec get_progress_callback(t(), String.t()) :: Base.progress_callback() | nil
   def get_progress_callback(state, token) do
     Map.get(state.progress_callbacks, token)
   end
@@ -340,7 +298,7 @@ defmodule Hermes.Client.State do
       iex> is_function(updated_state.log_callback, 3)
       true
   """
-  @spec set_log_callback(t(), log_callback()) :: t()
+  @spec set_log_callback(t(), Base.log_callback()) :: t()
   def set_log_callback(state, callback) when is_function(callback, 3) do
     %{state | log_callback: callback}
   end
@@ -376,7 +334,7 @@ defmodule Hermes.Client.State do
       iex> is_function(callback, 3) or is_nil(callback)
       true
   """
-  @spec get_log_callback(t()) :: log_callback() | nil
+  @spec get_log_callback(t()) :: Base.log_callback() | nil
   def get_log_callback(state) do
     state.log_callback
   end
@@ -591,7 +549,7 @@ defmodule Hermes.Client.State do
       iex> Hermes.Client.State.get_root_by_uri(state, "file:///home/user/project")
       %{uri: "file:///home/user/project", name: "My Project"}
   """
-  @spec get_root_by_uri(t(), String.t()) :: root() | nil
+  @spec get_root_by_uri(t(), String.t()) :: Base.root() | nil
   def get_root_by_uri(state, uri) when is_binary(uri) do
     Map.get(state.roots, uri)
   end
@@ -608,7 +566,7 @@ defmodule Hermes.Client.State do
       iex> Hermes.Client.State.list_roots(state)
       [%{uri: "file:///home/user/project", name: "My Project"}]
   """
-  @spec list_roots(t()) :: [root()]
+  @spec list_roots(t()) :: [Base.root()]
   def list_roots(state) do
     Map.values(state.roots)
   end

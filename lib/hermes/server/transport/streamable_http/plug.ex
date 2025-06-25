@@ -12,8 +12,8 @@ if Code.ensure_loaded?(Plug) do
 
     ## SSE Streaming Architecture
 
-    This Plug delegates SSE streaming to `Hermes.SSE.Streaming` which keeps
-    the request process alive and handles the streaming loop.
+    This Plug handles SSE streaming by keeping the request process alive 
+    and managing the streaming loop for server-to-client communication.
 
     ## Usage in Phoenix Router
 

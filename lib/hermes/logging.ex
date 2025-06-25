@@ -1,25 +1,5 @@
 defmodule Hermes.Logging do
-  @moduledoc """
-  Centralized logging for Hermes MCP client.
-
-  This module provides structured logging functions that automatically manage context
-  and format logs appropriately based on log levels.
-
-  ## Configuration
-
-  You can configure logging levels for different event types:
-
-      config :hermes_mcp, :logging,
-        client_events: :info,     # client lifecycle events
-        server_events: :info,     # server lifecycle events
-        transport_events: :debug, # transport layer events
-        protocol_messages: :debug # MCP protocol messages
-
-  Alternatively, you can disable Hermes logging entirely:
-
-      config :hermes_mcp, :log, false
-
-  """
+  @moduledoc false
 
   require Logger
 

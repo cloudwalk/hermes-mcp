@@ -1,27 +1,5 @@
 defmodule Hermes.Server.Handlers.Prompts do
-  @moduledoc """
-  Handles MCP protocol prompt-related methods.
-
-  This module processes:
-  - `prompts/list` - Lists available prompts with optional pagination
-  - `prompts/get` - Retrieves and generates messages for a specific prompt
-
-  ## Pagination Support
-
-  The `prompts/list` method supports pagination through cursor parameters:
-
-      # Request
-      %{"method" => "prompts/list", "params" => %{"cursor" => "optional-cursor"}}
-      
-      # Response with more results
-      %{
-        "prompts" => [...],
-        "nextCursor" => "next-page-cursor"
-      }
-      
-      # Response for last page
-      %{"prompts" => [...]}
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Component

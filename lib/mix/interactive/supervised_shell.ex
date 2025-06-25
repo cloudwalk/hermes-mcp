@@ -1,11 +1,5 @@
 defmodule Mix.Interactive.SupervisedShell do
-  @moduledoc """
-  Supervised shell for interactive MCP sessions with automatic restart capability.
-
-  This module provides a robust shell that monitors both the transport and client
-  processes, automatically restarting them if they crash due to timeouts or other
-  errors.
-  """
+  @moduledoc false
 
   alias Mix.Interactive.CLI
   alias Mix.Interactive.Commands

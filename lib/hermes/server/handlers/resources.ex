@@ -1,48 +1,5 @@
 defmodule Hermes.Server.Handlers.Resources do
-  @moduledoc """
-  Handles MCP protocol resource-related methods.
-
-  This module processes:
-  - `resources/list` - Lists available resources with optional pagination
-  - `resources/read` - Reads content from one or more resources
-
-  ## Pagination Support
-
-  The `resources/list` method supports pagination through cursor parameters:
-
-      # Request
-      %{"method" => "resources/list", "params" => %{"cursor" => "optional-cursor"}}
-      
-      # Response with more results
-      %{
-        "resources" => [...],
-        "nextCursor" => "next-page-cursor"
-      }
-      
-      # Response for last page
-      %{"resources" => [...]}
-
-  ## Resource Reading
-
-  The `resources/read` method supports reading multiple resources at once:
-
-      # Single resource
-      %{"method" => "resources/read", "params" => %{"uri" => "file:///example.txt"}}
-      
-      # Multiple resources  
-      %{"method" => "resources/read", "params" => %{"uris" => ["file:///a.txt", "file:///b.txt"]}}
-      
-      # Response (always wrapped in contents array)
-      %{
-        "contents" => [
-          %{
-            "uri" => "file:///example.txt",
-            "mimeType" => "text/plain", 
-            "text" => "content"
-          }
-        ]
-      }
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Component
