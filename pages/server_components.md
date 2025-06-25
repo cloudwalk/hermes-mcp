@@ -403,7 +403,9 @@ defmodule MyServer.Tools.Counter do
   alias Hermes.Server.Response
 
   schema do
-    %{increment: {:optional, :integer, default: 1}}
+    field :increment, {:integer, {:default, 1}},
+      description: "how much to increment",
+      required: false
   end
 
   @impl true
@@ -412,7 +414,8 @@ defmodule MyServer.Tools.Counter do
     count = frame.assigns[:count] || 0
     new_count = count + inc
     
-    # Update frame
+    # Update frame, if current count == 1, in the next tool call
+    # assuming inc == 2, then could would have value 3
     new_frame = assign(frame, :count, new_count)
     
     {:reply, Response.text(Response.tool(), "Count: #{new_count}"), new_frame}
@@ -429,6 +432,12 @@ For HTTP transports, `frame.assigns` inherits from `Plug.Conn.assigns`. Users ar
 pipeline :authenticated_api do
   plug MyApp.AuthPlug        # Sets conn.assigns[:current_user]
   plug MyApp.PermissionsPlug # Sets conn.assigns[:permissions]
+end
+
+scope "/mcp" do
+  pipe_through :authenticated_api
+
+  forward "/", Hermes.Server.Transport.StreamableHTTP, server: MyServer
 end
 
 # In your MCP component
@@ -470,20 +479,6 @@ Where:
 - `frame` is the updated frame state
 
 ## Schema Definition
-
-### Traditional Peri Schema
-
-You can use standard Peri schema syntax:
-
-```elixir
-schema do
-  %{
-    name: {:required, :string},
-    age: {:integer, {:default, 25}},
-    tags: {:list, :string}
-  }
-end
-```
 
 ### Field Macro with Metadata
 

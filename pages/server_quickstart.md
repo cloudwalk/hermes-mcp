@@ -62,13 +62,15 @@ defmodule MyApp.MCPServer.Tools.Greeter do
 
   use Hermes.Server.Component, type: :tool
 
+  alias Hermes.Server.Response
+
   schema do
-    %{name: {:required, :string}}
+    field :name, :string, required: true
   end
 
   @impl true
   def execute(%{name: name}, frame) do
-    {:ok, "Hello, #{name}! Welcome to MCP!", frame}
+    {:reply, Response.text(Response.tool(), "Hello, #{name}! Welcome to MCP!"), frame}
   end
 end
 ```

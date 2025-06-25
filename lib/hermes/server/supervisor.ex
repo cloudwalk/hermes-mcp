@@ -110,7 +110,7 @@ defmodule Hermes.Server.Supervisor do
   @impl true
   def init(opts) do
     server = Keyword.fetch!(opts, :module)
-    transport = Keyword.fetch!(opts, :transport)
+    transport = normalize_transport(Keyword.fetch!(opts, :transport))
     init_arg = Keyword.fetch!(opts, :init_arg)
     registry = Keyword.fetch!(opts, :registry)
 
@@ -146,6 +146,9 @@ defmodule Hermes.Server.Supervisor do
       :ignore
     end
   end
+
+  defp normalize_transport(t) when t in [:stdio, StubTransport], do: t
+  defp normalize_transport(t) when t in ~w(sse streamable_http)a, do: {t, []}
 
   if Mix.env() == :test do
     defp parse_transport_child(StubTransport = kind, server, registry) do

@@ -25,7 +25,7 @@ Any client API request can include progress tracking options. Internally, these 
 
 ```elixir
 # Make a request with progress tracking
-Hermes.Client.read_resource(client, "resource-uri",
+MyApp.MCPClient.read_resource("resource-uri",
   progress: [token: progress_token]
 )
 ```
@@ -57,5 +57,5 @@ callback = fn ^token, progress, total ->
   IO.puts("Progress: #{progress}/#{total || "unknown"}")
 end
 
-Hermes.Client.list_tools(client, progress: [token: token, callback: callback])
+MyApp.MCPClient.list_tools(progress: [token: token, callback: callback])
 ```

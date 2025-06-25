@@ -41,7 +41,7 @@ All errors have:
 ## Handling Client Responses
 
 ```elixir
-case Hermes.Client.call_tool(client, "search", %{query: "test"}) do
+case MyApp.MCPClient.call_tool("search", %{query: "test"}) do
   # Success
   {:ok, %Hermes.MCP.Response{is_error: false, result: result}} ->
     IO.puts("Success: #{inspect(result)}")
@@ -62,7 +62,7 @@ end
 
 ```elixir
 # Set custom timeout (default is 30 seconds)
-case Hermes.Client.call_tool(client, "slow_tool", %{}, timeout: 60_000) do
+case MyApp.MCPClient.call_tool("slow_tool", %{}, timeout: 60_000) do
   {:error, %Hermes.MCP.Error{reason: :timeout}} ->
     IO.puts("Request timed out")
   

@@ -44,14 +44,16 @@ end
 
 # Define your tool
 defmodule MyApp.MCPServer.EchoTool do
-  @moduledoc "THis tool echoes everything the user says to the LLM"
+  @moduledoc "This tool echoes everything the user says to the LLM"
 
   use Hermes.Server.Component, type: :tool
 
   alias Hermes.Server.Response
 
   schema do
-    field :text, {:required, {:string, {:max, 500}}}, description: "The text to be echoed, max of 500 chars"
+    field :text, {:string, {:max, 500}},
+      description: "The text to be echoed, max of 500 chars",
+      required: true
   end
 
   @impl true
@@ -63,8 +65,11 @@ end
 # Add to your application supervisor
 children = [
   Hermes.Server.Registry,
-  {MyApp.MCPServer, transport: :stdio}
+  {MyApp.MCPServer, transport: :streamable_http}
 ]
+
+# Add to your Plug/Phoenix router (if using HTTP)
+forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug, server: MyApp.MCPServer
 ```
 
 ### Client  
