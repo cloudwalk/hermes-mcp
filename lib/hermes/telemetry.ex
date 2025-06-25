@@ -1,41 +1,5 @@
 defmodule Hermes.Telemetry do
-  @moduledoc """
-  Telemetry integration for Hermes MCP.
-
-  This module defines telemetry events emitted by Hermes MCP and provides
-  helper functions for emitting events consistently across the codebase.
-
-  ## Event Naming Convention
-
-  All telemetry events emitted by Hermes MCP follow the namespace pattern:
-  `[:hermes_mcp, component, action]`
-
-  Where:
-  - `:hermes_mcp` is the root namespace
-  - `component` is the specific component emitting the event (e.g., `:client`, `:transport`)
-  - `action` is the specific action or lifecycle event (e.g., `:init`, `:request`, `:response`)
-
-  ## Span Events
-
-  Many operations in Hermes MCP emit span events using `:telemetry.span/3`, which
-  generates three potential events:
-  - `[..., :start]` - When the operation begins
-  - `[..., :stop]` - When the operation completes successfully
-  - `[..., :exception]` - When the operation fails with an exception
-
-  ## Example
-
-  ```elixir
-  :telemetry.attach(
-    "log-client-requests",
-    [:hermes_mcp, :client, :request, :stop],
-    fn _event, %{duration: duration}, %{method: method}, _config ->
-      Logger.info("Request to \#{method} completed in \#{div(duration, 1_000_000)} ms")
-    end,
-    nil
-  )
-  ```
-  """
+  @moduledoc false
 
   @doc """
   Execute a telemetry event with the Hermes MCP namespace.

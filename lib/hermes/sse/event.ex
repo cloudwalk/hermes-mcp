@@ -1,13 +1,5 @@
 defmodule Hermes.SSE.Event do
-  @moduledoc """
-  Represents a Server-Sent Event.
-
-  Fields:
-    - `:id`    - identifier of the event (if any)
-    - `:event` - event type (defaults to "message")
-    - `:data`  - the event data (concatenates multiple data lines with a newline)
-    - `:retry` - reconnection time (parsed as integer, if provided)
-  """
+  @moduledoc false
 
   @type t :: %__MODULE__{
           id: String.t() | nil,

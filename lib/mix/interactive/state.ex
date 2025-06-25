@@ -1,29 +1,5 @@
 defmodule Mix.Interactive.State do
-  @moduledoc """
-  State inspection utilities for the interactive MCP shell.
-
-  This module provides functions for inspecting, formatting, and displaying
-  the internal state of Hermes MCP client and transport processes, useful
-  for debugging and introspection purposes.
-
-  ## Features
-
-  * Retrieves and formats client state information
-  * Displays transport state (SSE or STDIO)
-  * Pretty-prints nested data structures
-  * Shows connection status and diagnostics
-  * Highlights pending requests with timing information
-
-  ## Usage
-
-  This module is primarily used by the interactive shell's `show_state` command
-  to provide a human-readable view of the system's internal state.
-
-  ```elixir
-  # From the commands module:
-  Mix.Interactive.State.print_state(client_pid)
-  ```
-  """
+  @moduledoc false
 
   alias Hermes.Client.Request
   alias Hermes.Transport.SSE

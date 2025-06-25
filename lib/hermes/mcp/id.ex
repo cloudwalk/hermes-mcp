@@ -1,29 +1,5 @@
 defmodule Hermes.MCP.ID do
-  @moduledoc """
-  Utilities for working with MCP message identifiers.
-
-  This module provides functions for generating request IDs and progress tokens
-  used in the MCP protocol.
-
-  ## ID Format
-
-  Generated IDs are Base64-encoded strings containing:
-  - Timestamp component (to ensure temporal uniqueness)
-  - Process identifier hash (to ensure process-level uniqueness)
-  - Random component (to ensure collision resistance)
-
-  This format ensures uniqueness across nodes, processes, and repeated calls.
-
-  ## Examples
-
-  ```elixir
-  # Generate a standard request ID
-  request_id = Hermes.MCP.ID.generate()
-
-  # Generate a progress token
-  progress_token = Hermes.MCP.ID.generate_progress_token()
-  ```
-  """
+  @moduledoc false
 
   @doc """
   Generates a unique request ID.

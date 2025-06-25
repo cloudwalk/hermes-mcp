@@ -1,10 +1,5 @@
 defmodule Mix.Interactive.CLI do
-  @moduledoc """
-  Standalone CLI application for Hermes MCP interactive shells.
-
-  This module serves as the entry point for the standalone binary compiled with Burrito.
-  It can start SSE, WebSocket, or STDIO interactive shells based on command-line arguments.
-  """
+  @moduledoc false
 
   alias Mix.Interactive.Shell
   alias Mix.Interactive.UI

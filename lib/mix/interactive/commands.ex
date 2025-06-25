@@ -1,20 +1,5 @@
 defmodule Mix.Interactive.Commands do
-  @moduledoc """
-  Common command implementations for interactive MCP shells.
-
-  This module contains the implementation of all commands available in the
-  interactive MCP shells. It provides a consistent set of commands across
-  different transport implementations, with shared functionality for:
-
-  - Listing available commands
-  - Fetching and displaying tools, prompts, and resources
-  - Calling tools and getting prompts
-  - Handling user input and error cases
-  - Formatting and displaying results
-
-  Each command follows a similar pattern, receiving client and loop function
-  references to enable proper continuation of the interactive shell.
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Response
   alias Hermes.Transport.SSE

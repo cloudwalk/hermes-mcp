@@ -1,7 +1,5 @@
 defmodule Hermes.SSE.Parser do
-  @moduledoc """
-  Parses a raw SSE stream into a list of `%SSE.Event{}` structs.
-  """
+  @moduledoc false
 
   alias Hermes.SSE.Event
 

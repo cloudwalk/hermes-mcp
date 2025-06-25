@@ -1,27 +1,5 @@
 defmodule Hermes.Server.Handlers.Tools do
-  @moduledoc """
-  Handles MCP protocol tool-related methods.
-
-  This module processes:
-  - `tools/list` - Lists available tools with optional pagination
-  - `tools/call` - Executes a specific tool with given arguments
-
-  ## Pagination Support
-
-  The `tools/list` method supports pagination through cursor parameters:
-
-      # Request
-      %{"method" => "tools/list", "params" => %{"cursor" => "optional-cursor"}}
-      
-      # Response with more results
-      %{
-        "tools" => [...],
-        "nextCursor" => "next-page-cursor"
-      }
-      
-      # Response for last page
-      %{"tools" => [...]}
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Component

@@ -75,7 +75,7 @@ Requests timeout after 30 seconds by default:
 
 ```elixir
 # Custom timeout
-Hermes.Client.call_tool(client, "slow_tool", %{}, timeout: 60_000)
+MyApp.MCPClient.call_tool("slow_tool", %{}, timeout: 60_000)
 ```
 
 On timeout:
@@ -89,7 +89,7 @@ On timeout:
 
 ```elixir
 # The client handles correlation automatically
-{:ok, response} = Hermes.Client.call_tool(client, "tool", %{})
+{:ok, response} = MyApp.MCPClient.call_tool("tool", %{})
 ```
 
 ### Server Side

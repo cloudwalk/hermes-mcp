@@ -1,12 +1,5 @@
 defmodule Hermes.Server.Component.Schema do
-  @moduledoc """
-  Handles schema conversion between Peri and JSON Schema formats for MCP protocol compliance.
-
-  This module provides utilities to:
-  - Convert Peri schemas to JSON Schema format
-  - Transform schemas to prompt argument definitions
-  - Format validation errors for client responses
-  """
+  @moduledoc false
 
   @doc """
   Converts a Peri schema definition to JSON Schema format.

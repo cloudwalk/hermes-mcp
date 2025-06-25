@@ -1,7 +1,5 @@
 defmodule Hermes.HTTP do
-  @moduledoc """
-  HTTP utilities.
-  """
+  @moduledoc false
 
   require Logger
 
