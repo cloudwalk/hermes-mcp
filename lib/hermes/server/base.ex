@@ -1,54 +1,5 @@
 defmodule Hermes.Server.Base do
-  @moduledoc """
-  Base implementation of an MCP server.
-
-  This module provides the core functionality for handling MCP messages,
-  managing the protocol lifecycle, and coordinating with transport layers.
-  It implements the JSON-RPC message handling, session management, and
-  protocol negotiation required by the MCP specification.
-
-  ## Architecture
-
-  The Base server acts as the central message processor in the server stack:
-  - Receives messages from transport layers (STDIO, StreamableHTTP)
-  - Manages protocol initialization and version negotiation
-  - Delegates business logic to the implementation module
-  - Maintains session state via Session agents
-  - Handles errors and protocol violations
-
-  ## Session Management
-
-  For transports that support multiple sessions (like StreamableHTTP), the Base
-  server maintains a registry of Session agents. Each session tracks:
-  - Protocol version negotiated with that client
-  - Client information and capabilities
-  - Initialization state
-  - Log level preferences
-
-  ## Message Flow
-
-  1. Transport receives raw message from client
-  2. Transport calls Base with `{:message, data, session_id}`
-  3. Base decodes and validates the message
-  4. Base retrieves or creates session state
-  5. Base delegates to implementation module callbacks
-  6. Base encodes response and sends back through transport
-
-  ## Example Implementation
-
-      defmodule MyServer do
-        use Hermes.Server
-
-        def server_info do
-          %{"name" => "My MCP Server", "version" => "1.0.0"}
-        end
-
-        def handle_request(%{"method" => "my_method"} = request, frame) do
-          result = process_request(request["params"])
-          {:reply, result, frame}
-        end
-      end
-  """
+  @moduledoc false
 
   use GenServer
 
@@ -113,7 +64,7 @@ defmodule Hermes.Server.Base do
 
   ## Parameters
     * `opts` - Keyword list of options:
-      * `:module` - (required) The module implementing the `Hermes.Server.Behaviour`
+      * `:module` - (required) The module implementing the `Hermes.Server`
       * `:init_arg` - Argument to pass to the module's `init/2` callback
       * `:name` - (required) Name for the GenServer process
       * `:registry` - The custom registry module to use to call related processes

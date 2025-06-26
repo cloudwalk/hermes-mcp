@@ -9,17 +9,17 @@ defmodule Upcase.Server do
     Hermes.Server.start_link(__MODULE__, :ok, opts)
   end
 
-  @impl Hermes.Server.Behaviour
+  @impl true
   def server_info do
     %{"name" => "Upcase MCP Server", "version" => "1.0.0"}
   end
 
-  @impl Hermes.Server.Behaviour
+  @impl true
   def server_capabilities do
     %{"tools" => %{}}
   end
 
-  @impl Hermes.Server.Behaviour
+  @impl true
   def supported_protocol_versions do
     ["2025-03-26", "2024-10-07", "2024-05-11"]
   end
