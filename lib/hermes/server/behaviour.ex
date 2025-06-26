@@ -228,7 +228,7 @@ defmodule Hermes.Server.Behaviour do
   """
   @callback handle_info(event :: term, Frame.t()) ::
               {:noreply, Frame.t()}
-              | {:noreply, Frame.t(), GenServer.timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, Frame.t()}
 
   @optional_callbacks handle_notification: 2, handle_info: 2
