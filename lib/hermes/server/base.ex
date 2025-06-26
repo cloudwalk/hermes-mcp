@@ -403,12 +403,23 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @impl GenServer
   def handle_info({:session_expired, session_id}, state) do
     if Map.get(state.sessions, session_id) do
       Logging.server_event("session_expired", %{session_id: session_id})
       SessionSupervisor.close_session(state.registry, state.module, session_id)
       {:noreply, %{state | sessions: Map.delete(state.sessions, session_id)}}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info(event, %{module: module} = state) do
+    if exported?(module, :handle_info, 2) do
+      case module.handle_info(event, state.frame) do
+        {:noreply, frame} -> {:noreply, %{state | frame: frame}}
+        {:noreply, frame, cont} -> {:noreply, %{state | frame: frame}, cont}
+        {:stop, reason, frame} -> {:stop, reason, %{state | frame: frame}}
+      end
     else
       {:noreply, state}
     end
@@ -425,6 +436,10 @@ defmodule Hermes.Server.Base do
     )
 
     :ok
+  end
+
+  defp exported?(m, f, a) do
+    function_exported?(m, f, a) or (Code.ensure_loaded?(m) and function_exported?(m, f, a))
   end
 
   defp handle_single_request(decoded, session, state) do
