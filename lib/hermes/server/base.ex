@@ -52,7 +52,6 @@ defmodule Hermes.Server.Base do
 
   use GenServer
 
-  import Hermes.Server.Behaviour, only: [impl_by?: 1]
   import Peri
 
   alias Hermes.Logging
@@ -285,10 +284,6 @@ defmodule Hermes.Server.Base do
 
   @impl GenServer
   def init(%{module: module} = opts) do
-    if not impl_by?(module) do
-      raise ArgumentError, "Module #{inspect(module)} does not implement Hermes.Server.Behaviour"
-    end
-
     server_info = module.server_info()
     capabilities = module.server_capabilities()
     protocol_versions = module.supported_protocol_versions()

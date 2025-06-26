@@ -31,6 +31,19 @@ defmodule Upcase.Server do
 
   @impl true
   def init(:ok, frame) do
-    {:ok, frame}
+    schedule_hello()
+    {:ok, assign(frame, counter: 0)}
+  end
+
+  @impl true
+  def handle_info(:hello, frame) do
+    schedule_hello()
+    frame = assign(frame, counter: frame.assigns.counter + 1)
+    IO.puts("HELLO FROM UPCASE (on #{inspect(self())})! COUNTING: #{frame.assigns.counter}")
+    {:noreply, frame}
+  end
+
+  defp schedule_hello do
+    Process.send_after(self(), :hello, 1_650)
   end
 end

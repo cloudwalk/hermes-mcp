@@ -9,7 +9,7 @@ defmodule Upcase.Application do
   def start(_type, _args) do
     children = [
       Hermes.Server.Registry,
-      {Upcase.Server, transport: {:streamable_http, []}},
+      {Upcase.Server, transport: {:streamable_http, start: true}},
       {Bandit, plug: Upcase.Router}
     ]
 

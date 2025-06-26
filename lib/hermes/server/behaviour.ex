@@ -222,30 +222,14 @@ defmodule Hermes.Server.Behaviour do
   @callback supported_protocol_versions() :: [String.t()]
 
   @doc """
-  Checks if the given module implements the Hermes.Server.Behaviour interface.
+  Invoked to handle all other external messages received for example from other processes
 
-  ## Parameters
-
-  - `module`: The module to be checked.
-
-  ## Returns
-
-  - boolean
-
-  ## Examples
-
-      iex> Hermes.Server.Behaviour.impl_by?(MyApp.MCPServer)
-      true
-
-      iex> Hermes.Server.Behaviour.impl_by?(String)
-      false
+  Works exactly the same as `GenServer.handle_info`
   """
-  def impl_by?(module) when is_atom(module) do
-    if Code.ensure_loaded?(module) do
-      callbacks = __MODULE__.behaviour_info(:callbacks)
-      functions = module.__info__(:functions)
+  @callback handle_info(event :: term, Frame.t()) ::
+              {:noreply, Frame.t()}
+              | {:noreply, Frame.t(), GenServer.timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, Frame.t()}
 
-      Enum.empty?(callbacks -- functions)
-    end
-  end
+  @optional_callbacks handle_notification: 2, handle_info: 2
 end
