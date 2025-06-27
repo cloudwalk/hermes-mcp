@@ -56,11 +56,20 @@ defmodule Hermes.Server.Frame do
       * `protocol_version` - active MCP protocol version, example: `"2025-03-26"`
   """
 
+  alias Hermes.Server.Component
+  alias Hermes.Server.Component.Prompt
+  alias Hermes.Server.Component.Resource
+  alias Hermes.Server.Component.Schema
+  alias Hermes.Server.Component.Tool
+
+  @type server_component_t :: Tool.t() | Resource.t() | Prompt.t()
+
   @type private_t :: %{
           optional(:session_id) => String.t(),
           optional(:client_info) => map(),
           optional(:client_capabilities) => map(),
-          optional(:protocol_version) => String.t()
+          optional(:protocol_version) => String.t(),
+          optional(:__mcp_components__) => list(server_component_t)
         }
 
   @type request_t :: %{
@@ -363,4 +372,92 @@ defmodule Hermes.Server.Frame do
   end
 
   def get_query_param(%__MODULE__{}, _key), do: nil
+
+  @doc """
+  Registers a tool definition.
+  """
+  @spec register_tool(t, String.t(), keyword()) :: t
+  def register_tool(%__MODULE__{} = frame, name, opts) when is_binary(name) do
+    input_schema = opts[:input_schema] || %{}
+    raw_schema = Component.__clean_schema_for_peri__(input_schema)
+    validate_input = fn params -> Peri.validate(raw_schema, params) end
+
+    update_components(frame, %Tool{
+      name: name,
+      description: opts[:description],
+      input_schema: Schema.to_json_schema(input_schema),
+      annotations: opts[:annotations],
+      validate_input: validate_input
+    })
+  end
+
+  @doc """
+  Registers a prompt definition.
+  """
+  @spec register_prompt(t, String.t(), keyword()) :: t
+  def register_prompt(%__MODULE__{} = frame, name, opts) when is_binary(name) do
+    arguments = opts[:arguments]
+    raw_schema = Component.__clean_schema_for_peri__(arguments)
+    validate_input = fn params -> Peri.validate(raw_schema, params) end
+
+    update_components(frame, %Prompt{
+      name: name,
+      description: opts[:description],
+      arguments: Schema.to_prompt_arguments(arguments),
+      validate_input: validate_input
+    })
+  end
+
+  @doc """
+  Registers a resource definition.
+  """
+  @spec register_resource(t, String.t(), keyword()) :: t
+  def register_resource(%__MODULE__{} = frame, uri, opts) when is_binary(uri) do
+    update_components(frame, %Resource{
+      uri: uri,
+      name: opts[:name] || uri,
+      description: opts[:description],
+      mime_type: opts[:mime_type] || "text/plain"
+    })
+  end
+
+  @doc false
+  def get_components(%__MODULE__{} = frame) do
+    Map.get(frame.private, :__mcp_components__, [])
+  end
+
+  @doc false
+  def get_tools(%__MODULE__{} = frame) do
+    frame
+    |> get_components()
+    |> Enum.filter(&match?(%Tool{}, &1))
+  end
+
+  @doc false
+  def get_prompts(%__MODULE__{} = frame) do
+    frame
+    |> get_components()
+    |> Enum.filter(&match?(%Prompt{}, &1))
+  end
+
+  @doc false
+  def get_resources(%__MODULE__{} = frame) do
+    frame
+    |> get_components()
+    |> Enum.filter(&match?(%Resource{}, &1))
+  end
+
+  @doc false
+  def get_component(%__MODULE__{} = frame, name) do
+    frame
+    |> get_components()
+    |> Enum.find(&(&1.name == name))
+  end
+
+  # Private helpers
+
+  defp update_components(frame, component) do
+    components = get_components(frame)
+    put_private(frame, :__mcp_components__, [component | components])
+  end
 end

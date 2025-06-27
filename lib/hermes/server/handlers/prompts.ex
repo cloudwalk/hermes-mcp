@@ -2,7 +2,7 @@ defmodule Hermes.Server.Handlers.Prompts do
   @moduledoc false
 
   alias Hermes.MCP.Error
-  alias Hermes.Server.Component
+  alias Hermes.Server.Component.Prompt
   alias Hermes.Server.Component.Schema
   alias Hermes.Server.Frame
   alias Hermes.Server.Response
@@ -24,10 +24,8 @@ defmodule Hermes.Server.Handlers.Prompts do
   @spec handle_list(Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_list(frame, server_module) do
-    prompts = server_module.__components__(:prompt)
-    response = %{"prompts" => Enum.map(prompts, &parse_prompt_definition/1)}
-
-    {:reply, response, frame}
+    prompts = server_module.__components__(:prompt) ++ Frame.get_prompts(frame)
+    {:reply, %{"prompts" => prompts}, frame}
   end
 
   @doc """
@@ -46,11 +44,11 @@ defmodule Hermes.Server.Handlers.Prompts do
   """
   @spec handle_get(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_get(%{"params" => %{"name" => prompt_name, "arguments" => params}}, frame, server_module) do
-    registered_prompts = server_module.__components__(:prompt)
+  def handle_get(%{"params" => %{"name" => prompt_name, "arguments" => params}}, frame, server) do
+    registered_prompts = server.__components__(:prompt) ++ Frame.get_prompts(frame)
 
     if prompt = find_prompt_module(registered_prompts, prompt_name) do
-      with {:ok, params} <- validate_params(params, prompt, frame), do: forward_to(prompt, params, frame)
+      with {:ok, params} <- validate_params(params, prompt, frame), do: forward_to(server, prompt, params, frame)
     else
       payload = %{message: "Prompt not found: #{prompt_name}"}
       {:error, Error.protocol(:invalid_params, payload), frame}
@@ -59,30 +57,30 @@ defmodule Hermes.Server.Handlers.Prompts do
 
   # Private functions
 
-  defp find_prompt_module(prompts, name) do
-    Enum.find_value(prompts, fn
-      {^name, module} -> module
-      _ -> nil
-    end)
-  end
+  defp find_prompt_module(prompts, name), do: Enum.find(prompts, &(&1.name == name))
 
-  defp parse_prompt_definition({name, module}) do
-    %{
-      "name" => name,
-      "description" => Component.get_description(module),
-      "arguments" => module.arguments()
-    }
-  end
-
-  defp validate_params(params, module, frame) do
-    with {:error, errors} <- module.mcp_schema(params) do
+  defp validate_params(params, %Prompt{} = prompt, frame) do
+    with {:error, errors} <- prompt.validate_input.(params) do
       message = Schema.format_errors(errors)
       {:error, Error.protocol(:invalid_params, %{message: message}), frame}
     end
   end
 
-  defp forward_to(module, params, frame) do
-    case module.get_messages(params, frame) do
+  defp forward_to(server, %Prompt{handler: nil} = prompt, params, frame) do
+    case server.handle_prompt_get(prompt.name, params, frame) do
+      {:reply, %Response{} = response, frame} ->
+        {:reply, Response.to_protocol(response), frame}
+
+      {:noreply, frame} ->
+        {:reply, %{"content" => [], "isError" => false}, frame}
+
+      {:error, %Error{} = error, frame} ->
+        {:error, error, frame}
+    end
+  end
+
+  defp forward_to(_server, %Prompt{handler: handler}, params, frame) do
+    case handler.get_messages(params, frame) do
       {:reply, %Response{} = response, frame} ->
         {:reply, Response.to_protocol(response), frame}
 

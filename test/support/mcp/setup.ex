@@ -151,7 +151,6 @@ defmodule Hermes.MCP.Setup do
     server_opts = [
       module: server_module,
       name: server_name,
-      init_arg: :ok,
       registry: registry,
       transport: [
         layer: transport,
@@ -191,7 +190,6 @@ defmodule Hermes.MCP.Setup do
 
     opts = [
       module: server_module,
-      init_arg: :ok,
       name: name,
       transport: [layer: Transport.STDIO, name: transport_name]
     ]

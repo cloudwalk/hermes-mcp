@@ -76,7 +76,6 @@ defmodule Hermes.Server.Supervisor do
   ## Parameters
 
     * `server` - The module implementing `Hermes.Server`
-    * `init_arg` - Argument passed to the server's `init/2` callback
     * `opts` - Options including:
       * `:transport` - Transport configuration (required)
       * `:name` - Supervisor name (optional, defaults to registered name)
@@ -99,11 +98,11 @@ defmodule Hermes.Server.Supervisor do
         session_idle_timeout: :timer.minutes(15)
       )
   """
-  @spec start_link(server :: module, init_arg :: term, list(start_option)) :: Supervisor.on_start()
-  def start_link(server, init_arg, opts) when is_atom(server) and is_list(opts) do
+  @spec start_link(server :: module, list(start_option)) :: Supervisor.on_start()
+  def start_link(server, opts) when is_atom(server) and is_list(opts) do
     registry = Keyword.get(opts, :registry, Hermes.Server.Registry)
     name = Keyword.get(opts, :name, registry.supervisor(server))
-    opts = Keyword.merge(opts, module: server, init_arg: init_arg, registry: registry)
+    opts = Keyword.merge(opts, module: server, registry: registry)
     Supervisor.start_link(__MODULE__, opts, name: name)
   end
 
@@ -111,7 +110,6 @@ defmodule Hermes.Server.Supervisor do
   def init(opts) do
     server = Keyword.fetch!(opts, :module)
     transport = normalize_transport(Keyword.fetch!(opts, :transport))
-    init_arg = Keyword.fetch!(opts, :init_arg)
     registry = Keyword.fetch!(opts, :registry)
 
     if should_start?(transport) do
@@ -124,7 +122,6 @@ defmodule Hermes.Server.Supervisor do
         module: server,
         name: server_name,
         transport: server_transport,
-        init_arg: init_arg,
         registry: registry
       ]
 

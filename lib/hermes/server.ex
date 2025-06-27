@@ -89,6 +89,9 @@ defmodule Hermes.Server do
   """
 
   alias Hermes.Server.Component
+  alias Hermes.Server.Component.Prompt
+  alias Hermes.Server.Component.Resource
+  alias Hermes.Server.Component.Tool
   alias Hermes.Server.ConfigurationError
   alias Hermes.Server.Frame
   alias Hermes.Server.Handlers
@@ -104,61 +107,82 @@ defmodule Hermes.Server do
   @type server_capabilities :: map()
 
   @doc """
-  Initializes the server when it starts up.
+  Called after a client requests a `initialize` request.
 
-  This callback sets the stage for your MCP server. It's called once when the server
-  process starts and gives you the opportunity to set up initial state, load configuration,
-  establish connections to external services, or perform any other setup tasks your
-  server needs before it can start handling MCP protocol messages.
+  This callback is invoked while the MCP handshake starts and so the client may not sent
+  the `notifications/initialized` message yet. For checking if the notification was already sent
+  and the MCP handshare was successfully completed, you can call the `initialized?/1` function.
 
-  The frame parameter provides a structured way to manage your server's state throughout
-  its lifecycle. You can store configuration, track active subscriptions, cache resources,
-  or maintain any other stateful data your server needs to operate effectively.
+  It receives the client's information and
+  the current frame, allowing you to perform client-specific setup, validate capabilities,
+  or prepare resources based on the connected client.
 
-  This follows the standard GenServer initialization pattern, so you can return various
-  tuples to control the server's startup behavior - from simple success to requesting
-  hibernation for memory optimization or scheduling immediate work with :continue.
+  The client_info parameter contains details about the connected client including its
+  name, version, and any additional metadata. Use this to tailor your server's behavior
+  to specific client implementations or versions.
   """
-  @callback init(init_arg :: term(), Frame.t()) ::
-              {:ok, Frame.t()}
-              | {:ok, Frame.t(), timeout | :hibernate | {:continue, arg :: term}}
-              | {:stop, reason :: term()}
-              | :ignore
+  @callback init(client_info :: map(), Frame.t()) :: {:ok, Frame.t()}
 
   @doc """
-  Handles incoming MCP requests from clients.
+  Handles a tool call request.
 
-  This callback is the heart of your MCP server's request handling. When a client sends a request,
-  this function determines how to process it and what response to send back. The MCP protocol
-  defines a standard set of request methods that clients can invoke:
+  This callback is invoked when a client calls a specific tool. It receives the tool name,
+  the arguments provided by the client, and the current frame. Developers's implementation should
+  execute the tool's logic and return the result.
 
-  **Core Protocol Requests:**
-  - `initialize` - Establishes the connection, exchanges capabilities between client and server
-  - `ping` - Health check to verify the server is responsive
+  This callback handles both module-based components (registered with `component`) and
+  runtime components (registered with `Frame.register_tool/3`). For module-based tools,
+  the framework automatically generates pattern-matched clauses during compilation.
+  """
+  @callback handle_tool_call(name :: String.t(), arguments :: map(), Frame.t()) ::
+              {:reply, result :: term(), Frame.t()}
+              | {:error, mcp_error(), Frame.t()}
 
-  **Resource Management:**
-  - `resources/list` - Returns available resources the server can provide
-  - `resources/templates/list` - Returns URI templates for dynamic resources
-  - `resources/read` - Retrieves content of a specific resource
-  - `resources/subscribe` - Subscribes to updates for a resource
-  - `resources/unsubscribe` - Cancels a resource subscription
+  @doc """
+  Handles a resource read request.
 
-  **Tool Execution:**
-  - `tools/list` - Returns available tools the server can execute
-  - `tools/call` - Executes a specific tool with provided arguments
+  This callback is invoked when a client requests to read a specific resource. It receives
+  the resource URI and the current frame. Developer's implementation should retrieve and return
+  the resource content.
 
-  **Prompt Templates:**
-  - `prompts/list` - Returns available prompt templates
-  - `prompts/get` - Retrieves a specific prompt with filled arguments
+  This callback handles both module-based components (registered with `component`) and
+  runtime components (registered with `Frame.register_resource/3`). For module-based resources,
+  the framework automatically generates pattern-matched clauses during compilation.
+  """
+  @callback handle_resource_read(uri :: String.t(), Frame.t()) ::
+              {:reply, content :: map(), Frame.t()}
+              | {:error, mcp_error(), Frame.t()}
 
-  **Other Capabilities:**
-  - `logging/setLevel` - Adjusts the server's logging verbosity
-  - `completion/complete` - Provides autocompletion suggestions
+  @doc """
+  Handles a prompt get request.
 
-  The server should respond to supported methods and return appropriate errors for
-  unsupported ones. When using `use Hermes.Server`, most of these handlers are
-  automatically implemented based on your configured capabilities and registered
-  components.
+  This callback is invoked when a client requests a specific prompt template. It receives
+  the prompt name, any arguments to fill into the template, and the current frame.
+
+  This callback handles both module-based components (registered with `component`) and
+  runtime components (registered with `Frame.register_prompt/3`). For module-based prompts,
+  the framework automatically generates pattern-matched clauses during compilation.
+  """
+  @callback handle_prompt_get(name :: String.t(), arguments :: map(), Frame.t()) ::
+              {:reply, messages :: list(), Frame.t()}
+              | {:error, mcp_error(), Frame.t()}
+
+  @doc """
+  Low-level handler for any MCP request.
+
+  This is an advanced callback that gives you complete control over request handling.
+  When implemented, it bypasses the automatic routing to `handle_tool_call/3`,
+  `handle_resource_read/2`, and `handle_prompt_get/3` and all other requests that are
+  handled internally, like `tools/list` and `logging/setLevel`.
+
+  Use this when you need to:
+  - Implement custom request methods beyond the standard MCP protocol
+  - Add middleware-like processing before requests reach specific handlers
+  - Override the framework's default request routing behavior
+
+  Note: If you implement this callback, you become responsible for handling ALL
+  MCP requests, including standard protocol methods like `tools/list`, `resources/list`, etc.
+  Consider using the specific callbacks instead unless you need this level of control.
   """
   @callback handle_request(request :: request(), state :: Frame.t()) ::
               {:reply, response :: response(), new_state :: Frame.t()}
@@ -297,23 +321,37 @@ defmodule Hermes.Server do
   """
   @callback terminate(reason :: term, Frame.t()) :: term
 
-  @optional_callbacks handle_notification: 2, handle_info: 2, handle_call: 3, handle_cast: 2, terminate: 2
+  @optional_callbacks handle_notification: 2,
+                      handle_info: 2,
+                      handle_call: 3,
+                      handle_cast: 2,
+                      terminate: 2,
+                      handle_tool_call: 3,
+                      handle_resource_read: 2,
+                      handle_prompt_get: 3,
+                      handle_request: 2
 
   @doc """
-  Starts a server with its supervision tree.
+  Checks if the MCP session has been initialized.
+
+  Returns true if the client has completed the initialization handshake and sent
+  the `notifications/initialized` message. This is useful for guarding operations
+  that require an active session.
 
   ## Examples
 
-      # Start with default options
-      Hermes.Server.start_link(MyServer, :ok, transport: :stdio)
-      
-      # Start with custom name
-      Hermes.Server.start_link(MyServer, %{}, 
-        transport: :stdio,
-        name: {:local, :my_server}
-      )
+      def handle_info(:check_status, frame) do
+        if Hermes.Server.initialized?(frame) do
+          # Perform operations requiring initialized session
+          {:noreply, frame}
+        else
+          # Wait for initialization
+          {:noreply, frame}
+        end
+      end
   """
-  defdelegate start_link(mod, init_arg, opts), to: Hermes.Server.Supervisor
+  @spec initialized?(Frame.t()) :: boolean()
+  def initialized?(%Frame{initialized: initialized}), do: initialized
 
   @doc false
   defguard is_server_capability(capability) when capability in @server_capabilities
@@ -326,7 +364,7 @@ defmodule Hermes.Server do
     quote do
       @behaviour Hermes.Server
 
-      import Hermes.Server, only: [component: 1, component: 2]
+      import Hermes.Server, only: [component: 1, component: 2, initialized?: 1]
 
       import Hermes.Server.Base,
         only: [
@@ -355,7 +393,7 @@ defmodule Hermes.Server do
       def child_spec(opts) do
         %{
           id: __MODULE__,
-          start: {__MODULE__, :start_link, [opts]},
+          start: {Hermes.Server.Supervisor, :start_link, [__MODULE__, opts]},
           type: :supervisor,
           restart: :permanent
         }
@@ -402,14 +440,11 @@ defmodule Hermes.Server do
     components = Module.get_attribute(env.module, :components, [])
     opts = get_server_opts(env.module)
 
-    tools = for {:tool, name, mod} <- components, do: {name, mod}
-    prompts = for {:prompt, name, mod} <- components, do: {name, mod}
-    resources = for {:resource, name, mod} <- components, do: {name, mod}
-
     quote do
-      def __components__(:tool), do: unquote(Macro.escape(tools))
-      def __components__(:prompt), do: unquote(Macro.escape(prompts))
-      def __components__(:resource), do: unquote(Macro.escape(resources))
+      def __components__, do: Hermes.Server.parse_components(unquote(Macro.escape(components)))
+      def __components__(:tool), do: Enum.filter(__components__(), &match?(%Tool{}, &1))
+      def __components__(:prompt), do: Enum.filter(__components__(), &match?(%Prompt{}, &1))
+      def __components__(:resource), do: Enum.filter(__components__(), &match?(%Resource{}, &1))
 
       @impl Hermes.Server
       def handle_request(%{} = request, frame) do
@@ -421,6 +456,72 @@ defmodule Hermes.Server do
       unquote(maybe_define_protocol_versions(env.module, opts[:protocol_versions]))
 
       defoverridable handle_request: 2
+    end
+  end
+
+  @doc false
+  def parse_components(components) when is_list(components) do
+    Enum.flat_map(components, &parse_components/1)
+  end
+
+  def parse_components({:tool, name, mod}) do
+    annotations = if Hermes.exported?(mod, :annotations, 0), do: mod.annotations()
+
+    if Hermes.exported?(mod, :input_schema, 0) do
+      validate_input = fn params ->
+        schema = mod.__mcp_raw_schema__()
+        Peri.validate(schema, params)
+      end
+
+      [
+        %Tool{
+          name: name,
+          description: Component.get_description(mod),
+          input_schema: mod.input_schema(),
+          annotations: annotations,
+          handler: mod,
+          validate_input: validate_input
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  def parse_components({:prompt, name, mod}) do
+    if Hermes.exported?(mod, :arguments, 0) do
+      validate_input = fn params ->
+        schema = mod.__mcp_raw_schema__()
+        Peri.validate(schema, params)
+      end
+
+      [
+        %Prompt{
+          name: name,
+          description: Component.get_description(mod),
+          arguments: mod.arguments(),
+          handler: mod,
+          validate_input: validate_input
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  def parse_components({:resource, name, mod}) do
+    if Hermes.exported?(mod, :uri, 0) do
+      [
+        %Resource{
+          uri: mod.uri(),
+          name: name,
+          description: Component.get_description(mod),
+          mime_type: mod.mime_type(),
+          handler: mod
+        }
+      ]
+    else
+      []
     end
   end
 

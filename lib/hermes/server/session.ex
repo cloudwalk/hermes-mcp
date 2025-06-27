@@ -1,19 +1,5 @@
 defmodule Hermes.Server.Session do
-  @moduledoc """
-  Manages state for the Hermes MCP server base implementation.
-
-  This module provides a structured representation of server state during the MCP lifecycle,
-  including initialization status, protocol negotiation, and server capabilities.
-
-  ## State Structure
-
-  Each server state includes:
-  - `protocol_version`: Negotiated MCP protocol version
-  - `frame`: Server frame (similar to LiveView socket)
-  - `initialized`: Whether the server has completed initialization
-  - `client_info`: Client information received during initialization
-  - `client_capabilities`: Client capabilities received during initialization
-  """
+  @moduledoc false
 
   use Agent, restart: :transient
 

@@ -2,7 +2,7 @@ defmodule Hermes.Server.Handlers.Resources do
   @moduledoc false
 
   alias Hermes.MCP.Error
-  alias Hermes.Server.Component
+  alias Hermes.Server.Component.Resource
   alias Hermes.Server.Frame
   alias Hermes.Server.Response
 
@@ -23,10 +23,8 @@ defmodule Hermes.Server.Handlers.Resources do
   @spec handle_list(Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_list(frame, server_module) do
-    resources = server_module.__components__(:resource)
-    response = %{"resources" => Enum.map(resources, &parse_resource_definition/1)}
-
-    {:reply, response, frame}
+    resources = server_module.__components__(:resource) ++ Frame.get_resources(frame)
+    {:reply, %{"resources" => resources}, frame}
   end
 
   @doc """
@@ -49,11 +47,11 @@ defmodule Hermes.Server.Handlers.Resources do
   """
   @spec handle_read(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_read(%{"params" => %{"uri" => uri}}, frame, server_module) when is_binary(uri) do
-    resources = server_module.__components__(:resource)
+  def handle_read(%{"params" => %{"uri" => uri}}, frame, server) when is_binary(uri) do
+    resources = server.__components__(:resource) ++ Frame.get_resources(frame)
 
     if resource = find_resource_module(resources, uri) do
-      read_single_resource(resource, uri, frame)
+      read_single_resource(server, resource, frame)
     else
       payload = %{message: "Resource not found: #{uri}"}
       error = Error.resource(:not_found, payload)
@@ -63,28 +61,31 @@ defmodule Hermes.Server.Handlers.Resources do
 
   # Private functions
 
-  defp find_resource_module(resources, uri) do
-    Enum.find_value(resources, fn {_name, module} ->
-      if module.uri() == uri, do: module
-    end)
-  end
+  defp find_resource_module(resources, uri), do: Enum.find(resources, &(&1.uri == uri))
 
-  defp parse_resource_definition({_name, module}) do
-    %{
-      "uri" => module.uri(),
-      "name" => Component.get_description(module),
-      "mimeType" => module.mime_type()
-    }
-  end
-
-  defp read_single_resource(module, uri, frame) do
-    case module.read(%{"uri" => uri}, frame) do
+  defp read_single_resource(server, %Resource{handler: nil, uri: uri, mime_type: mime_type}, frame) do
+    case server.handle_resource_read(uri, frame) do
       {:reply, %Response{} = response, frame} ->
-        content = Response.to_protocol(response, uri, module.mime_type())
+        content = Response.to_protocol(response, uri, mime_type)
         {:reply, %{"contents" => [content]}, frame}
 
       {:noreply, frame} ->
-        content = %{"uri" => uri, "mimeType" => module.mime_type(), "text" => ""}
+        content = %{"uri" => uri, "mimeType" => mime_type, "text" => ""}
+        {:reply, %{"contents" => [content]}, frame}
+
+      {:error, %Error{} = error, frame} ->
+        {:error, error, frame}
+    end
+  end
+
+  defp read_single_resource(_server, %Resource{handler: handler, uri: uri, mime_type: mime_type}, frame) do
+    case handler.read(%{"uri" => uri}, frame) do
+      {:reply, %Response{} = response, frame} ->
+        content = Response.to_protocol(response, uri, mime_type)
+        {:reply, %{"contents" => [content]}, frame}
+
+      {:noreply, frame} ->
+        content = %{"uri" => uri, "mimeType" => mime_type, "text" => ""}
         {:reply, %{"contents" => [content]}, frame}
 
       {:error, %Error{} = error, frame} ->

@@ -126,7 +126,6 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
           Base,
           module: StubServer,
           name: registry.server(StubServer),
-          init_arg: :ok,
           transport: [layer: StubTransport, name: stub_transport],
           registry: registry
         })

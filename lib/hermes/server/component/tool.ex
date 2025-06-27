@@ -56,7 +56,6 @@ defmodule Hermes.Server.Component.Tool do
   """
 
   alias Hermes.MCP.Error
-  alias Hermes.Server.Component
   alias Hermes.Server.Frame
   alias Hermes.Server.Response
 
@@ -64,6 +63,18 @@ defmodule Hermes.Server.Component.Tool do
   @type result :: term()
   @type schema :: map()
   @type annotations :: map() | nil
+
+  @type t :: %__MODULE__{
+          name: String.t(),
+          description: String.t() | nil,
+          input_schema: map | nil,
+          annotations: map | nil,
+          handler: module | nil,
+          validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
+        }
+
+  @derive {JSON.Encoder, except: [:handler, :validate_input]}
+  defstruct [:name, description: nil, input_schema: nil, annotations: nil, handler: nil, validate_input: nil]
 
   @doc """
   Returns the JSON Schema for the tool's input parameters.
@@ -90,7 +101,6 @@ defmodule Hermes.Server.Component.Tool do
       end
   """
   @callback annotations() :: annotations()
-  @optional_callbacks annotations: 0
 
   @doc """
   Executes the tool with the given parameters.
@@ -128,51 +138,5 @@ defmodule Hermes.Server.Component.Tool do
               | {:noreply, new_state :: Frame.t()}
               | {:error, error :: Error.t(), new_state :: Frame.t()}
 
-  @doc """
-  Converts a tool module into the MCP protocol format.
-
-  ## Parameters
-    * `tool_module` - The tool module
-    * `name` - The tool name (optional, defaults to deriving from module name)
-    * `protocol_version` - The protocol version (optional, defaults to "2024-11-05")
-  """
-  @spec to_protocol(module(), String.t() | nil, String.t()) :: map()
-  def to_protocol(tool_module, name \\ nil, protocol_version \\ "2024-11-05") do
-    name = name || derive_tool_name(tool_module)
-
-    base = %{
-      "name" => name,
-      "description" => Component.get_description(tool_module),
-      "inputSchema" => tool_module.input_schema()
-    }
-
-    # Only include annotations if protocol version supports it
-    if Hermes.Protocol.supports_feature?(protocol_version, :tool_annotations) and
-         Code.ensure_loaded?(tool_module) and function_exported?(tool_module, :annotations, 0) do
-      Map.put(base, "annotations", tool_module.annotations())
-    else
-      base
-    end
-  end
-
-  defp derive_tool_name(module) do
-    module
-    |> Module.split()
-    |> List.last()
-    |> Macro.underscore()
-  end
-
-  @doc """
-  Validates that a module implements the Tool behaviour.
-  """
-  @spec implements?(module()) :: boolean()
-  def implements?(module) do
-    behaviours =
-      :attributes
-      |> module.__info__()
-      |> Keyword.get(:behaviour, [])
-      |> List.flatten()
-
-    __MODULE__ in behaviours
-  end
+  @optional_callbacks annotations: 0
 end

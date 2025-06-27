@@ -158,7 +158,6 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
       server_opts = [
         module: ServerWithAnnotatedTools,
         name: :test_server,
-        init_arg: :ok,
         registry: Hermes.Server.Registry,
         transport: [layer: StubTransport, name: transport]
       ]

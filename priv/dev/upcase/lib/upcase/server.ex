@@ -5,9 +5,7 @@ defmodule Upcase.Server do
 
   use Hermes.Server
 
-  def start_link(opts \\ []) do
-    Hermes.Server.start_link(__MODULE__, :ok, opts)
-  end
+  require Logger
 
   @impl true
   def server_info do
@@ -30,7 +28,8 @@ defmodule Upcase.Server do
   component(Upcase.Resources.Examples)
 
   @impl true
-  def init(:ok, frame) do
+  def init(client_info, frame) do
+    Logger.info("We had the client_info: #{inspect(client_info)}")
     schedule_hello()
     {:ok, assign(frame, counter: 0)}
   end

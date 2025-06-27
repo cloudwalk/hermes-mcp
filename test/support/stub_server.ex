@@ -46,15 +46,6 @@ defmodule StubServer do
     }
   ]
 
-  def start_link(opts) do
-    Hermes.Server.start_link(__MODULE__, :ok, opts)
-  end
-
-  @impl true
-  def init(:ok, frame) do
-    {:ok, frame}
-  end
-
   @impl true
   def handle_request(%{"method" => "ping"}, frame) do
     {:reply, %{}, frame}

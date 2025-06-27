@@ -28,7 +28,6 @@ defmodule Hermes.Server.Base do
           frame: Frame.t(),
           supported_versions: list(String.t()),
           transport: [layer: module, name: GenServer.name()],
-          init_arg: term,
           registry: module,
           sessions: %{required(String.t()) => {GenServer.name(), reference()}},
           session_idle_timeout: pos_integer(),
@@ -39,20 +38,17 @@ defmodule Hermes.Server.Base do
   MCP server options
 
   - `:module` - The module implementing the server behavior (required)
-  - `:init_args` - Arguments passed to the module's init/1 callback
   - `:name` - Optional name for registering the GenServer
   - `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
   """
   @type option ::
           {:module, GenServer.name()}
-          | {:init_arg, keyword}
           | {:name, GenServer.name()}
           | {:session_idle_timeout, pos_integer()}
           | GenServer.option()
 
   defschema :parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:init_arg, {:required, :any}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
@@ -65,7 +61,6 @@ defmodule Hermes.Server.Base do
   ## Parameters
     * `opts` - Keyword list of options:
       * `:module` - (required) The module implementing the `Hermes.Server`
-      * `:init_arg` - Argument to pass to the module's `init/2` callback
       * `:name` - (required) Name for the GenServer process
       * `:registry` - The custom registry module to use to call related processes
       * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
@@ -78,7 +73,6 @@ defmodule Hermes.Server.Base do
       # Start with explicit transport configuration
       Hermes.Server.Base.start_link(
         module: MyServer,
-        init_arg: [],
         name: {:via, Registry, {MyRegistry, :my_server}},
         transport: [
           layer: Hermes.Server.Transport.STDIO,
@@ -89,7 +83,6 @@ defmodule Hermes.Server.Base do
       # With custom session timeout (15 minutes)
       Hermes.Server.Base.start_link(
         module: MyServer,
-        init_arg: [],
         name: :my_server,
         session_idle_timeout: :timer.minutes(15),
         transport: [
@@ -245,7 +238,6 @@ defmodule Hermes.Server.Base do
       capabilities: capabilities,
       supported_versions: protocol_versions,
       transport: Map.new(opts.transport),
-      init_arg: opts.init_arg,
       registry: opts.registry,
       sessions: %{},
       session_idle_timeout: opts.session_idle_timeout,
@@ -261,7 +253,7 @@ defmodule Hermes.Server.Base do
       %{module: module, server_info: server_info, capabilities: capabilities}
     )
 
-    server_init(state)
+    {:ok, state, :hibernate}
   end
 
   @impl GenServer
@@ -379,7 +371,7 @@ defmodule Hermes.Server.Base do
   end
 
   def handle_info(event, %{module: module} = state) do
-    if exported?(module, :handle_info, 2) do
+    if Hermes.exported?(module, :handle_info, 2) do
       case module.handle_info(event, state.frame) do
         {:noreply, frame} -> {:noreply, %{state | frame: frame}}
         {:noreply, frame, cont} -> {:noreply, %{state | frame: frame}, cont}
@@ -400,15 +392,11 @@ defmodule Hermes.Server.Base do
       %{reason: reason, server_info: server_info}
     )
 
-    if exported?(module, :terminate, 2) do
+    if Hermes.exported?(module, :terminate, 2) do
       module.terminate(reason, state.frame)
     else
       :ok
     end
-  end
-
-  defp exported?(m, f, a) do
-    function_exported?(m, f, a) or (Code.ensure_loaded?(m) and function_exported?(m, f, a))
   end
 
   defp handle_single_request(decoded, session, state) do
@@ -576,11 +564,13 @@ defmodule Hermes.Server.Base do
 
   # Notification handling
 
-  defp handle_notification(%{"method" => "notifications/initialized"}, session, state) do
+  defp handle_notification(%{"method" => "notifications/initialized"}, session, %{module: module} = state) do
     Logging.server_event("client_initialized", %{session_id: session.id})
     :ok = Session.mark_initialized(session.name)
     Logging.server_event("session_marked_initialized", %{session_id: session.id, initialized: true})
-    {:noreply, %{state | frame: %{state.frame | initialized: true}}}
+    frame = %{state.frame | initialized: true}
+    {:ok, frame} = if Hermes.exported?(module, :init, 2), do: module.init(session.client_info, frame), else: {:ok, frame}
+    {:noreply, %{state | frame: frame}}
   end
 
   defp handle_notification(%{"method" => "notifications/cancelled"} = notification, session, state) do
@@ -663,20 +653,6 @@ defmodule Hermes.Server.Base do
   end
 
   # Helper functions
-
-  defp server_init(%{module: module, init_arg: init_arg} = state) do
-    case module.init(init_arg, state.frame) do
-      {:ok, %Frame{} = frame} ->
-        {:ok, %{state | frame: frame}, :hibernate}
-
-      :ignore ->
-        :ignore
-
-      {:stop, reason} ->
-        Logging.server_event("starting_failed", %{reason: reason}, level: :error)
-        {:stop, reason}
-    end
-  end
 
   defp server_request(%{"id" => request_id, "method" => method} = request, %{module: module} = state) do
     case module.handle_request(request, state.frame) do

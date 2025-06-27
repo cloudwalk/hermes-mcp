@@ -43,4 +43,9 @@ defmodule Hermes do
   def genserver_name(val) do
     {:error, "#{inspect(val, pretty: true)} is not a valid name for a GenServer"}
   end
+
+  @doc false
+  def exported?(m, f, a) do
+    function_exported?(m, f, a) or (Code.ensure_loaded?(m) and function_exported?(m, f, a))
+  end
 end

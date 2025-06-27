@@ -17,7 +17,6 @@ defmodule Hermes.Server.BaseTest do
                Base.start_link(
                  module: StubServer,
                  name: :named_server,
-                 init_arg: :ok,
                  transport: [layer: StubTransport, name: transport]
                )
 
@@ -31,7 +30,6 @@ defmodule Hermes.Server.BaseTest do
                Base.start_link(
                  module: StubServer,
                  name: :named_server,
-                 init_arg: :ok,
                  transport: [layer: StubTransport, name: transport]
                )
 
@@ -99,7 +97,6 @@ defmodule Hermes.Server.BaseTest do
          [
            module: StubServer,
            name: :expiry_test_server,
-           init_arg: :ok,
            transport: [layer: StubTransport, name: transport],
            # 100ms for testing
            session_idle_timeout: 100
@@ -131,7 +128,6 @@ defmodule Hermes.Server.BaseTest do
            [
              module: StubServer,
              name: :reset_test_server,
-             init_arg: :ok,
              transport: [layer: StubTransport, name: transport],
              session_idle_timeout: 200
            ]}
@@ -169,7 +165,6 @@ defmodule Hermes.Server.BaseTest do
            [
              module: StubServer,
              name: :notification_reset_server,
-             init_arg: :ok,
              transport: [layer: StubTransport, name: transport],
              session_idle_timeout: 200
            ]}
