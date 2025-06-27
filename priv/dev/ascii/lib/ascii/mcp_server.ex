@@ -11,15 +11,6 @@ defmodule Ascii.MCPServer do
   alias Hermes.MCP.Error
   require Logger
 
-  def start_link(opts \\ []) do
-    Hermes.Server.start_link(__MODULE__, :ok, opts)
-  end
-
-  @impl true
-  def init(:ok, frame) do
-    {:ok, frame}
-  end
-
   @impl true
   def handle_request(%{"method" => "tools/list"} = _request, state) do
     response = %{

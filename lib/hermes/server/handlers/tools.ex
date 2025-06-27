@@ -25,10 +25,7 @@ defmodule Hermes.Server.Handlers.Tools do
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_list(frame, server_module) do
     tools = server_module.__components__(:tool) ++ Frame.get_tools(frame)
-    protocol_version = Frame.get_protocol_version(frame) || "2024-11-05"
-    response = %{"tools" => Enum.map(tools, &parse_tool_definition(&1, protocol_version))}
-
-    {:reply, response, frame}
+    {:reply, %{"tools" => tools}, frame}
   end
 
   @doc """
@@ -61,14 +58,6 @@ defmodule Hermes.Server.Handlers.Tools do
   # Private functions
 
   defp find_tool_module(tools, name), do: Enum.find(tools, &(&1.name == name))
-
-  defp parse_tool_definition(%Tool{} = tool, protocol_version) do
-    if Hermes.Protocol.supports_feature?(protocol_version, :tool_annotations) do
-      tool
-    else
-      tool |> Map.from_struct() |> Map.delete(:annotations)
-    end
-  end
 
   defp validate_params(params, %Tool{} = tool, frame) do
     with {:error, errors} <- tool.validate_input.(params) do

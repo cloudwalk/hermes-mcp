@@ -3,7 +3,6 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
   alias Hermes.MCP.Message
   alias Hermes.Server.Component
-  alias Hermes.Server.Component.Tool
 
   defmodule ToolWithAnnotations do
     @moduledoc "A tool with annotations"
@@ -75,54 +74,9 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
   end
 
   describe "tool annotations" do
-    test "tool with annotations in use macro" do
-      protocol = Tool.to_protocol(ToolWithAnnotations, nil, "2025-03-26")
-
-      assert protocol["name"] == "tool_with_annotations"
-      assert protocol["description"] == "A tool with annotations"
-      assert protocol["inputSchema"]["type"] == "object"
-
-      assert protocol["annotations"] == %{
-               "confidence" => 0.95,
-               "category" => "text-processing",
-               "tags" => ["nlp", "text", "analysis"]
-             }
-    end
-
-    test "tool without annotations" do
-      protocol = Tool.to_protocol(ToolWithoutAnnotations, nil, "2025-03-26")
-
-      assert protocol["name"] == "tool_without_annotations"
-      assert protocol["description"] == "A tool without annotations"
-      assert protocol["inputSchema"]["type"] == "object"
-      refute Map.has_key?(protocol, "annotations")
-    end
-
-    test "tool with custom annotations implementation" do
-      protocol = Tool.to_protocol(ToolWithCustomAnnotations, nil, "2025-03-26")
-
-      assert protocol["name"] == "tool_with_custom_annotations"
-      assert protocol["description"] == "A tool with custom annotations implementation"
-      assert protocol["inputSchema"]["type"] == "object"
-
-      assert protocol["annotations"] == %{
-               "version" => "2.0",
-               "experimental" => true,
-               "capabilities" => %{
-                 "streaming" => false,
-                 "batch" => true
-               }
-             }
-    end
-
     test "annotations callback is optional" do
-      # Verify that ToolWithAnnotations implements annotations
       assert function_exported?(ToolWithAnnotations, :annotations, 0)
-
-      # Verify that ToolWithoutAnnotations does not implement annotations
       refute function_exported?(ToolWithoutAnnotations, :annotations, 0)
-
-      # Verify that ToolWithCustomAnnotations implements annotations
       assert function_exported?(ToolWithCustomAnnotations, :annotations, 0)
     end
   end
@@ -177,14 +131,12 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
     test "lists tools with and without annotations", %{server: server, session_id: session_id} do
       request = build_request("tools/list", %{})
       {:ok, response_string} = GenServer.call(server, {:request, request, session_id, %{}})
-
       {:ok, [response]} = Message.decode(response_string)
 
       assert response["result"]
       tools = response["result"]["tools"]
       assert length(tools) == 3
 
-      # Find each tool and verify its annotations
       tool_with_annotations = Enum.find(tools, &(&1["name"] == "tool_with_annotations"))
       assert tool_with_annotations["annotations"]["confidence"] == 0.95
       assert tool_with_annotations["annotations"]["category"] == "text-processing"
@@ -195,9 +147,9 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
       tool_with_custom = Enum.find(tools, &(&1["name"] == "tool_with_custom_annotations"))
       assert tool_with_custom["annotations"]["version"] == "2.0"
-      assert tool_with_custom["annotations"]["experimental"] == true
-      assert tool_with_custom["annotations"]["capabilities"]["streaming"] == false
-      assert tool_with_custom["annotations"]["capabilities"]["batch"] == true
+      assert tool_with_custom["annotations"]["experimental"]
+      assert tool_with_custom["annotations"]["capabilities"]["batch"]
+      refute tool_with_custom["annotations"]["capabilities"]["streaming"]
     end
   end
 end

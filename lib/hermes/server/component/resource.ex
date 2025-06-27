@@ -85,7 +85,6 @@ defmodule Hermes.Server.Component.Resource do
           handler: module | nil
         }
 
-  @derive {JSON.Encoder, except: [:handler]}
   defstruct [:uri, :name, description: nil, mime_type: "text/plain", handler: nil]
 
   @doc """
@@ -136,4 +135,14 @@ defmodule Hermes.Server.Component.Resource do
               {:reply, response :: Response.t(), new_state :: Frame.t()}
               | {:noreply, new_state :: Frame.t()}
               | {:error, error :: Error.t(), new_state :: Frame.t()}
+
+  defimpl JSON.Encoder, for: __MODULE__ do
+    alias Hermes.Server.Component.Resource
+
+    def encode(%Resource{} = resource, _) do
+      resource
+      |> Map.from_struct()
+      |> JSON.encode!()
+    end
+  end
 end

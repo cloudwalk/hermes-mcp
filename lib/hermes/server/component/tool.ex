@@ -73,7 +73,6 @@ defmodule Hermes.Server.Component.Tool do
           validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
         }
 
-  @derive {JSON.Encoder, except: [:handler, :validate_input]}
   defstruct [:name, description: nil, input_schema: nil, annotations: nil, handler: nil, validate_input: nil]
 
   @doc """
@@ -139,4 +138,18 @@ defmodule Hermes.Server.Component.Tool do
               | {:error, error :: Error.t(), new_state :: Frame.t()}
 
   @optional_callbacks annotations: 0
+
+  defimpl JSON.Encoder, for: __MODULE__ do
+    alias Hermes.Server.Component.Tool
+
+    def encode(%Tool{} = tool, _) do
+      %{
+        "name" => tool.name,
+        "description" => tool.description,
+        "inputSchema" => tool.input_schema
+      }
+      |> then(&if a = tool.annotations, do: Map.put(&1, "annotations", a), else: &1)
+      |> JSON.encode!()
+    end
+  end
 end

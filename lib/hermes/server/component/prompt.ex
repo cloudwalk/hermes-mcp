@@ -94,7 +94,6 @@ defmodule Hermes.Server.Component.Prompt do
           validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
         }
 
-  @derive {JSON.Encoder, except: [:handler, :validate_input]}
   defstruct [:name, description: nil, arguments: nil, handler: nil, validate_input: nil]
 
   @doc """
@@ -154,4 +153,14 @@ defmodule Hermes.Server.Component.Prompt do
               {:reply, response :: Response.t(), new_state :: Frame.t()}
               | {:noreply, new_state :: Frame.t()}
               | {:error, error :: Error.t(), new_state :: Frame.t()}
+
+  defimpl JSON.Encoder, for: __MODULE__ do
+    alias Hermes.Server.Component.Prompt
+
+    def encode(%Prompt{} = prompt, _) do
+      prompt
+      |> Map.from_struct()
+      |> JSON.encode!()
+    end
+  end
 end

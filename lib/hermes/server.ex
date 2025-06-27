@@ -329,7 +329,8 @@ defmodule Hermes.Server do
                       handle_tool_call: 3,
                       handle_resource_read: 2,
                       handle_prompt_get: 3,
-                      handle_request: 2
+                      handle_request: 2,
+                      init: 2
 
   @doc """
   Checks if the MCP session has been initialized.
@@ -469,8 +470,9 @@ defmodule Hermes.Server do
 
     if Hermes.exported?(mod, :input_schema, 0) do
       validate_input = fn params ->
-        schema = mod.__mcp_raw_schema__()
-        Peri.validate(schema, params)
+        mod.__mcp_raw_schema__()
+        |> Component.__clean_schema_for_peri__()
+        |> Peri.validate(params)
       end
 
       [
@@ -491,8 +493,9 @@ defmodule Hermes.Server do
   def parse_components({:prompt, name, mod}) do
     if Hermes.exported?(mod, :arguments, 0) do
       validate_input = fn params ->
-        schema = mod.__mcp_raw_schema__()
-        Peri.validate(schema, params)
+        mod.__mcp_raw_schema__()
+        |> Component.__clean_schema_for_peri__()
+        |> Peri.validate(params)
       end
 
       [
