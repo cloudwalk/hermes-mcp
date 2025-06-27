@@ -1,53 +1,91 @@
 defmodule Hermes.Server do
   @moduledoc """
-  MCP server implementation.
+  Build MCP servers that extend language model capabilities.
 
-  This module provides the main API for implementing MCP (Model Context Protocol) servers.
-  It includes macros and functions to simplify server creation with standardized capabilities,
-  protocol version support, and supervision tree setup.
+  MCP servers are specialized processes that provide three core primitives to AI assistants:
+  **Resources** (contextual data like files or schemas), **Tools** (actions the model can invoke),
+  and **Prompts** (user-selectable templates). They operate in a secure, isolated architecture
+  where clients maintain 1:1 connections with servers, enabling composable functionality while
+  maintaining strict security boundaries.
 
-  ## Usage
+  ## Quick Start
+
+  Create a server in three steps:
 
       defmodule MyServer do
         use Hermes.Server,
-          name: "My MCP Server",
+          name: "my-server",
           version: "1.0.0",
-          capabilities: [:tools, :resources, :logging]
+          capabilities: [:tools]
 
-        @impl Hermes.Server
-        def init(_arg, frame) do
-          {:ok, frame}
-        end
-
-        @impl Hermes.Server
-        def handle_request(%{"method" => "tools/list"}, frame) do
-          {:reply, %{"tools" => []}, frame}
-        end
-
-        @impl Hermes.Server
-        def handle_notification(_notification, frame) do
-          {:noreply, frame}
-        end
+        component MyServer.Calculator
       end
 
-  ## Server Capabilities
+      defmodule MyServer.Calculator do
+        use Hermes.Server.Component, type: :tool
 
-  The following capabilities are supported:
-  - `:prompts` - Server can provide prompt templates
-  - `:tools` - Server can execute tools/functions
-  - `:resources` - Server can provide resources (files, data, etc.)
-  - `:logging` - Server supports log level configuration
+        def definition do
+          %{
+            name: "add",
+            description: "Add two numbers",
+            input_schema: %{
+              type: "object",
+              properties: %{
+                a: %{type: "number"},
+                b: %{type: "number"}
+              }
+            }
+          }
+        end
 
-  Capabilities can be configured with options:
-  - `subscribe?: boolean` - Whether the capability supports subscriptions (resources only)
-  - `list_changed?: boolean` - Whether the capability emits list change notifications
+        def call(%{"a" => a, "b" => b}), do: {:ok, a + b}
+      end
 
-  ## Protocol Versions
+      # Start your server
+      {:ok, _pid} = Hermes.Server.start_link(MyServer, [], transport: :stdio)
 
-  By default, servers support the following protocol versions:
-  - "2025-03-26" - Latest protocol version
-  - "2024-10-07" - Previous stable version
-  - "2024-05-11" - Legacy version for backward compatibility
+  Your server is now a living process that AI assistants can connect to, discover available
+  tools, and execute calculations through a secure protocol boundary.
+
+  ## Capabilities
+
+  Declare what your server can do:
+
+  - **`:tools`** - Execute functions with structured inputs and outputs
+  - **`:resources`** - Provide data that models can read (files, APIs, databases)
+  - **`:prompts`** - Offer reusable templates for common interactions
+  - **`:logging`** - Allow clients to configure verbosity levels
+
+  Configure capabilities with options:
+
+      use Hermes.Server,
+        capabilities: [
+          :tools,
+          {:resources, subscribe?: true},      # Enable resource update subscriptions
+          {:prompts, list_changed?: true}      # Notify when prompts change
+        ]
+
+  ## Components
+
+  Register tools, resources, and prompts as components:
+
+      component MyServer.FileReader           # Auto-named as "file_reader"
+      component MyServer.ApiClient, name: "api"   # Custom name
+
+  Components are modules that implement specific behaviors (`Hermes.Server.Component`)
+  and are automatically discovered by clients through the protocol.
+
+  ## Server Lifecycle
+
+  Your server follows a predictable lifecycle with callbacks you can hook into:
+
+  1. **`init/2`** - Set up initial state when the server starts
+  2. **`handle_request/2`** - Process MCP protocol requests from clients
+  3. **`handle_notification/2`** - React to one-way client messages
+  4. **`handle_info/2`** - Bridge external events into MCP notifications
+
+  Most protocol handling is automatic - you typically only implement `init/2` for setup
+  and occasionally override other callbacks for custom behavior.
   """
 
   alias Hermes.Server.Component
@@ -210,7 +248,56 @@ defmodule Hermes.Server do
               | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, Frame.t()}
 
-  @optional_callbacks handle_notification: 2, handle_info: 2
+  @doc """
+  Handles synchronous calls to the server process.
+
+  This optional callback allows you to handle custom synchronous calls made to your
+  MCP server process using `GenServer.call/2`. This is useful for implementing
+  administrative functions, status queries, or any synchronous operations that
+  need to interact with the server's internal state.
+
+  The callback follows standard GenServer semantics and should return appropriate
+  reply tuples. If not implemented, the Base module provides a default implementation
+  that handles standard MCP operations.
+  """
+  @callback handle_call(request :: term, from :: GenServer.from(), Frame.t()) ::
+              {:reply, reply :: term, Frame.t()}
+              | {:reply, reply :: term, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Frame.t()}
+              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, reply :: term, Frame.t()}
+              | {:stop, reason :: term, Frame.t()}
+
+  @doc """
+  Handles asynchronous casts to the server process.
+
+  This optional callback allows you to handle custom asynchronous messages sent to your
+  MCP server process using `GenServer.cast/2`. This is useful for fire-and-forget
+  operations, background tasks, or any asynchronous operations that don't require
+  an immediate response.
+
+  The callback follows standard GenServer semantics. If not implemented, the Base
+  module provides a default implementation that handles standard MCP operations.
+  """
+  @callback handle_cast(request :: term, Frame.t()) ::
+              {:noreply, Frame.t()}
+              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, Frame.t()}
+
+  @doc """
+  Cleans up when the server process terminates.
+
+  This optional callback is invoked when the server process is about to terminate.
+  It allows you to perform cleanup operations, close connections, save state,
+  or release resources before the process exits.
+
+  The callback receives the termination reason and the current frame. Any return
+  value is ignored. If not implemented, the Base module provides a default
+  implementation that logs the termination event.
+  """
+  @callback terminate(reason :: term, Frame.t()) :: term
+
+  @optional_callbacks handle_notification: 2, handle_info: 2, handle_call: 3, handle_cast: 2, terminate: 2
 
   @doc """
   Starts a server with its supervision tree.

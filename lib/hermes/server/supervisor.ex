@@ -197,6 +197,8 @@ defmodule Hermes.Server.Supervisor do
   end
 
   defp check_phoenix_config do
-    Application.get_env(:phoenix, :serve_endpoints, false)
+    phoenix_start? = Application.get_env(:phoenix, :serve_endpoints)
+
+    if is_nil(phoenix_start?), do: true, else: phoenix_start?
   end
 end

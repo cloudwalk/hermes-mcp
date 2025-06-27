@@ -303,6 +303,17 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  def handle_call(request, from, %{module: module} = state) do
+    case module.handle_call(request, from, state.frame) do
+      {:reply, reply, frame} -> {:reply, reply, %{state | frame: frame}}
+      {:reply, reply, frame, cont} -> {:reply, reply, %{state | frame: frame}, cont}
+      {:noreply, frame} -> {:noreply, %{state | frame: frame}}
+      {:noreply, frame, cont} -> {:noreply, %{state | frame: frame}, cont}
+      {:stop, reason, reply, frame} -> {:stop, reason, reply, %{state | frame: frame}}
+      {:stop, reason, frame} -> {:stop, reason, %{state | frame: frame}}
+    end
+  end
+
   @impl GenServer
   def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
     with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
@@ -317,6 +328,14 @@ defmodule Hermes.Server.Base do
 
         {:noreply, state}
       end
+    end
+  end
+
+  def handle_cast(request, %{module: module} = state) do
+    case module.handle_cast(request, state.frame) do
+      {:noreply, frame} -> {:noreply, %{state | frame: frame}}
+      {:noreply, frame, cont} -> {:noreply, %{state | frame: frame}, cont}
+      {:stop, reason, frame} -> {:stop, reason, %{state | frame: frame}}
     end
   end
 
@@ -372,7 +391,7 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def terminate(reason, %{server_info: server_info}) do
+  def terminate(reason, %{module: module, server_info: server_info} = state) do
     Logging.server_event("terminating", %{reason: reason, server_info: server_info})
 
     Telemetry.execute(
@@ -381,7 +400,11 @@ defmodule Hermes.Server.Base do
       %{reason: reason, server_info: server_info}
     )
 
-    :ok
+    if exported?(module, :terminate, 2) do
+      module.terminate(reason, state.frame)
+    else
+      :ok
+    end
   end
 
   defp exported?(m, f, a) do
