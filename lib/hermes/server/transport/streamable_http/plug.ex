@@ -414,7 +414,9 @@ if Code.ensure_loaded?(Plug) do
           {:error, reason} ->
             Logging.transport_event(
               "sse_background_request_error",
-              %{reason: reason}, level: :error)
+              %{reason: reason},
+              level: :error
+            )
         end
       end)
     end
@@ -481,7 +483,9 @@ if Code.ensure_loaded?(Plug) do
         {:error, reason} ->
           Logging.transport_event(
             "parse_error",
-            %{body: body, reason: inspect(reason)}, level: :error)
+            %{body: body, reason: inspect(reason)},
+            level: :error
+          )
 
           {:error, :invalid_json}
       end

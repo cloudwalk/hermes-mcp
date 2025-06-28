@@ -382,7 +382,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       {:error, reason} ->
         Logging.transport_event(
           "server_error",
-          %{reason: reason, session_id: session_id}, level: :error)
+          %{reason: reason, session_id: session_id},
+          level: :error
+        )
 
         {:error, reason}
     end

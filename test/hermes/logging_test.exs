@@ -203,7 +203,10 @@ defmodule Hermes.LoggingTest do
             "incoming",
             "response",
             123,
-            %{"id" => 123, "result" => %{}}, level: :error, custom: :metadata)
+            %{"id" => 123, "result" => %{}},
+            level: :error,
+            custom: :metadata
+          )
         end)
 
       assert log =~ "[error] [MCP message] incoming response: id=123 success"

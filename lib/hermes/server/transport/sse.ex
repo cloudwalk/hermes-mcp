@@ -343,7 +343,9 @@ defmodule Hermes.Server.Transport.SSE do
       {:error, reason} ->
         Logging.transport_event(
           "server_error",
-          %{reason: reason, session_id: session_id}, level: :error)
+          %{reason: reason, session_id: session_id},
+          level: :error
+        )
 
         {:error, reason}
     end
@@ -361,7 +363,9 @@ defmodule Hermes.Server.Transport.SSE do
       {:error, reason} ->
         Logging.transport_event(
           "batch_server_error",
-          %{reason: reason, session_id: session_id}, level: :error)
+          %{reason: reason, session_id: session_id},
+          level: :error
+        )
 
         {:error, reason}
     end

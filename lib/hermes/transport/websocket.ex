@@ -319,7 +319,9 @@ if Code.ensure_loaded?(:gun) do
         ) do
       Logging.transport_event(
         "ws_upgrade_rejected",
-        %{status: status, headers: headers}, level: :error)
+        %{status: status, headers: headers},
+        level: :error
+      )
 
       {:stop, {:ws_upgrade_rejected, status}, state}
     end

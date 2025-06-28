@@ -174,7 +174,9 @@ defmodule Hermes.Transport.STDIO do
   def handle_info({port, :closed}, %{port: port} = state) do
     Logging.transport_event(
       "stdio_closed",
-      "Connection closed, transport will restart", level: :warning)
+      "Connection closed, transport will restart",
+      level: :warning
+    )
 
     Telemetry.execute(
       Telemetry.event_transport_disconnect(),
