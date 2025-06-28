@@ -380,6 +380,7 @@ defmodule Hermes.Server do
           send_progress: 5
         ]
 
+      import Hermes.Server.Component, only: [field: 3]
       import Hermes.Server.Frame
 
       require Hermes.MCP.Message

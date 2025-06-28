@@ -378,7 +378,7 @@ defmodule Hermes.Server.Frame do
   """
   @spec register_tool(t, String.t(), keyword()) :: t
   def register_tool(%__MODULE__{} = frame, name, opts) when is_binary(name) do
-    input_schema = opts[:input_schema] || %{}
+    input_schema = Schema.normalize(opts[:input_schema] || %{})
     raw_schema = Component.__clean_schema_for_peri__(input_schema)
     validate_input = fn params -> Peri.validate(raw_schema, params) end
 
@@ -396,7 +396,7 @@ defmodule Hermes.Server.Frame do
   """
   @spec register_prompt(t, String.t(), keyword()) :: t
   def register_prompt(%__MODULE__{} = frame, name, opts) when is_binary(name) do
-    arguments = opts[:arguments]
+    arguments = Schema.normalize(opts[:arguments] || %{})
     raw_schema = Component.__clean_schema_for_peri__(arguments)
     validate_input = fn params -> Peri.validate(raw_schema, params) end
 

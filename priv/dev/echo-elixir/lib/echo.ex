@@ -12,7 +12,7 @@ defmodule Echo do
   """
   @spec version() :: String.t() | nil
   def version do
-    if vsn = Application.spec(:specialist)[:vsn] do
+    if vsn = Application.spec(:echo)[:vsn] do
       List.to_string(vsn)
     end
   end

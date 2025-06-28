@@ -1,21 +1,23 @@
 defmodule Hermes.Server.Component.Schema do
   @moduledoc false
 
-  @doc """
-  Converts a Peri schema definition to JSON Schema format.
+  alias Hermes.Server.Component
 
-  ## Examples
+  @type schema :: map() | list()
+  @type field_type :: atom() | tuple()
+  @type json_schema :: map()
+  @type prompt_argument :: map()
 
-      iex> to_json_schema(%{name: :string, age: {:required, :integer}})
-      %{
-        "type" => "object",
-        "properties" => %{
-          "name" => %{"type" => "string"},
-          "age" => %{"type" => "integer"}
-        },
-        "required" => ["age"]
-      }
-  """
+  @spec normalize(schema()) :: map()
+  def normalize(schema) when is_map(schema) do
+    Map.new(schema, fn {key, value} -> {key, normalize_field(value)} end)
+  end
+
+  def normalize(schema) when is_list(schema), do: Map.new(schema)
+
+  def normalize(schema), do: schema
+
+  @spec to_json_schema(schema() | nil) :: json_schema()
   def to_json_schema(nil), do: %{"type" => "object"}
 
   def to_json_schema(schema) when is_map(schema) do
@@ -32,17 +34,7 @@ defmodule Hermes.Server.Component.Schema do
     if Enum.empty?(required), do: base, else: Map.put(base, "required", required)
   end
 
-  @doc """
-  Converts a Peri schema to prompt argument definitions.
-
-  ## Examples
-
-      iex> to_prompt_arguments(%{language: {:required, :string}, focus: :string})
-      [
-        %{"name" => "language", "description" => "Required string parameter", "required" => true},
-        %{"name" => "focus", "description" => "Optional string parameter", "required" => false}
-      ]
-  """
+  @spec to_prompt_arguments(schema() | nil) :: [prompt_argument()]
   def to_prompt_arguments(nil), do: []
 
   def to_prompt_arguments(schema) when is_map(schema) do
@@ -55,9 +47,7 @@ defmodule Hermes.Server.Component.Schema do
     end)
   end
 
-  @doc """
-  Formats Peri validation errors into a human-readable string.
-  """
+  @spec format_errors([map()] | [binary()]) :: binary()
   def format_errors(errors) when is_list(errors) do
     Enum.map_join(errors, "; ", &format_error/1)
   end
@@ -79,7 +69,6 @@ defmodule Hermes.Server.Component.Schema do
   defp convert_type({:mcp_field, type, opts}) when is_list(opts) do
     base_schema = convert_type(type)
 
-    # For nested objects, we need to merge metadata at the object level
     Enum.reduce(opts, base_schema, fn
       {:format, format}, schema -> Map.put(schema, "format", format)
       {:description, desc}, schema -> Map.put(schema, "description", desc)
@@ -203,4 +192,85 @@ defmodule Hermes.Server.Component.Schema do
   defp describe_base_type({type, _}), do: "#{to_string(type)} parameter"
   defp describe_base_type(schema) when is_map(schema), do: "nested object"
   defp describe_base_type(_), do: "parameter"
+
+  @spec validator(schema()) :: (map() -> {:ok, map()} | {:error, list(Peri.Error.t())})
+  def validator(schema) do
+    normalized = normalize(schema)
+    peri_schema = Component.__clean_schema_for_peri__(normalized)
+
+    fn params -> Peri.validate(peri_schema, params) end
+  end
+
+  defp normalize_field({:required, type, opts}) when is_list(opts) do
+    {:mcp_field, {:required, type}, opts}
+  end
+
+  defp normalize_field({type, opts}) when is_list(opts) do
+    {metadata, constraints} = split_opts(opts)
+
+    if Enum.empty?(constraints) do
+      {:mcp_field, type, metadata}
+    else
+      base_type = build_constrained_type(type, constraints)
+      {:mcp_field, base_type, metadata}
+    end
+  end
+
+  defp normalize_field({:object, fields}) when is_map(fields) do
+    normalize(fields)
+  end
+
+  defp normalize_field({:object, fields, opts}) when is_map(fields) and is_list(opts) do
+    {:mcp_field, normalize(fields), opts}
+  end
+
+  defp normalize_field({:list, item_type}) do
+    {:list, normalize_field(item_type)}
+  end
+
+  defp normalize_field({:list, item_type, opts}) when is_list(opts) do
+    {:mcp_field, {:list, normalize_field(item_type)}, opts}
+  end
+
+  defp normalize_field({:mcp_field, _, _} = field), do: field
+  defp normalize_field(nested) when is_map(nested), do: normalize(nested)
+  defp normalize_field(other), do: other
+
+  defp split_opts(opts) do
+    Keyword.split(opts, [:description, :format, :default, :type])
+  end
+
+  defp build_constrained_type(type, []), do: type
+
+  defp build_constrained_type(type, [{key, value}]) do
+    {type, {key, value}}
+  end
+
+  defp build_constrained_type(:string, constraints) do
+    case {Keyword.get(constraints, :min), Keyword.get(constraints, :max)} do
+      {nil, max} when not is_nil(max) -> {:string, {:max, max}}
+      {min, nil} when not is_nil(min) -> {:string, {:min, min}}
+      _ -> :string
+    end
+  end
+
+  defp build_constrained_type(:integer, constraints) do
+    case {Keyword.get(constraints, :min), Keyword.get(constraints, :max)} do
+      {min, max} when not is_nil(min) and not is_nil(max) -> {:integer, {:range, {min, max}}}
+      {nil, max} when not is_nil(max) -> {:integer, {:max, max}}
+      {min, nil} when not is_nil(min) -> {:integer, {:min, min}}
+      _ -> :integer
+    end
+  end
+
+  defp build_constrained_type(:float, constraints) do
+    case {Keyword.get(constraints, :min), Keyword.get(constraints, :max)} do
+      {min, max} when not is_nil(min) and not is_nil(max) -> {:float, {:range, {min, max}}}
+      {nil, max} when not is_nil(max) -> {:float, {:max, max}}
+      {min, nil} when not is_nil(min) -> {:float, {:min, min}}
+      _ -> :float
+    end
+  end
+
+  defp build_constrained_type(type, _constraints), do: type
 end

@@ -20,7 +20,7 @@ config :logger, :console,
 config :phoenix, :json_library, JSON
 
 config :mime, :types, %{
-  "text/event-stream" => ["event-stream"],
+  "text/event-stream" => ["event-stream"]
 }
 
 import_config "#{config_env()}.exs"

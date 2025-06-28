@@ -67,7 +67,7 @@ defmodule Hermes.Server.Handlers.Tools do
   end
 
   defp forward_to(server, %Tool{handler: nil} = tool, params, frame) do
-    case server.handle_tool(tool.name, params, frame) do
+    case server.handle_tool_call(tool.name, params, frame) do
       {:reply, %Response{} = response, frame} ->
         {:reply, Response.to_protocol(response), frame}
 

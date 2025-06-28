@@ -32,33 +32,24 @@ defmodule MyApp.MCPServer do
     version: "1.0.0", 
     capabilities: [:tools]
 
-  def start_link(opts) do
-    Hermes.Server.start_link(__MODULE__, :ok, opts)
-  end
-
-  component MyApp.MCPServer.EchoTool
-
   @impl true
-  def init(:ok, frame), do: {:ok, frame}
-end
-
-# Define your tool
-defmodule MyApp.MCPServer.EchoTool do
-  @moduledoc "This tool echoes everything the user says to the LLM"
-
-  use Hermes.Server.Component, type: :tool
-
-  alias Hermes.Server.Response
-
-  schema do
-    field :text, {:string, {:max, 500}},
-      description: "The text to be echoed, max of 500 chars",
-      required: true
+  # this callback will be called when the
+  # MCP initialize lifecycle completes
+  def init(_client_info, frame) do
+    {:ok,frame
+      |> assign(counter: 0)
+      |> register_tool("echo",
+        input_schema: %{
+          text: {:required, :string, max: 150, description: "the text to be echoed"}
+        },
+        annotations: %{read_only: true},
+        description: "echoes everything the user says to the LLM") }
   end
 
   @impl true
-  def execute(%{text: text}, frame) do
-    {:reply, Response.text(Response.tool(), text), frame}
+  def handle_tool("echo", %{text: text}, frame) do
+    Logger.info("This tool was called #{frame.assigns.counter + 1}")
+    {:reply, text, assign(frame, counter: frame.assigns.counter + 1)}
   end
 end
 
@@ -72,27 +63,28 @@ children = [
 forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug, server: MyApp.MCPServer
 ```
 
+Now you can achieve your MCP server on `http://localhost:<port>/mcp`
+
 ### Client  
 
 ```elixir
 # Define a client module
-defmodule MyApp.AnthropicClient do
+defmodule MyApp.MCPClient do
   use Hermes.Client,
     name: "MyApp",
     version: "1.0.0",
-    protocol_version: "2024-11-05",
-    capabilities: [:roots, :sampling]
+    protocol_version: "2025-03-26"
 end
 
 # Add to your application supervisor
 children = [
   {MyApp.AnthropicClient, 
-   transport: {:stdio, command: "uvx", args: ["mcp-server-anthropic"]}}
+   transport: {:streamable_http, base_url: "http://localhost:4000"}}
 ]
 
 # Use the client
-{:ok, tools} = MyApp.AnthropicClient.list_tools()
-{:ok, result} = MyApp.AnthropicClient.call_tool("search", %{query: "elixir"})
+{:ok, tools} = MyApp.MCPClient.list_tools()
+{:ok, result} = MyApp.MCPClient.call_tool("search", %{query: "elixir"})
 ```
 
 ## Why Hermes?
