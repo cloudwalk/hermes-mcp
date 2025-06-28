@@ -73,7 +73,14 @@ defmodule Hermes.Server.Component.Tool do
           validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
         }
 
-  defstruct [:name, description: nil, input_schema: nil, annotations: nil, handler: nil, validate_input: nil]
+  defstruct [
+    :name,
+    description: nil,
+    input_schema: nil,
+    annotations: nil,
+    handler: nil,
+    validate_input: nil
+  ]
 
   @doc """
   Returns the JSON Schema for the tool's input parameters.

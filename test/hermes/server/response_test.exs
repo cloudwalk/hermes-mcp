@@ -51,7 +51,13 @@ defmodule Hermes.Server.ResponseTest do
         |> Response.to_protocol()
 
       assert result == %{
-               "content" => [%{"type" => "image", "data" => "base64data", "mimeType" => "image/png"}],
+               "content" => [
+                 %{
+                   "type" => "image",
+                   "data" => "base64data",
+                   "mimeType" => "image/png"
+                 }
+               ],
                "isError" => false
              }
     end
@@ -118,7 +124,12 @@ defmodule Hermes.Server.ResponseTest do
              } = result
 
       assert {:ok, decoded} = JSON.decode(text)
-      assert decoded == %{"status" => "success", "count" => 42, "items" => ["a", "b", "c"]}
+
+      assert decoded == %{
+               "status" => "success",
+               "count" => 42,
+               "items" => ["a", "b", "c"]
+             }
     end
   end
 

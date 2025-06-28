@@ -106,7 +106,8 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
       # Start session supervisor
       start_supervised!(
-        {Hermes.Server.Session.Supervisor, server: ServerWithAnnotatedTools, registry: Hermes.Server.Registry}
+        {Hermes.Server.Session.Supervisor,
+         server: ServerWithAnnotatedTools, registry: Hermes.Server.Registry}
       )
 
       server_opts = [
@@ -120,32 +121,54 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
       # Initialize the server
       session_id = "test-session"
-      request = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
+      request =
+        init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
       assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
       notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+      assert :ok =
+               GenServer.cast(server, {:notification, notification, session_id, %{}})
 
       %{server: server, session_id: session_id}
     end
 
-    test "lists tools with and without annotations", %{server: server, session_id: session_id} do
+    test "lists tools with and without annotations", %{
+      server: server,
+      session_id: session_id
+    } do
       request = build_request("tools/list", %{})
-      {:ok, response_string} = GenServer.call(server, {:request, request, session_id, %{}})
+
+      {:ok, response_string} =
+        GenServer.call(server, {:request, request, session_id, %{}})
+
       {:ok, [response]} = Message.decode(response_string)
 
       assert response["result"]
       tools = response["result"]["tools"]
       assert length(tools) == 3
 
-      tool_with_annotations = Enum.find(tools, &(&1["name"] == "tool_with_annotations"))
+      tool_with_annotations =
+        Enum.find(tools, &(&1["name"] == "tool_with_annotations"))
+
       assert tool_with_annotations["annotations"]["confidence"] == 0.95
       assert tool_with_annotations["annotations"]["category"] == "text-processing"
-      assert tool_with_annotations["annotations"]["tags"] == ["nlp", "text", "analysis"]
 
-      tool_without_annotations = Enum.find(tools, &(&1["name"] == "tool_without_annotations"))
+      assert tool_with_annotations["annotations"]["tags"] == [
+               "nlp",
+               "text",
+               "analysis"
+             ]
+
+      tool_without_annotations =
+        Enum.find(tools, &(&1["name"] == "tool_without_annotations"))
+
       refute Map.has_key?(tool_without_annotations, "annotations")
 
-      tool_with_custom = Enum.find(tools, &(&1["name"] == "tool_with_custom_annotations"))
+      tool_with_custom =
+        Enum.find(tools, &(&1["name"] == "tool_with_custom_annotations"))
+
       assert tool_with_custom["annotations"]["version"] == "2.0"
       assert tool_with_custom["annotations"]["experimental"]
       assert tool_with_custom["annotations"]["capabilities"]["batch"]

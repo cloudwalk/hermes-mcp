@@ -172,7 +172,9 @@ defmodule Hermes.Transport.STDIO do
   end
 
   def handle_info({port, :closed}, %{port: port} = state) do
-    Logging.transport_event("stdio_closed", "Connection closed, transport will restart", level: :warning)
+    Logging.transport_event(
+      "stdio_closed",
+      "Connection closed, transport will restart", level: :warning)
 
     Telemetry.execute(
       Telemetry.event_transport_disconnect(),
@@ -265,12 +267,17 @@ defmodule Hermes.Transport.STDIO do
 
   defp spawn_port(cmd, state) do
     default_env = get_default_env()
-    env = if is_nil(state.env), do: default_env, else: Map.merge(default_env, state.env)
+
+    env =
+      if is_nil(state.env), do: default_env, else: Map.merge(default_env, state.env)
+
     env = normalize_env_for_erlang(env)
 
     opts =
       [:binary]
-      |> then(&if is_nil(state.args), do: &1, else: Enum.concat(&1, args: state.args))
+      |> then(
+        &if is_nil(state.args), do: &1, else: Enum.concat(&1, args: state.args)
+      )
       |> then(&if is_nil(state.env), do: &1, else: Enum.concat(&1, env: env))
       |> then(&if is_nil(state.cwd), do: &1, else: Enum.concat(&1, cd: state.cwd))
 
@@ -278,7 +285,8 @@ defmodule Hermes.Transport.STDIO do
   end
 
   defp get_default_env do
-    default_env = if :os.type() == {:win32, :nt}, do: @win32_default_env, else: @unix_default_env
+    default_env =
+      if :os.type() == {:win32, :nt}, do: @win32_default_env, else: @unix_default_env
 
     System.get_env()
     |> Enum.filter(fn {k, _} -> Enum.member?(default_env, k) end)

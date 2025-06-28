@@ -131,7 +131,9 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
     test "supports deeply nested fields" do
       json_schema = DeeplyNestedTool.input_schema()
 
-      assert json_schema["properties"]["organization"]["properties"]["admin"]["properties"]["permissions"] == %{
+      assert json_schema["properties"]["organization"]["properties"]["admin"][
+               "properties"
+             ]["permissions"] == %{
                "type" => "object",
                "properties" => %{
                  "read" => %{"type" => "boolean"},
@@ -152,7 +154,10 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
 
         schema do
           field(:title, {:required, :string}, description: "Title of the item")
-          field(:priority, {:enum, ["low", "medium", "high"]}, description: "Priority level")
+
+          field(:priority, {:enum, ["low", "medium", "high"]},
+            description: "Priority level"
+          )
 
           field :metadata do
             field(:created_at, :string, format: "date-time")
@@ -169,8 +174,17 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
       json_schema = CleanSyntaxTool.input_schema()
 
       assert json_schema["properties"]["title"]["description"] == "Title of the item"
-      assert json_schema["properties"]["priority"]["enum"] == ["low", "medium", "high"]
-      assert json_schema["properties"]["metadata"]["properties"]["created_at"]["format"] == "date-time"
+
+      assert json_schema["properties"]["priority"]["enum"] == [
+               "low",
+               "medium",
+               "high"
+             ]
+
+      assert json_schema["properties"]["metadata"]["properties"]["created_at"][
+               "format"
+             ] == "date-time"
+
       assert json_schema["required"] == ["title"]
     end
   end

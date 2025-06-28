@@ -47,7 +47,11 @@ defmodule Hermes.SSE do
       ref = make_ref()
       task = spawn_stream_task(req, ref, opts)
 
-      Stream.resource(fn -> {ref, task} end, &process_task_stream/1, &shutdown_task/1)
+      Stream.resource(
+        fn -> {ref, task} end,
+        &process_task_stream/1,
+        &shutdown_task/1
+      )
     end
   end
 
@@ -115,7 +119,8 @@ defmodule Hermes.SSE do
   end
 
   # the raw streaming response
-  defp process_sse_stream({:status, status}, acc, _dest, _ref) when status != 200, do: {:halt, acc}
+  defp process_sse_stream({:status, status}, acc, _dest, _ref) when status != 200,
+    do: {:halt, acc}
 
   defp process_sse_stream(chunk, acc, dest, ref) do
     send(dest, {:chunk, chunk, ref})

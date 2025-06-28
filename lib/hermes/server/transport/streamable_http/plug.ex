@@ -105,7 +105,10 @@ if Code.ensure_loaded?(Plug) do
             start_sse_streaming(conn, transport, session_id, session_header)
 
           {:error, reason} ->
-            Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
+            Logging.transport_event("sse_registration_failed", %{reason: reason},
+              level: :error
+            )
+
             send_error(conn, 500, "Could not establish SSE connection")
         end
       else
@@ -115,7 +118,10 @@ if Code.ensure_loaded?(Plug) do
 
     # POST request handler - processes MCP messages
 
-    defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
+    defp handle_post(
+           conn,
+           %{transport: transport, session_header: session_header} = opts
+         ) do
       with :ok <- validate_accept_header(conn),
            {:ok, body, conn} <- maybe_read_request_body(conn, opts),
            {:ok, messages} <- maybe_parse_messages(body) do
@@ -133,23 +139,51 @@ if Code.ensure_loaded?(Plug) do
         |> process_message(conn, transport, session_id, context, session_header)
       else
         {:error, :invalid_accept_header} ->
-          send_error(conn, 406, "Not Acceptable: Client must accept both application/json and text/event-stream")
+          send_error(
+            conn,
+            406,
+            "Not Acceptable: Client must accept both application/json and text/event-stream"
+          )
 
         {:error, :invalid_json} ->
-          send_jsonrpc_error(conn, Error.protocol(:parse_error, %{message: "Invalid JSON"}), nil)
+          send_jsonrpc_error(
+            conn,
+            Error.protocol(:parse_error, %{message: "Invalid JSON"}),
+            nil
+          )
 
         {:error, reason} ->
           Logging.transport_event("request_error", %{reason: reason}, level: :error)
-          send_jsonrpc_error(conn, Error.protocol(:parse_error, %{reason: reason}), nil)
+
+          send_jsonrpc_error(
+            conn,
+            Error.protocol(:parse_error, %{reason: reason}),
+            nil
+          )
       end
     end
 
     defp prepare_message_or_batch([single]), do: single
     defp prepare_message_or_batch(batch), do: batch
 
-    defp process_message(message, conn, transport, session_id, context, session_header) when is_map(message) do
+    defp process_message(
+           message,
+           conn,
+           transport,
+           session_id,
+           context,
+           session_header
+         )
+         when is_map(message) do
       if Message.is_request(message) do
-        handle_request_with_possible_sse(conn, transport, session_id, message, context, session_header)
+        handle_request_with_possible_sse(
+          conn,
+          transport,
+          session_id,
+          message,
+          context,
+          session_header
+        )
       else
         # Notification
         transport
@@ -158,9 +192,17 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp process_message(batch, conn, transport, session_id, context, session_header) when is_list(batch) do
+    defp process_message(batch, conn, transport, session_id, context, session_header)
+         when is_list(batch) do
       if Enum.any?(batch, &Message.is_request/1) do
-        handle_request_with_possible_sse(conn, transport, session_id, batch, context, session_header)
+        handle_request_with_possible_sse(
+          conn,
+          transport,
+          session_id,
+          batch,
+          context,
+          session_header
+        )
       else
         # All notifications
         transport
@@ -180,8 +222,15 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp format_notification_response({:error, reason}, conn) do
-      Logging.transport_event("notification_handling_failed", %{reason: reason}, level: :error)
-      send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), nil)
+      Logging.transport_event("notification_handling_failed", %{reason: reason},
+        level: :error
+      )
+
+      send_jsonrpc_error(
+        conn,
+        Error.protocol(:internal_error, %{reason: reason}),
+        nil
+      )
     end
 
     # DELETE request handler - closes session
@@ -202,18 +251,59 @@ if Code.ensure_loaded?(Plug) do
 
     # Handle requests that might need SSE streaming
 
-    defp handle_request_with_possible_sse(conn, transport, session_id, body, context, session_header) do
+    defp handle_request_with_possible_sse(
+           conn,
+           transport,
+           session_id,
+           body,
+           context,
+           session_header
+         ) do
       if wants_sse?(conn) do
-        handle_sse_request(conn, transport, session_id, body, context, session_header)
+        handle_sse_request(
+          conn,
+          transport,
+          session_id,
+          body,
+          context,
+          session_header
+        )
       else
-        handle_json_request(conn, transport, session_id, body, context, session_header)
+        handle_json_request(
+          conn,
+          transport,
+          session_id,
+          body,
+          context,
+          session_header
+        )
       end
     end
 
-    defp handle_sse_request(conn, transport, session_id, body, context, session_header) do
-      case StreamableHTTP.handle_message_for_sse(transport, session_id, body, context) do
+    defp handle_sse_request(
+           conn,
+           transport,
+           session_id,
+           body,
+           context,
+           session_header
+         ) do
+      case StreamableHTTP.handle_message_for_sse(
+             transport,
+             session_id,
+             body,
+             context
+           ) do
         {:sse, response} ->
-          route_sse_response(conn, transport, session_id, response, body, context, session_header)
+          route_sse_response(
+            conn,
+            transport,
+            session_id,
+            response,
+            body,
+            context,
+            session_header
+          )
 
         {:ok, response} ->
           conn
@@ -226,7 +316,14 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp handle_json_request(conn, transport, session_id, body, context, session_header) do
+    defp handle_json_request(
+           conn,
+           transport,
+           session_id,
+           body,
+           context,
+           session_header
+         ) do
       case StreamableHTTP.handle_message(transport, session_id, body, context) do
         {:ok, response} ->
           conn
@@ -239,7 +336,15 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp route_sse_response(conn, transport, session_id, response, body, context, session_header) do
+    defp route_sse_response(
+           conn,
+           transport,
+           session_id,
+           response,
+           body,
+           context,
+           session_header
+         ) do
       if handler_pid = StreamableHTTP.get_sse_handler(transport, session_id) do
         send(handler_pid, {:sse_message, response})
 
@@ -247,7 +352,14 @@ if Code.ensure_loaded?(Plug) do
         |> put_resp_content_type("application/json")
         |> send_resp(202, "{}")
       else
-        establish_sse_for_request(conn, transport, session_id, body, context, session_header)
+        establish_sse_for_request(
+          conn,
+          transport,
+          session_id,
+          body,
+          context,
+          session_header
+        )
       end
     end
 
@@ -257,18 +369,37 @@ if Code.ensure_loaded?(Plug) do
 
     defp handle_request_error(conn, reason, body) do
       Logging.transport_event("request_error", %{reason: reason}, level: :error)
-      send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), extract_request_id(body))
+
+      send_jsonrpc_error(
+        conn,
+        Error.protocol(:internal_error, %{reason: reason}),
+        extract_request_id(body)
+      )
     end
 
-    defp establish_sse_for_request(conn, transport, session_id, body, context, session_header) do
+    defp establish_sse_for_request(
+           conn,
+           transport,
+           session_id,
+           body,
+           context,
+           session_header
+         ) do
       case StreamableHTTP.register_sse_handler(transport, session_id) do
         :ok ->
           start_background_request(transport, session_id, body, context)
           start_sse_streaming(conn, transport, session_id, session_header)
 
         {:error, reason} ->
-          Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
-          send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), extract_request_id(body))
+          Logging.transport_event("sse_registration_failed", %{reason: reason},
+            level: :error
+          )
+
+          send_jsonrpc_error(
+            conn,
+            Error.protocol(:internal_error, %{reason: reason}),
+            extract_request_id(body)
+          )
       end
     end
 
@@ -281,7 +412,9 @@ if Code.ensure_loaded?(Plug) do
             send(self_pid, {:sse_message, response})
 
           {:error, reason} ->
-            Logging.transport_event("sse_background_request_error", %{reason: reason}, level: :error)
+            Logging.transport_event(
+              "sse_background_request_error",
+              %{reason: reason}, level: :error)
         end
       end)
     end
@@ -331,7 +464,8 @@ if Code.ensure_loaded?(Plug) do
     end
 
     # initialize request can't be batched
-    defp determine_session_id(_conn, _header, [message]) when Message.is_initialize(message) do
+    defp determine_session_id(_conn, _header, [message])
+         when Message.is_initialize(message) do
       ID.generate_session_id()
     end
 
@@ -345,7 +479,10 @@ if Code.ensure_loaded?(Plug) do
           {:ok, messages}
 
         {:error, reason} ->
-          Logging.transport_event("parse_error", %{body: body, reason: inspect(reason)}, level: :error)
+          Logging.transport_event(
+            "parse_error",
+            %{body: body, reason: inspect(reason)}, level: :error)
+
           {:error, :invalid_json}
       end
     end
@@ -374,19 +511,24 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
+    defp maybe_read_request_body(
+           %{body_params: %Unfetched{aspect: :body_params}} = conn,
+           %{timeout: timeout}
+         ) do
       case Plug.Conn.read_body(conn, read_timeout: timeout) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}
       end
     end
 
-    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _) when is_list(json_array) do
+    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _)
+         when is_list(json_array) do
       # Phoenix parses JSON arrays into _json parameter
       {:ok, json_array, conn}
     end
 
-    defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
+    defp maybe_read_request_body(%{body_params: body} = conn, _),
+      do: {:ok, body, conn}
 
     defp send_error(conn, status, message) do
       data = %{data: %{message: message, http_status: status}}

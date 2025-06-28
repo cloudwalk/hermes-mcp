@@ -11,11 +11,22 @@ defmodule Hermes do
   alias Hermes.Transport.StreamableHTTP, as: ClientStreamableHTTP
 
   @client_transports if Mix.env() == :test,
-                       do: [ClientSTDIO, ClientSSE, ClientStreamableHTTP, StubTransport, Hermes.MockTransport],
+                       do: [
+                         ClientSTDIO,
+                         ClientSSE,
+                         ClientStreamableHTTP,
+                         StubTransport,
+                         Hermes.MockTransport
+                       ],
                        else: [ClientSTDIO, ClientSSE, ClientStreamableHTTP]
 
   @server_transports if Mix.env() == :test,
-                       do: [ServerSTDIO, ServerStreamableHTTP, ServerSSE, StubTransport],
+                       do: [
+                         ServerSTDIO,
+                         ServerStreamableHTTP,
+                         ServerSSE,
+                         StubTransport
+                       ],
                        else: [ServerSTDIO, ServerStreamableHTTP, ServerSSE]
 
   defschema :client_transport,
@@ -30,7 +41,8 @@ defmodule Hermes do
 
   @doc "Checks if hermes should be compiled/used as standalone CLI or OTP library"
   def should_compile_cli? do
-    Code.ensure_loaded?(Burrito) and Application.get_env(:hermes_mcp, :compile_cli?, false)
+    Code.ensure_loaded?(Burrito) and
+      Application.get_env(:hermes_mcp, :compile_cli?, false)
   end
 
   @doc """
@@ -46,6 +58,7 @@ defmodule Hermes do
 
   @doc false
   def exported?(m, f, a) do
-    function_exported?(m, f, a) or (Code.ensure_loaded?(m) and function_exported?(m, f, a))
+    function_exported?(m, f, a) or
+      (Code.ensure_loaded?(m) and function_exported?(m, f, a))
   end
 end

@@ -44,7 +44,10 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     sse_path = parsed[:sse_path] || "/sse"
 
     if base_url == "" do
-      IO.puts("#{UI.colors().error}Error: --base-url cannot be empty#{UI.colors().reset}")
+      IO.puts(
+        "#{UI.colors().error}Error: --base-url cannot be empty#{UI.colors().reset}"
+      )
+
       IO.puts("Please provide a valid URL, e.g., --base-url=http://localhost:8000")
       System.halt(1)
     end
@@ -53,7 +56,10 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
 
     header = UI.header("HERMES MCP SSE INTERACTIVE")
     IO.puts(header)
-    IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
+
+    IO.puts(
+      "#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n"
+    )
 
     SupervisedShell.start(
       transport_module: SSE,

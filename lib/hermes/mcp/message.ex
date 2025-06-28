@@ -70,7 +70,9 @@ defmodule Hermes.MCP.Message do
   }
 
   @completion_complete_params_schema %{
-    "ref" => {:required, {:oneof, [@completion_prompt_ref_schema, @completion_resource_ref_schema]}},
+    "ref" =>
+      {:required,
+       {:oneof, [@completion_prompt_ref_schema, @completion_resource_ref_schema]}},
     "argument" => {:required, @completion_argument_schema}
   }
 
@@ -89,21 +91,45 @@ defmodule Hermes.MCP.Message do
 
   defp params_with_progress_token(attrs) do
     with {:ok, %{} = schema} <- parse_request_params_by_method(attrs) do
-      schema = if get_in(attrs, ["params", "_meta"]), do: Map.merge(schema, @progress_params), else: schema
+      schema =
+        if get_in(attrs, ["params", "_meta"]),
+          do: Map.merge(schema, @progress_params),
+          else: schema
+
       {:ok, schema}
     end
   end
 
-  defp parse_request_params_by_method(%{"method" => "initialize"}), do: {:ok, @init_params_schema}
-  defp parse_request_params_by_method(%{"method" => "ping"}), do: {:ok, @ping_params_schema}
-  defp parse_request_params_by_method(%{"method" => "resources/list"}), do: {:ok, @resources_list_params_schema}
-  defp parse_request_params_by_method(%{"method" => "resources/read"}), do: {:ok, @resources_read_params_schema}
-  defp parse_request_params_by_method(%{"method" => "prompts/list"}), do: {:ok, @prompts_list_params_schema}
-  defp parse_request_params_by_method(%{"method" => "prompts/get"}), do: {:ok, @prompts_get_params_schema}
-  defp parse_request_params_by_method(%{"method" => "tools/list"}), do: {:ok, @tools_list_params_schema}
-  defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
-  defp parse_request_params_by_method(%{"method" => "logging/setLevel"}), do: {:ok, @set_log_level_params_schema}
-  defp parse_request_params_by_method(%{"method" => "completion/complete"}), do: {:ok, @completion_complete_params_schema}
+  defp parse_request_params_by_method(%{"method" => "initialize"}),
+    do: {:ok, @init_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "ping"}),
+    do: {:ok, @ping_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "resources/list"}),
+    do: {:ok, @resources_list_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "resources/read"}),
+    do: {:ok, @resources_read_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "prompts/list"}),
+    do: {:ok, @prompts_list_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "prompts/get"}),
+    do: {:ok, @prompts_get_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "tools/list"}),
+    do: {:ok, @tools_list_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "tools/call"}),
+    do: {:ok, @tools_call_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "logging/setLevel"}),
+    do: {:ok, @set_log_level_params_schema}
+
+  defp parse_request_params_by_method(%{"method" => "completion/complete"}),
+    do: {:ok, @completion_complete_params_schema}
+
   defp parse_request_params_by_method(%{"method" => "roots/list"}), do: {:ok, :map}
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
@@ -140,8 +166,9 @@ defmodule Hermes.MCP.Message do
     "params" => {:dependent, &parse_notification_params_by_method/1}
   }
 
-  defp parse_notification_params_by_method(%{"method" => "notifications/initialized"}),
-    do: {:ok, @init_noti_params_schema}
+  defp parse_notification_params_by_method(%{
+         "method" => "notifications/initialized"
+       }), do: {:ok, @init_noti_params_schema}
 
   defp parse_notification_params_by_method(%{"method" => "notifications/cancelled"}),
     do: {:ok, @cancel_noti_params_schema}
@@ -152,7 +179,9 @@ defmodule Hermes.MCP.Message do
   defp parse_notification_params_by_method(%{"method" => "notifications/message"}),
     do: {:ok, @logging_message_notif_params_schema}
 
-  defp parse_notification_params_by_method(%{"method" => "notifications/roots/list_changed"}), do: {:ok, :map}
+  defp parse_notification_params_by_method(%{
+         "method" => "notifications/roots/list_changed"
+       }), do: {:ok, :map}
 
   defp parse_notification_params_by_method(_), do: {:ok, :map}
 
@@ -201,7 +230,8 @@ defmodule Hermes.MCP.Message do
       iex> is_request(notification)
       false
   """
-  defguard is_request(data) when is_map_key(data, "method") and is_map_key(data, "id")
+  defguard is_request(data)
+           when is_map_key(data, "method") and is_map_key(data, "id")
 
   @doc """
   Guard to determine if a JSON-RPC message is a notification.
@@ -218,7 +248,8 @@ defmodule Hermes.MCP.Message do
       iex> is_notification(request)
       false
   """
-  defguard is_notification(data) when is_map_key(data, "method") and not is_map_key(data, "id")
+  defguard is_notification(data)
+           when is_map_key(data, "method") and not is_map_key(data, "id")
 
   @doc """
   Guard to determine if a JSON-RPC message is a response.
@@ -231,7 +262,8 @@ defmodule Hermes.MCP.Message do
       iex> is_response(message)
       true
   """
-  defguard is_response(data) when is_map_key(data, "result") and is_map_key(data, "id")
+  defguard is_response(data)
+           when is_map_key(data, "result") and is_map_key(data, "id")
 
   @doc """
   Guard to determine if a JSON-RPC message is an error.
@@ -257,7 +289,8 @@ defmodule Hermes.MCP.Message do
       iex> is_ping(message)
       true
   """
-  defguard is_ping(data) when is_request(data) and :erlang.map_get("method", data) == "ping"
+  defguard is_ping(data)
+           when is_request(data) and :erlang.map_get("method", data) == "ping"
 
   @doc """
   Guard to check if a request is an initialize request.
@@ -268,7 +301,8 @@ defmodule Hermes.MCP.Message do
       iex> is_initialize(message)
       true
   """
-  defguard is_initialize(data) when is_request(data) and :erlang.map_get("method", data) == "initialize"
+  defguard is_initialize(data)
+           when is_request(data) and :erlang.map_get("method", data) == "initialize"
 
   @doc """
   Guard to check if a message is part of the initialization lifecycle.
@@ -291,7 +325,8 @@ defmodule Hermes.MCP.Message do
   """
   defguard is_initialize_lifecycle(data)
            when (is_request(data) and :erlang.map_get("method", data) == "initialize") or
-                  (is_notification(data) and :erlang.map_get("method", data) == "notifications/initialized")
+                  (is_notification(data) and
+                     :erlang.map_get("method", data) == "notifications/initialized")
 
   @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.
@@ -416,8 +451,13 @@ defmodule Hermes.MCP.Message do
 
   Returns the encoded string with a newline character appended.
   """
-  @spec encode_progress_notification(map(), term() | nil) :: {:ok, String.t()} | {:error, term()}
-  def encode_progress_notification(params, params_schema \\ @progress_notif_params_schema) when is_map(params) do
+  @spec encode_progress_notification(map(), term() | nil) ::
+          {:ok, String.t()} | {:error, term()}
+  def encode_progress_notification(
+        params,
+        params_schema \\ @progress_notif_params_schema
+      )
+      when is_map(params) do
     # Validate params against the provided schema
     case Peri.validate(params_schema, params) do
       {:ok, validated_params} ->
@@ -445,10 +485,15 @@ defmodule Hermes.MCP.Message do
       })
   """
   @deprecated "Use encode_progress_notification/2 with a params map. This function will be removed in a future release."
-  @spec encode_progress_notification(String.t() | integer(), number(), number() | nil) ::
+  @spec encode_progress_notification(
+          String.t() | integer(),
+          number(),
+          number() | nil
+        ) ::
           {:ok, String.t()} | {:error, term()}
   def encode_progress_notification(progress_token, progress, total)
-      when (is_binary(progress_token) or is_integer(progress_token)) and is_number(progress) do
+      when (is_binary(progress_token) or is_integer(progress_token)) and
+             is_number(progress) do
     params = %{
       "progressToken" => progress_token,
       "progress" => progress
@@ -515,7 +560,8 @@ defmodule Hermes.MCP.Message do
 
   Returns the encoded notification string with a newline character appended.
   """
-  @spec encode_log_message(String.t(), term(), String.t() | nil) :: {:ok, String.t()} | {:error, term()}
+  @spec encode_log_message(String.t(), term(), String.t() | nil) ::
+          {:ok, String.t()} | {:error, term()}
   def encode_log_message(level, data, logger \\ nil) when level in @log_levels do
     params = maybe_add_logger(%{"level" => level, "data" => data}, logger)
 
@@ -526,7 +572,9 @@ defmodule Hermes.MCP.Message do
   end
 
   defp maybe_add_logger(params, nil), do: params
-  defp maybe_add_logger(params, logger) when is_binary(logger), do: Map.put(params, "logger", logger)
+
+  defp maybe_add_logger(params, logger) when is_binary(logger),
+    do: Map.put(params, "logger", logger)
 
   @doc """
   Encodes a batch of JSON-RPC messages.
@@ -541,7 +589,8 @@ defmodule Hermes.MCP.Message do
   Returns `{:ok, encoded_batch}` if successful, or `{:error, reason}` if validation fails.
   """
   @spec encode_batch([map()], term() | nil) :: {:ok, String.t()} | {:error, term()}
-  def encode_batch(messages, batch_schema \\ get_schema(:batch_schema)) when is_list(messages) do
+  def encode_batch(messages, batch_schema \\ get_schema(:batch_schema))
+      when is_list(messages) do
     case Peri.validate(batch_schema, messages) do
       {:ok, validated_messages} ->
         batch_json = JSON.encode!(validated_messages)

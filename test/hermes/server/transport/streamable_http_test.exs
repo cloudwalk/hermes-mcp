@@ -14,7 +14,9 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
 
       assert {:ok, pid} = StreamableHTTP.start_link(server: server, name: name)
       assert Process.alive?(pid)
-      assert Hermes.Server.Registry.whereis_transport(StubServer, :streamable_http) == pid
+
+      assert Hermes.Server.Registry.whereis_transport(StubServer, :streamable_http) ==
+               pid
     end
 
     test "requires server option" do
@@ -28,7 +30,11 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
     setup do
       registry = Hermes.Server.Registry
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
 
       %{transport: transport, server: StubServer}
     end
@@ -43,7 +49,9 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
       refute StreamableHTTP.get_sse_handler(transport, session_id)
     end
 
-    test "handle_message_for_sse fails when server is not in registry", %{transport: transport} do
+    test "handle_message_for_sse fails when server is not in registry", %{
+      transport: transport
+    } do
       session_id = "test-session-456"
 
       assert :ok = StreamableHTTP.register_sse_handler(transport, session_id)

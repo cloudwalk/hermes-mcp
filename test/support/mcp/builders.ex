@@ -31,8 +31,14 @@ defmodule Hermes.MCP.Builders do
     }
   end
 
-  def init_response(request_id, capabilities) when is_binary(request_id) and is_map(capabilities) do
-    init_response(request_id, "2025-03-26", %{"name" => "TestServer", "version" => "1.0.0"}, capabilities)
+  def init_response(request_id, capabilities)
+      when is_binary(request_id) and is_map(capabilities) do
+    init_response(
+      request_id,
+      "2025-03-26",
+      %{"name" => "TestServer", "version" => "1.0.0"},
+      capabilities
+    )
   end
 
   def build_request(method, params \\ %{}, id \\ ID.generate_request_id()) do
@@ -113,7 +119,16 @@ defmodule Hermes.MCP.Builders do
   end
 
   def completion_complete_response(request_id, values, total, has_more) do
-    build_response(%{"completion" => %{"values" => values, "total" => total, "hasMore" => has_more}}, request_id)
+    build_response(
+      %{
+        "completion" => %{
+          "values" => values,
+          "total" => total,
+          "hasMore" => has_more
+        }
+      },
+      request_id
+    )
   end
 
   def empty_result_response(request_id) do
@@ -123,7 +138,11 @@ defmodule Hermes.MCP.Builders do
   # Notification builders - using generic builder
 
   def log_notification(level, data, logger) do
-    build_notification("notifications/message", %{"level" => level, "data" => data, "logger" => logger})
+    build_notification("notifications/message", %{
+      "level" => level,
+      "data" => data,
+      "logger" => logger
+    })
   end
 
   def progress_notification(token, progress \\ 0, total \\ nil) do
@@ -135,6 +154,9 @@ defmodule Hermes.MCP.Builders do
   end
 
   def cancelled_notification(request_id, reason) do
-    build_notification("notifications/cancelled", %{"requestId" => request_id, "reason" => reason})
+    build_notification("notifications/cancelled", %{
+      "requestId" => request_id,
+      "reason" => reason
+    })
   end
 end

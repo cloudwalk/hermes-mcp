@@ -33,7 +33,13 @@ defmodule Hermes.Server.ComponentPromptTest do
     test "supports nested fields in prompts" do
       arguments = NestedPrompt.arguments()
 
-      assert [%{"name" => "config", "description" => "Configuration options", "required" => false}] = arguments
+      assert [
+               %{
+                 "name" => "config",
+                 "description" => "Configuration options",
+                 "required" => false
+               }
+             ] = arguments
     end
 
     test "backward compatibility with legacy prompt schemas" do

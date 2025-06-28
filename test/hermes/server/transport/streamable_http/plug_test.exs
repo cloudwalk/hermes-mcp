@@ -31,7 +31,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "accepts custom session header", %{registry: registry} do
-      opts = StreamableHTTPPlug.init(server: StubServer, session_header: "x-custom-session")
+      opts =
+        StreamableHTTPPlug.init(
+          server: StubServer,
+          session_header: "x-custom-session"
+        )
 
       assert %{
                transport: transport,
@@ -46,7 +50,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       start_supervised!(MockCustomRegistry)
       assert Process.whereis(MockCustomRegistry)
 
-      opts = StreamableHTTPPlug.init(server: StubServer, mode: :streamable_http, registry: MockCustomRegistry)
+      opts =
+        StreamableHTTPPlug.init(
+          server: StubServer,
+          mode: :streamable_http,
+          registry: MockCustomRegistry
+        )
 
       expected_transport = MockCustomRegistry.transport(StubServer, :streamable_http)
 
@@ -57,7 +66,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "GET endpoint" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
+
       opts = StreamableHTTPPlug.init(server: StubServer)
 
       %{opts: opts, transport: transport}
@@ -107,7 +121,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         })
 
       # Start a stub transport for the server
-      stub_transport = start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
+      stub_transport =
+        start_supervised!(
+          {StubTransport, name: registry.transport(StubServer, :stub)}
+        )
 
       # Start the Base server with stub transport
       {:ok, _server} =
@@ -121,7 +138,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Now start the StreamableHTTP transport
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 
@@ -129,7 +150,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "POST request with notification returns 202", %{opts: opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =
@@ -295,7 +321,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "DELETE endpoint" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
+
       opts = StreamableHTTPPlug.init(server: StubServer)
 
       %{opts: opts, transport: transport}
@@ -327,7 +358,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "unsupported methods" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, _transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, _transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
+
       opts = StreamableHTTPPlug.init(server: StubServer)
 
       %{opts: opts}
@@ -355,7 +391,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         })
 
       # Start a stub transport for the server
-      stub_transport = start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
+      stub_transport =
+        start_supervised!(
+          {StubTransport, name: registry.transport(StubServer, :stub)}
+        )
 
       # Start the Base server with stub transport
       {:ok, _server} =
@@ -369,14 +408,24 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Now start the StreamableHTTP transport
       name = registry.transport(StubServer, :streamable_http)
-      {:ok, transport} = start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised(
+          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+        )
+
       opts = StreamableHTTPPlug.init(server: StubServer)
 
       %{opts: opts, transport: transport}
     end
 
     test "extracts session ID from header", %{opts: opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =
@@ -391,7 +440,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "generates session ID if not provided", %{opts: opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =

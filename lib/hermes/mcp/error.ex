@@ -236,7 +236,8 @@ defmodule Hermes.MCP.Error do
       iex> String.contains?(encoded, "Parse error")
       true
   """
-  @spec to_json_rpc(t(), String.t() | integer()) :: {:ok, String.t()} | {:error, term()}
+  @spec to_json_rpc(t(), String.t() | integer()) ::
+          {:ok, String.t()} | {:error, term()}
   def to_json_rpc(%__MODULE__{} = error, id \\ ID.generate_error_id()) do
     error_payload =
       %{

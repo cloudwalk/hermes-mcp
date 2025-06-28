@@ -140,7 +140,11 @@ defmodule Hermes.Transport.StreamableHTTP do
   @impl GenServer
   def handle_call({:send, message}, from, state) do
     emit_telemetry(:send, state, %{message_size: byte_size(message)})
-    Logging.transport_event("sending_http_request", %{url: URI.to_string(state.mcp_url), size: byte_size(message)})
+
+    Logging.transport_event("sending_http_request", %{
+      url: URI.to_string(state.mcp_url),
+      size: byte_size(message)
+    })
 
     new_state = %{state | active_request: from}
 
@@ -155,7 +159,10 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:reply, {:error, :session_expired}, %{state | session_id: nil}}
 
       {:error, reason} ->
-        Logging.transport_event("http_request_error", %{reason: inspect(reason)}, level: :error)
+        Logging.transport_event("http_request_error", %{reason: inspect(reason)},
+          level: :error
+        )
+
         log_error(reason)
         {:reply, {:error, reason}, state}
     end
@@ -195,7 +202,8 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, _ref, :process, pid, reason}, state) when state.sse_task != nil do
+  def handle_info({:DOWN, _ref, :process, pid, reason}, state)
+      when state.sse_task != nil do
     if pid == state.sse_task.pid do
       Logging.transport_event("sse_task_down", %{reason: reason})
       new_state = maybe_start_sse_connection(%{state | sse_task: nil})
@@ -231,7 +239,11 @@ defmodule Hermes.Transport.StreamableHTTP do
     options = [transport_opts: state.transport_opts] ++ state.http_options
     url = URI.to_string(state.mcp_url)
 
-    Logging.transport_event("http_request", %{method: :post, url: url, headers: headers})
+    Logging.transport_event("http_request", %{
+      method: :post,
+      url: url,
+      headers: headers
+    })
 
     request = HTTP.build(:post, url, headers, message, options)
 
@@ -245,7 +257,10 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:error, {:http_error, status, body}}
 
       {:error, reason} = error ->
-        Logging.transport_event("http_request_failed", %{reason: reason}, level: :error)
+        Logging.transport_event("http_request_failed", %{reason: reason},
+          level: :error
+        )
+
         error
     end
   end
@@ -273,7 +288,8 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:noreply, new_state}
 
       {_, content_type} ->
-        {:reply, {:error, {:unsupported_content_type, content_type}}, %{new_state | active_request: nil}}
+        {:reply, {:error, {:unsupported_content_type, content_type}},
+         %{new_state | active_request: nil}}
     end
   end
 
@@ -317,7 +333,9 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   defp put_session_header(headers, nil), do: headers
-  defp put_session_header(headers, session_id), do: Map.put(headers, "mcp-session-id", session_id)
+
+  defp put_session_header(headers, session_id),
+    do: Map.put(headers, "mcp-session-id", session_id)
 
   defp update_session_id(state, headers) do
     case get_header(headers, "mcp-session-id") do
@@ -368,7 +386,9 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   defp log_error({:http_error, status, body}) do
-    Logging.transport_event("http_error", %{status: status, body: body}, level: :error)
+    Logging.transport_event("http_error", %{status: status, body: body},
+      level: :error
+    )
   end
 
   defp log_error(reason) do
@@ -378,7 +398,9 @@ defmodule Hermes.Transport.StreamableHTTP do
   # Additional helper functions for SSE support
 
   defp maybe_start_sse_connection(%{enable_sse: false} = state), do: state
-  defp maybe_start_sse_connection(%{enable_sse: true, session_id: nil} = state), do: state
+
+  defp maybe_start_sse_connection(%{enable_sse: true, session_id: nil} = state),
+    do: state
 
   defp maybe_start_sse_connection(%{enable_sse: true} = state) do
     task = start_sse_task(state)
@@ -411,10 +433,15 @@ defmodule Hermes.Transport.StreamableHTTP do
         handle_sse_response(resp_headers, body, parent)
 
       {:ok, %{status: 405}} ->
-        Logging.transport_event("sse_not_supported", "Server returned 405 for GET request")
+        Logging.transport_event(
+          "sse_not_supported",
+          "Server returned 405 for GET request"
+        )
 
       error ->
-        Logging.transport_event("sse_connection_failed", %{error: error}, level: :warning)
+        Logging.transport_event("sse_connection_failed", %{error: error},
+          level: :warning
+        )
     end
   end
 
@@ -431,18 +458,24 @@ defmodule Hermes.Transport.StreamableHTTP do
 
     options = [transport_opts: state.transport_opts] ++ state.http_options
 
-    request = HTTP.build(:delete, URI.to_string(state.mcp_url), headers, nil, options)
+    request =
+      HTTP.build(:delete, URI.to_string(state.mcp_url), headers, nil, options)
 
     case HTTP.follow_redirect(request) do
       {:ok, %{status: status}} when status in [200, 405] ->
         :ok
 
       error ->
-        Logging.transport_event("session_delete_failed", %{error: error}, level: :debug)
+        Logging.transport_event("session_delete_failed", %{error: error},
+          level: :debug
+        )
+
         :ok
     end
   end
 
   defp put_last_event_id_header(headers, nil), do: headers
-  defp put_last_event_id_header(headers, event_id), do: Map.put(headers, "last-event-id", event_id)
+
+  defp put_last_event_id_header(headers, event_id),
+    do: Map.put(headers, "last-event-id", event_id)
 end

@@ -47,7 +47,8 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
       start_supervised!(MockCustomRegistry)
       assert Process.whereis(MockCustomRegistry)
 
-      opts = SSEPlug.init(server: StubServer, mode: :sse, registry: MockCustomRegistry)
+      opts =
+        SSEPlug.init(server: StubServer, mode: :sse, registry: MockCustomRegistry)
 
       expected_transport = MockCustomRegistry.transport(StubServer, :sse)
 
@@ -58,7 +59,9 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
   describe "SSE endpoint" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :sse)
-      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       sse_opts = SSEPlug.init(server: StubServer, mode: :sse)
       %{sse_opts: sse_opts, transport: transport}
@@ -118,7 +121,10 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
         })
 
       # Start a stub transport for the server
-      stub_transport = start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
+      stub_transport =
+        start_supervised!(
+          {StubTransport, name: registry.transport(StubServer, :stub)}
+        )
 
       # Start the Base server with stub transport
       {:ok, _server} =
@@ -132,13 +138,18 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
 
       # Now start the SSE transport
       name = registry.transport(StubServer, :sse)
-      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       post_opts = SSEPlug.init(server: StubServer, mode: :post)
       %{post_opts: post_opts, transport: transport, registry: registry}
     end
 
-    test "POST request with valid JSON returns response", %{post_opts: post_opts, transport: transport} do
+    test "POST request with valid JSON returns response", %{
+      post_opts: post_opts,
+      transport: transport
+    } do
       session_id = "test-session"
       :ok = SSE.register_sse_handler(transport, session_id)
 
@@ -163,7 +174,12 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "POST request with notification returns 202", %{post_opts: post_opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =
@@ -204,14 +220,21 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
   describe "session ID extraction" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :sse)
-      {:ok, transport} = start_supervised({SSE, server: StubServer, name: name, registry: registry})
+
+      {:ok, transport} =
+        start_supervised({SSE, server: StubServer, name: name, registry: registry})
 
       post_opts = SSEPlug.init(server: StubServer, mode: :post)
       %{post_opts: post_opts, transport: transport}
     end
 
     test "extracts session ID from header", %{post_opts: post_opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =
@@ -224,7 +247,12 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "extracts session ID from query params", %{post_opts: post_opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =
@@ -236,7 +264,12 @@ defmodule Hermes.Server.Transport.SSE.PlugTest do
     end
 
     test "generates session ID if not provided", %{post_opts: post_opts} do
-      notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
+      notification =
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        })
+
       {:ok, body} = Message.encode_notification(notification)
 
       conn =

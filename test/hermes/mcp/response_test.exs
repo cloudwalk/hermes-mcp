@@ -67,7 +67,11 @@ defmodule Hermes.MCP.ResponseTest do
       }
 
       assert Response.unwrap(success_response) == %{"data" => "value"}
-      assert Response.unwrap(error_response) == %{"isError" => true, "reason" => "not_found"}
+
+      assert Response.unwrap(error_response) == %{
+               "isError" => true,
+               "reason" => "not_found"
+             }
     end
   end
 
@@ -130,7 +134,11 @@ defmodule Hermes.MCP.ResponseTest do
       }
 
       assert Response.get_result(success_response) == %{"data" => "value"}
-      assert Response.get_result(error_response) == %{"isError" => true, "reason" => "not_found"}
+
+      assert Response.get_result(error_response) == %{
+               "isError" => true,
+               "reason" => "not_found"
+             }
     end
   end
 

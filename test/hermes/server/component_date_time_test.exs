@@ -53,7 +53,9 @@ defmodule Hermes.Server.ComponentDateTimeTest do
 
     test "rejects invalid date formats" do
       assert {:error, errors} = DateTool.mcp_schema(%{event_date: "not-a-date"})
-      assert [%{message: "invalid ISO 8601 date format", path: [:event_date]}] = errors
+
+      assert [%{message: "invalid ISO 8601 date format", path: [:event_date]}] =
+               errors
     end
 
     test "enforces required date fields" do
@@ -100,7 +102,9 @@ defmodule Hermes.Server.ComponentDateTimeTest do
 
     test "rejects invalid datetime formats" do
       assert {:error, errors} = DateTimeTool.mcp_schema(%{created_at: "2024-01-15"})
-      assert [%{message: "invalid ISO 8601 datetime format", path: [:created_at]}] = errors
+
+      assert [%{message: "invalid ISO 8601 datetime format", path: [:created_at]}] =
+               errors
     end
   end
 
@@ -125,7 +129,9 @@ defmodule Hermes.Server.ComponentDateTimeTest do
 
     test "rejects invalid time formats" do
       assert {:error, errors} = TimeTool.mcp_schema(%{start_time: "25:00:00"})
-      assert [%{message: "invalid ISO 8601 time format", path: [:start_time]}] = errors
+
+      assert [%{message: "invalid ISO 8601 time format", path: [:start_time]}] =
+               errors
     end
   end
 
@@ -166,7 +172,8 @@ defmodule Hermes.Server.ComponentDateTimeTest do
                  important_dates: ["2024-01-01", "2024-06-15", "2024-12-25"]
                })
 
-      assert [~D[2024-01-01], ~D[2024-06-15], ~D[2024-12-25]] = validated.important_dates
+      assert [~D[2024-01-01], ~D[2024-06-15], ~D[2024-12-25]] =
+               validated.important_dates
     end
 
     test "reports errors for invalid dates in lists" do

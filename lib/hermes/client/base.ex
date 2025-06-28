@@ -47,7 +47,9 @@ defmodule Hermes.Client.Base do
     - The return value is ignored
   """
   @type progress_callback ::
-          (progress_token :: String.t() | integer(), progress :: number(), total :: number() | nil ->
+          (progress_token :: String.t() | integer(),
+           progress :: number(),
+           total :: number() | nil ->
              any())
 
   @typedoc """
@@ -142,7 +144,10 @@ defmodule Hermes.Client.Base do
           | {:protocol_version, String.t()}
           | GenServer.option()
 
-  @default_client_capabilities %{"roots" => %{"listChanged" => true}, "sampling" => %{}}
+  @default_client_capabilities %{
+    "roots" => %{"listChanged" => true},
+    "sampling" => %{}
+  }
 
   defschema(:parse_options, [
     {:name, {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}}},
@@ -230,7 +235,8 @@ defmodule Hermes.Client.Base do
       * `:token` - A unique token to track progress (string or integer)
       * `:callback` - A function to call when progress updates are received
   """
-  @spec read_resource(t, String.t(), keyword) :: {:ok, Response.t()} | {:error, Error.t()}
+  @spec read_resource(t, String.t(), keyword) ::
+          {:ok, Response.t()} | {:error, Error.t()}
   def read_resource(client, uri, opts \\ []) do
     operation =
       Operation.new(%{
@@ -398,7 +404,8 @@ defmodule Hermes.Client.Base do
   Returns {:ok, result} if successful, {:error, reason} otherwise.
   """
   @spec set_log_level(t, String.t()) :: {:ok, Response.t()} | {:error, Error.t()}
-  def set_log_level(client, level) when level in ~w(debug info notice warning error critical alert emergency) do
+  def set_log_level(client, level)
+      when level in ~w(debug info notice warning error critical alert emergency) do
     operation =
       Operation.new(%{
         method: "logging/setLevel",
@@ -445,7 +452,8 @@ defmodule Hermes.Client.Base do
       # Access the completion values
       values = get_in(Response.unwrap(response), ["completion", "values"])
   """
-  @spec complete(t, map(), map(), keyword()) :: {:ok, Response.t()} | {:error, Error.t()}
+  @spec complete(t, map(), map(), keyword()) ::
+          {:ok, Response.t()} | {:error, Error.t()}
   def complete(client, ref, argument, opts \\ []) do
     params = %{
       "ref" => ref,
@@ -475,7 +483,8 @@ defmodule Hermes.Client.Base do
   The callback function will be called whenever a log message notification is received.
   """
   @spec register_log_callback(t, log_callback(), opts :: Keyword.t()) :: :ok
-  def register_log_callback(client, callback, opts \\ []) when is_function(callback, 3) do
+  def register_log_callback(client, callback, opts \\ [])
+      when is_function(callback, 3) do
     timeout = opts[:timeout] || to_timeout(second: 5)
     GenServer.call(client, {:register_log_callback, callback}, timeout)
   end
@@ -515,9 +524,15 @@ defmodule Hermes.Client.Base do
         ) ::
           :ok
   def register_progress_callback(client, progress_token, callback, opts \\ [])
-      when is_function(callback, 3) and (is_binary(progress_token) or is_integer(progress_token)) do
+      when is_function(callback, 3) and
+             (is_binary(progress_token) or is_integer(progress_token)) do
     timeout = opts[:timeout] || to_timeout(second: 5)
-    GenServer.call(client, {:register_progress_callback, progress_token, callback}, timeout)
+
+    GenServer.call(
+      client,
+      {:register_progress_callback, progress_token, callback},
+      timeout
+    )
   end
 
   @doc """
@@ -528,7 +543,8 @@ defmodule Hermes.Client.Base do
     * `client` - The client process
     * `progress_token` - The progress token to stop watching (string or integer)
   """
-  @spec unregister_progress_callback(t, String.t() | integer(), opts :: Keyword.t()) :: :ok
+  @spec unregister_progress_callback(t, String.t() | integer(), opts :: Keyword.t()) ::
+          :ok
   def unregister_progress_callback(client, progress_token, opts \\ [])
       when is_binary(progress_token) or is_integer(progress_token) do
     timeout = opts[:timeout] || to_timeout(second: 5)
@@ -547,12 +563,24 @@ defmodule Hermes.Client.Base do
 
   Returns `:ok` if notification was sent successfully, or `{:error, reason}` otherwise.
   """
-  @spec send_progress(t, String.t() | integer(), number(), number() | nil, opts :: Keyword.t()) ::
+  @spec send_progress(
+          t,
+          String.t() | integer(),
+          number(),
+          number() | nil,
+          opts :: Keyword.t()
+        ) ::
           :ok | {:error, term()}
   def send_progress(client, progress_token, progress, total \\ nil, opts \\ [])
-      when is_number(progress) and (is_binary(progress_token) or is_integer(progress_token)) do
+      when is_number(progress) and
+             (is_binary(progress_token) or is_integer(progress_token)) do
     timeout = opts[:timeout] || to_timeout(second: 5)
-    GenServer.call(client, {:send_progress, progress_token, progress, total}, timeout)
+
+    GenServer.call(
+      client,
+      {:send_progress, progress_token, progress, total},
+      timeout
+    )
   end
 
   @doc """
@@ -704,7 +732,8 @@ defmodule Hermes.Client.Base do
       {:ok, results} = Hermes.Client.send_batch(client, operations)
       # results is a list: [{:ok, :pong}, {:ok, tools_response}]
   """
-  @spec send_batch(t, [Operation.t()]) :: {:ok, [{:ok, any()} | {:error, Error.t()}]} | {:error, Error.t()}
+  @spec send_batch(t, [Operation.t()]) ::
+          {:ok, [{:ok, any()} | {:error, Error.t()}]} | {:error, Error.t()}
   def send_batch(client, [_ | _] = operations) do
     max_timeout = Enum.max_by(operations, & &1.timeout).timeout
     buffer_timeout = max_timeout + to_timeout(second: 1)
@@ -777,7 +806,8 @@ defmodule Hermes.Client.Base do
       State.add_progress_token_to_params(operation.params, operation.progress_opts)
 
     with :ok <- State.validate_capability(state, method),
-         {request_id, updated_state} = State.add_request_from_operation(state, operation, from),
+         {request_id, updated_state} =
+           State.add_request_from_operation(state, operation, from),
          {:ok, request_data} <- encode_request(method, params_with_token, request_id),
          :ok <- send_to_transport(state.transport, request_data) do
       Telemetry.execute(
@@ -984,7 +1014,8 @@ defmodule Hermes.Client.Base do
     roots_result = %{"roots" => roots}
     roots_count = Enum.count(roots)
 
-    with {:ok, response_data} <- Message.encode_response(%{"result" => roots_result}, id),
+    with {:ok, response_data} <-
+           Message.encode_response(%{"result" => roots_result}, id),
          :ok <- send_to_transport(state.transport, response_data) do
       Logging.client_event("roots_list_request", %{id: id, roots_count: roots_count})
 
@@ -997,7 +1028,9 @@ defmodule Hermes.Client.Base do
       {:noreply, state}
     else
       err ->
-        Logging.client_event("roots_list_error", %{id: id, error: err}, level: :error)
+        Logging.client_event("roots_list_error", %{id: id, error: err},
+          level: :error
+        )
 
         Telemetry.execute(
           Telemetry.event_client_error(),
@@ -1015,7 +1048,9 @@ defmodule Hermes.Client.Base do
       {:noreply, state}
     else
       err ->
-        Logging.client_event("ping_response_error", %{id: id, error: err}, level: :error)
+        Logging.client_event("ping_response_error", %{id: id, error: err},
+          level: :error
+        )
 
         Telemetry.execute(
           Telemetry.event_client_error(),
@@ -1262,14 +1297,28 @@ defmodule Hermes.Client.Base do
     :ok
   end
 
-  defp handle_success_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
+  defp handle_success_response(
+         %{"id" => id, "result" => %{"serverInfo" => _} = result},
+         id,
+         state
+       ) do
     case State.remove_request(state, id) do
       {nil, state} ->
         state
 
       {_request, state} ->
-        state = State.update_server_info(state, result["capabilities"], result["serverInfo"])
-        Logging.client_event("initialized", %{server_info: result["serverInfo"], capabilities: result["capabilities"]})
+        state =
+          State.update_server_info(
+            state,
+            result["capabilities"],
+            result["serverInfo"]
+          )
+
+        Logging.client_event("initialized", %{
+          server_info: result["serverInfo"],
+          capabilities: result["capabilities"]
+        })
+
         :ok = send_notification(state, "notifications/initialized")
 
         state
@@ -1312,7 +1361,10 @@ defmodule Hermes.Client.Base do
     )
   end
 
-  defp maybe_reply_to_request(%{batch_id: nil, method: "ping", from: from}, _response) do
+  defp maybe_reply_to_request(
+         %{batch_id: nil, method: "ping", from: from},
+         _response
+       ) do
     GenServer.reply(from, :pong)
   end
 
@@ -1326,31 +1378,52 @@ defmodule Hermes.Client.Base do
 
   # Notification handling
 
-  defp handle_notification(%{"method" => "notifications/progress"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/progress"} = notification,
+         state
+       ) do
     handle_progress_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/message"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/message"} = notification,
+         state
+       ) do
     handle_log_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/cancelled"} = notification,
+         state
+       ) do
     handle_cancelled_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/resources/list_changed"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/resources/list_changed"} = notification,
+         state
+       ) do
     handle_resources_list_changed_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/resources/updated"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/resources/updated"} = notification,
+         state
+       ) do
     handle_resource_updated_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/prompts/list_changed"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/prompts/list_changed"} = notification,
+         state
+       ) do
     handle_prompts_list_changed_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/tools/list_changed"} = notification, state) do
+  defp handle_notification(
+         %{"method" => "notifications/tools/list_changed"} = notification,
+         state
+       ) do
     handle_tools_list_changed_notification(notification, state)
   end
 
@@ -1416,7 +1489,9 @@ defmodule Hermes.Client.Base do
         _ -> :info
       end
 
-    Logging.client_event("server_log", %{level: level, data: data, logger: logger}, level: elixir_level)
+    Logging.client_event("server_log", %{level: level, data: data, logger: logger},
+      level: elixir_level
+    )
   end
 
   defp handle_resources_list_changed_notification(_notification, state) do
@@ -1512,7 +1587,8 @@ defmodule Hermes.Client.Base do
   # Batch operation helpers
 
   defp prepare_batch(operations, from, batch_id, state) do
-    {messages, updated_state} = build_batch_messages(operations, from, batch_id, state)
+    {messages, updated_state} =
+      build_batch_messages(operations, from, batch_id, state)
 
     case Message.encode_batch(messages) do
       {:ok, batch_data} -> {:ok, batch_data, updated_state}
@@ -1523,7 +1599,9 @@ defmodule Hermes.Client.Base do
   defp build_batch_messages(operations, from, batch_id, state) do
     {messages, final_state} =
       Enum.reduce(operations, {[], state}, fn operation, {msgs, current_state} ->
-        {message, _, new_state} = build_batch_message(operation, from, batch_id, current_state)
+        {message, _, new_state} =
+          build_batch_message(operation, from, batch_id, current_state)
+
         {[message | msgs], new_state}
       end)
 
@@ -1531,8 +1609,11 @@ defmodule Hermes.Client.Base do
   end
 
   defp build_batch_message(operation, from, batch_id, state) do
-    params_with_token = State.add_progress_token_to_params(operation.params, operation.progress_opts)
-    {request_id, new_state} = State.add_request_from_operation(state, operation, from, batch_id)
+    params_with_token =
+      State.add_progress_token_to_params(operation.params, operation.progress_opts)
+
+    {request_id, new_state} =
+      State.add_request_from_operation(state, operation, from, batch_id)
 
     message = %{
       "jsonrpc" => "2.0",

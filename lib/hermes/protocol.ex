@@ -218,7 +218,8 @@ defmodule Hermes.Protocol do
       iex> Hermes.Protocol.negotiate_version("2024-11-05", "1.0.0")
       {:error, %Hermes.MCP.Error{reason: :incompatible_versions}}
   """
-  @spec negotiate_version(version(), version()) :: {:ok, version()} | {:error, Error.t()}
+  @spec negotiate_version(version(), version()) ::
+          {:ok, version()} | {:error, Error.t()}
   def negotiate_version(client_version, server_version) do
     cond do
       client_version == server_version and client_version in @supported_versions ->
@@ -282,7 +283,8 @@ defmodule Hermes.Protocol do
       iex> Hermes.Protocol.validate_client_config("2024-11-05", Hermes.Transport.SSE, capabilities)
       :ok
   """
-  @spec validate_client_config(version(), module(), map()) :: :ok | {:error, Error.t()}
+  @spec validate_client_config(version(), module(), map()) ::
+          :ok | {:error, Error.t()}
   def validate_client_config(version, transport_module, _capabilities) do
     with :ok <- validate_version(version) do
       validate_transport(version, transport_module)

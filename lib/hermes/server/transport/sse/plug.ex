@@ -147,7 +147,10 @@ if Code.ensure_loaded?(Plug) do
             )
 
           {:error, reason} ->
-            Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
+            Logging.transport_event("sse_registration_failed", %{reason: reason},
+              level: :error
+            )
+
             send_error(conn, 500, "Could not establish SSE connection")
         end
       else
@@ -188,15 +191,26 @@ if Code.ensure_loaded?(Plug) do
 
         messages
         |> prepare_message_or_batch()
-        |> then(fn msg -> SSE.handle_message(transport, session_id, msg, context) end)
+        |> then(fn msg ->
+          SSE.handle_message(transport, session_id, msg, context)
+        end)
         |> send_response(conn)
       else
         {:error, :invalid_json} ->
-          send_jsonrpc_error(conn, Error.protocol(:parse_error, %{message: "Invalid JSON"}), nil)
+          send_jsonrpc_error(
+            conn,
+            Error.protocol(:parse_error, %{message: "Invalid JSON"}),
+            nil
+          )
 
         {:error, reason} ->
           Logging.transport_event("post_error", %{reason: reason}, level: :error)
-          send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), nil)
+
+          send_jsonrpc_error(
+            conn,
+            Error.protocol(:internal_error, %{reason: reason}),
+            nil
+          )
       end
     end
 
@@ -221,7 +235,12 @@ if Code.ensure_loaded?(Plug) do
 
     defp send_response({:error, reason}, conn) do
       Logging.transport_event("response_error", %{reason: reason}, level: :error)
-      send_jsonrpc_error(conn, Error.protocol(:internal_error, %{reason: reason}), nil)
+
+      send_jsonrpc_error(
+        conn,
+        Error.protocol(:internal_error, %{reason: reason}),
+        nil
+      )
     end
 
     # Helper functions
@@ -273,18 +292,23 @@ if Code.ensure_loaded?(Plug) do
       end)
     end
 
-    defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
+    defp maybe_read_request_body(
+           %{body_params: %Unfetched{aspect: :body_params}} = conn,
+           %{timeout: timeout}
+         ) do
       case Plug.Conn.read_body(conn, read_timeout: timeout) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}
       end
     end
 
-    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _) when is_list(json_array) do
+    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _)
+         when is_list(json_array) do
       {:ok, json_array, conn}
     end
 
-    defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
+    defp maybe_read_request_body(%{body_params: body} = conn, _),
+      do: {:ok, body, conn}
 
     defp send_error(conn, status, message) do
       data = %{data: %{message: message, http_status: status}}

@@ -11,7 +11,9 @@ defmodule Hermes.Server.Session do
           client_capabilities: map() | nil,
           log_level: String.t(),
           id: String.t() | nil,
-          pending_requests: %{String.t() => %{started_at: integer(), method: String.t()}}
+          pending_requests: %{
+            String.t() => %{started_at: integer(), method: String.t()}
+          }
         }
 
   defstruct [
@@ -101,9 +103,19 @@ defmodule Hermes.Server.Session do
       :ok
   """
   @spec update_from_initialization(GenServer.name(), String.t(), map, map) :: :ok
-  def update_from_initialization(session, negotiated_version, client_info, capabilities) do
+  def update_from_initialization(
+        session,
+        negotiated_version,
+        client_info,
+        capabilities
+      ) do
     Agent.update(session, fn state ->
-      %{state | protocol_version: negotiated_version, client_info: client_info, client_capabilities: capabilities}
+      %{
+        state
+        | protocol_version: negotiated_version,
+          client_info: client_info,
+          client_capabilities: capabilities
+      }
     end)
   end
 
@@ -145,7 +157,10 @@ defmodule Hermes.Server.Session do
         method: method
       }
 
-      %{state | pending_requests: Map.put(state.pending_requests, request_id, request_info)}
+      %{
+        state
+        | pending_requests: Map.put(state.pending_requests, request_id, request_info)
+      }
     end)
   end
 

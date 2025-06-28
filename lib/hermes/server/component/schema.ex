@@ -86,7 +86,9 @@ defmodule Hermes.Server.Component.Schema do
   defp convert_type(:date), do: %{"type" => "string", "format" => "date"}
   defp convert_type(:time), do: %{"type" => "string", "format" => "time"}
   defp convert_type(:datetime), do: %{"type" => "string", "format" => "date-time"}
-  defp convert_type(:naive_datetime), do: %{"type" => "string", "format" => "date-time"}
+
+  defp convert_type(:naive_datetime),
+    do: %{"type" => "string", "format" => "date-time"}
 
   defp convert_type({:string, {:regex, %Regex{source: pattern}}}) do
     %{"type" => "string", "pattern" => pattern}
@@ -185,15 +187,23 @@ defmodule Hermes.Server.Component.Schema do
   defp describe_base_type(:integer), do: "integer parameter"
   defp describe_base_type(:float), do: "number parameter"
   defp describe_base_type(:boolean), do: "boolean parameter"
-  defp describe_base_type({:enum, values}), do: "one of: #{inspect(values, pretty: true)}"
-  defp describe_base_type({:list, {type, _}}), do: "array of #{describe_base_type(type)} elements parameter"
-  defp describe_base_type({:list, type}), do: "array of #{describe_base_type(type)} elements parameter"
+
+  defp describe_base_type({:enum, values}),
+    do: "one of: #{inspect(values, pretty: true)}"
+
+  defp describe_base_type({:list, {type, _}}),
+    do: "array of #{describe_base_type(type)} elements parameter"
+
+  defp describe_base_type({:list, type}),
+    do: "array of #{describe_base_type(type)} elements parameter"
+
   defp describe_base_type({:map, _}), do: "object parameter"
   defp describe_base_type({type, _}), do: "#{to_string(type)} parameter"
   defp describe_base_type(schema) when is_map(schema), do: "nested object"
   defp describe_base_type(_), do: "parameter"
 
-  @spec validator(schema()) :: (map() -> {:ok, map()} | {:error, list(Peri.Error.t())})
+  @spec validator(schema()) :: (map() ->
+                                  {:ok, map()} | {:error, list(Peri.Error.t())})
   def validator(schema) do
     normalized = normalize(schema)
     peri_schema = Component.__clean_schema_for_peri__(normalized)
@@ -220,7 +230,8 @@ defmodule Hermes.Server.Component.Schema do
     normalize(fields)
   end
 
-  defp normalize_field({:object, fields, opts}) when is_map(fields) and is_list(opts) do
+  defp normalize_field({:object, fields, opts})
+       when is_map(fields) and is_list(opts) do
     {:mcp_field, normalize(fields), opts}
   end
 
@@ -256,19 +267,33 @@ defmodule Hermes.Server.Component.Schema do
 
   defp build_constrained_type(:integer, constraints) do
     case {Keyword.get(constraints, :min), Keyword.get(constraints, :max)} do
-      {min, max} when not is_nil(min) and not is_nil(max) -> {:integer, {:range, {min, max}}}
-      {nil, max} when not is_nil(max) -> {:integer, {:max, max}}
-      {min, nil} when not is_nil(min) -> {:integer, {:min, min}}
-      _ -> :integer
+      {min, max} when not is_nil(min) and not is_nil(max) ->
+        {:integer, {:range, {min, max}}}
+
+      {nil, max} when not is_nil(max) ->
+        {:integer, {:max, max}}
+
+      {min, nil} when not is_nil(min) ->
+        {:integer, {:min, min}}
+
+      _ ->
+        :integer
     end
   end
 
   defp build_constrained_type(:float, constraints) do
     case {Keyword.get(constraints, :min), Keyword.get(constraints, :max)} do
-      {min, max} when not is_nil(min) and not is_nil(max) -> {:float, {:range, {min, max}}}
-      {nil, max} when not is_nil(max) -> {:float, {:max, max}}
-      {min, nil} when not is_nil(min) -> {:float, {:min, min}}
-      _ -> :float
+      {min, max} when not is_nil(min) and not is_nil(max) ->
+        {:float, {:range, {min, max}}}
+
+      {nil, max} when not is_nil(max) ->
+        {:float, {:max, max}}
+
+      {min, nil} when not is_nil(min) ->
+        {:float, {:min, min}}
+
+      _ ->
+        :float
     end
   end
 

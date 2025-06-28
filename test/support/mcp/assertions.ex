@@ -11,7 +11,10 @@ defmodule Hermes.MCP.Assertions do
   def assert_server_initialized(server) when is_pid(server) do
     state = :sys.get_state(server)
     assert {session_id, _} = state.sessions |> Map.to_list() |> List.first()
-    assert session = Hermes.Server.Registry.whereis_server_session(StubServer, session_id)
+
+    assert session =
+             Hermes.Server.Registry.whereis_server_session(StubServer, session_id)
+
     state = :sys.get_state(session)
     assert state.initialized, "Expected server to be initialized"
   end

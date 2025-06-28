@@ -75,7 +75,8 @@ defmodule Hermes.Server.Registry.Adapter do
     * `server_module` - The module implementing the server
     * `session_id` - The unique session identifier
   """
-  @callback server_session(server_module :: module(), session_id :: String.t()) :: GenServer.name()
+  @callback server_session(server_module :: module(), session_id :: String.t()) ::
+              GenServer.name()
 
   @doc """
   Returns a name for a transport process.
@@ -85,7 +86,8 @@ defmodule Hermes.Server.Registry.Adapter do
     * `server_module` - The module implementing the server
     * `transport_type` - The type of transport (e.g., :stdio, :sse, :websocket)
   """
-  @callback transport(server_module :: module(), transport_type :: atom()) :: GenServer.name()
+  @callback transport(server_module :: module(), transport_type :: atom()) ::
+              GenServer.name()
 
   @doc """
   Returns a name for a supervisor process.
@@ -118,7 +120,10 @@ defmodule Hermes.Server.Registry.Adapter do
     * `server_module` - The module implementing the server
     * `session_id` - The unique session identifier
   """
-  @callback whereis_server_session(server_module :: module(), session_id :: String.t()) :: pid() | nil
+  @callback whereis_server_session(
+              server_module :: module(),
+              session_id :: String.t()
+            ) :: pid() | nil
 
   @doc """
   Gets the PID of a transport process.
@@ -130,7 +135,8 @@ defmodule Hermes.Server.Registry.Adapter do
     * `server_module` - The module implementing the server
     * `transport_type` - The type of transport
   """
-  @callback whereis_transport(server_module :: module(), transport_type :: atom()) :: pid() | nil
+  @callback whereis_transport(server_module :: module(), transport_type :: atom()) ::
+              pid() | nil
 
   @doc """
   Gets the PID of a supervisor process.
@@ -142,5 +148,6 @@ defmodule Hermes.Server.Registry.Adapter do
     * `kind` - The kind of supervisor
     * `server_module` - The module implementing the server
   """
-  @callback whereis_supervisor(kind :: atom(), server_module :: module()) :: pid() | nil
+  @callback whereis_supervisor(kind :: atom(), server_module :: module()) ::
+              pid() | nil
 end

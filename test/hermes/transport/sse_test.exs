@@ -67,7 +67,9 @@ defmodule Hermes.Transport.SSETest do
   end
 
   describe "send_message/2" do
-    test "sends message to endpoint after receiving endpoint event", %{bypass: bypass} do
+    test "sends message to endpoint after receiving endpoint event", %{
+      bypass: bypass
+    } do
       server_url = "http://localhost:#{bypass.port}"
 
       # Start a stub client
@@ -119,10 +121,16 @@ defmodule Hermes.Transport.SSETest do
       # Verify the transport has received the endpoint
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
-      assert String.ends_with?(to_string(transport_state.message_url), "/messages/123")
+
+      assert String.ends_with?(
+               to_string(transport_state.message_url),
+               "/messages/123"
+             )
 
       # Send a ping message through the transport
-      {:ok, ping_message} = Message.encode_request(%{"method" => "ping", "params" => %{}}, "1")
+      {:ok, ping_message} =
+        Message.encode_request(%{"method" => "ping", "params" => %{}}, "1")
+
       assert :ok = SSE.send_message(transport, ping_message)
 
       # Give time for the response to come back
@@ -332,16 +340,25 @@ defmodule Hermes.Transport.SSETest do
       {:ok, stub_client} = StubClient.start_link()
 
       Bypass.expect(bypass, "GET", "/sse", fn conn ->
-        assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
+        assert "auth-token" ==
+                 conn |> Plug.Conn.get_req_header("authorization") |> List.first()
+
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
-        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
+
+        {:ok, conn} =
+          Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
+
         conn
       end)
 
       Bypass.expect(bypass, "POST", "/messages/123", fn conn ->
-        assert "application/json" == conn |> Plug.Conn.get_req_header("accept") |> List.first()
-        assert "auth-token" == conn |> Plug.Conn.get_req_header("authorization") |> List.first()
+        assert "application/json" ==
+                 conn |> Plug.Conn.get_req_header("accept") |> List.first()
+
+        assert "auth-token" ==
+                 conn |> Plug.Conn.get_req_header("authorization") |> List.first()
+
         Plug.Conn.resp(conn, 200, "")
       end)
 
@@ -378,7 +395,10 @@ defmodule Hermes.Transport.SSETest do
       Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
-        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
+
+        {:ok, conn} =
+          Plug.Conn.chunk(conn, "event: endpoint\ndata: /messages/123\n\n")
+
         conn
       end)
 
@@ -414,7 +434,10 @@ defmodule Hermes.Transport.SSETest do
       Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
-        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: #{absolute_endpoint}\n\n")
+
+        {:ok, conn} =
+          Plug.Conn.chunk(conn, "event: endpoint\ndata: #{absolute_endpoint}\n\n")
+
         conn
       end)
 
@@ -445,7 +468,10 @@ defmodule Hermes.Transport.SSETest do
       Bypass.expect(bypass, "GET", "/mcp/sse", fn conn ->
         conn = Plug.Conn.put_resp_header(conn, "content-type", "text/event-stream")
         conn = Plug.Conn.send_chunked(conn, 200)
-        {:ok, conn} = Plug.Conn.chunk(conn, "event: endpoint\ndata: #{duplicate_path}\n\n")
+
+        {:ok, conn} =
+          Plug.Conn.chunk(conn, "event: endpoint\ndata: #{duplicate_path}\n\n")
+
         conn
       end)
 

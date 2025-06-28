@@ -21,9 +21,17 @@ defmodule Hermes.Logging do
     log(level, "[MCP message] #{direction} #{type}: #{summary}", metadata)
 
     if should_log_details?(data) do
-      log(level, "[MCP message] #{direction} #{type} data: #{inspect(data)}", metadata)
+      log(
+        level,
+        "[MCP message] #{direction} #{type} data: #{inspect(data)}",
+        metadata
+      )
     else
-      log(level, "[MCP message] #{direction} #{type} data (truncated): #{truncate_data(data)}", metadata)
+      log(
+        level,
+        "[MCP message] #{direction} #{type} data (truncated): #{truncate_data(data)}",
+        metadata
+      )
     end
   end
 
@@ -93,8 +101,12 @@ defmodule Hermes.Logging do
 
   defp default_level(:client_events), do: get_logging_level(:client_events, :debug)
   defp default_level(:server_events), do: get_logging_level(:server_events, :debug)
-  defp default_level(:transport_events), do: get_logging_level(:transport_events, :debug)
-  defp default_level(:protocol_messages), do: get_logging_level(:protocol_messages, :debug)
+
+  defp default_level(:transport_events),
+    do: get_logging_level(:transport_events, :debug)
+
+  defp default_level(:protocol_messages),
+    do: get_logging_level(:protocol_messages, :debug)
 
   defp get_logging_level(event_type, default) do
     logging_config = Application.get_env(:hermes_mcp, :logging, [])
@@ -105,11 +117,20 @@ defmodule Hermes.Logging do
   defp log_by_level(:debug, message, metadata), do: Logger.debug(message, metadata)
   defp log_by_level(:info, message, metadata), do: Logger.info(message, metadata)
   defp log_by_level(:notice, message, metadata), do: Logger.info(message, metadata)
-  defp log_by_level(:warning, message, metadata), do: Logger.warning(message, metadata)
+
+  defp log_by_level(:warning, message, metadata),
+    do: Logger.warning(message, metadata)
+
   defp log_by_level(:error, message, metadata), do: Logger.error(message, metadata)
-  defp log_by_level(:critical, message, metadata), do: Logger.error(message, metadata)
+
+  defp log_by_level(:critical, message, metadata),
+    do: Logger.error(message, metadata)
+
   defp log_by_level(:alert, message, metadata), do: Logger.error(message, metadata)
-  defp log_by_level(:emergency, message, metadata), do: Logger.error(message, metadata)
+
+  defp log_by_level(:emergency, message, metadata),
+    do: Logger.error(message, metadata)
+
   defp log_by_level(_, message, metadata), do: Logger.info(message, metadata)
 
   defp create_message_summary("request", id, data) when is_map(data) do
@@ -141,7 +162,8 @@ defmodule Hermes.Logging do
   defp should_log_details?(data) when is_map(data), do: map_size(data) < 10
   defp should_log_details?(_), do: true
 
-  defp truncate_data(data) when is_binary(data), do: "#{String.slice(data, 0, 100)}..."
+  defp truncate_data(data) when is_binary(data),
+    do: "#{String.slice(data, 0, 100)}..."
 
   defp truncate_data(data) when is_map(data) do
     important_keys =

@@ -34,7 +34,9 @@ defmodule Hermes.Server.Transport.STDIO do
           | GenServer.option()
 
   defschema(:parse_options, [
-    {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
+    {:server,
+     {:required,
+      {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
     {:name, {:custom, &Hermes.genserver_name/1}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}}
   ])
@@ -125,7 +127,8 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   @impl GenServer
-  def handle_info({ref, result}, %{reading_task: %Task{ref: ref}} = state) when is_reference(ref) do
+  def handle_info({ref, result}, %{reading_task: %Task{ref: ref}} = state)
+      when is_reference(ref) do
     Process.demonitor(ref, [:flush])
 
     case result do
@@ -248,7 +251,10 @@ defmodule Hermes.Server.Transport.STDIO do
     process_message(message, state)
   end
 
-  defp process_messages([_ | _] = messages, %{server: server_name, registry: registry}) do
+  defp process_messages([_ | _] = messages, %{
+         server: server_name,
+         registry: registry
+       }) do
     server = registry.whereis_server(server_name)
 
     context = %{
@@ -260,8 +266,13 @@ defmodule Hermes.Server.Transport.STDIO do
     case GenServer.call(server, {:batch_request, messages, "stdio", context}) do
       {:batch, responses} ->
         case Message.encode_batch(responses) do
-          {:ok, batch_response} -> send_message(self(), batch_response)
-          {:error, reason} -> Logging.transport_event("batch_encode_error", %{reason: reason}, level: :error)
+          {:ok, batch_response} ->
+            send_message(self(), batch_response)
+
+          {:error, reason} ->
+            Logging.transport_event("batch_encode_error", %{reason: reason},
+              level: :error
+            )
         end
 
       {:error, error} ->
@@ -272,7 +283,9 @@ defmodule Hermes.Server.Transport.STDIO do
     end
   catch
     :exit, reason ->
-      Logging.transport_event("server_batch_call_failed", %{reason: reason}, level: :error)
+      Logging.transport_event("server_batch_call_failed", %{reason: reason},
+        level: :error
+      )
   end
 
   defp process_message(message, %{server: server_name, registry: registry}) do
@@ -288,8 +301,11 @@ defmodule Hermes.Server.Transport.STDIO do
       GenServer.cast(server, {:notification, message, "stdio", context})
     else
       case GenServer.call(server, {:request, message, "stdio", context}) do
-        {:ok, response} when is_binary(response) -> send_message(self(), response)
-        {:error, reason} -> Logging.transport_event("server_error", %{reason: reason}, level: :error)
+        {:ok, response} when is_binary(response) ->
+          send_message(self(), response)
+
+        {:error, reason} ->
+          Logging.transport_event("server_error", %{reason: reason}, level: :error)
       end
     end
   catch

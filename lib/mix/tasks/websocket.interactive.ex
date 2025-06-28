@@ -41,11 +41,16 @@ if Code.ensure_loaded?(:gun) do
       configure_logger(log_level)
 
       server_options = Keyword.put_new(parsed, :base_url, "http://localhost:8000")
-      server_url = Path.join(server_options[:base_url], server_options[:base_path] || "")
+
+      server_url =
+        Path.join(server_options[:base_url], server_options[:base_path] || "")
 
       header = UI.header("HERMES MCP WEBSOCKET INTERACTIVE")
       IO.puts(header)
-      IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
+
+      IO.puts(
+        "#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n"
+      )
 
       SupervisedShell.start(
         transport_module: WebSocket,

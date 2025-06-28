@@ -94,7 +94,13 @@ defmodule Hermes.Server.Component.Prompt do
           validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
         }
 
-  defstruct [:name, description: nil, arguments: nil, handler: nil, validate_input: nil]
+  defstruct [
+    :name,
+    description: nil,
+    arguments: nil,
+    handler: nil,
+    validate_input: nil
+  ]
 
   @doc """
   Returns the list of arguments this prompt accepts.

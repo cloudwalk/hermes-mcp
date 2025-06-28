@@ -42,7 +42,10 @@ defmodule Mix.Tasks.Hermes.StreamableHttp.Interactive do
 
     header = UI.header("HERMES MCP STREAMABLE HTTP INTERACTIVE")
     IO.puts(header)
-    IO.puts("#{UI.colors().info}Connecting to Streamable HTTP server at: #{server_url}#{UI.colors().reset}\n")
+
+    IO.puts(
+      "#{UI.colors().info}Connecting to Streamable HTTP server at: #{server_url}#{UI.colors().reset}\n"
+    )
 
     SupervisedShell.start(
       transport_module: StreamableHTTP,

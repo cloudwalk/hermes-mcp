@@ -120,7 +120,9 @@ defmodule Hermes.MCP.Setup do
     request = Builders.init_request(protocol_version, info, capabilities)
     assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
     notification = Builders.build_notification("notifications/initialized", %{})
-    assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+    assert :ok =
+             GenServer.cast(server, {:notification, notification, session_id, %{}})
 
     Process.sleep(50)
 
@@ -141,7 +143,11 @@ defmodule Hermes.MCP.Setup do
 
     # session supervisor
     %{registry: registry} = ctx = with_default_registry(ctx)
-    start_supervised!({Session.Supervisor, server: server_module, registry: ctx.registry})
+
+    start_supervised!(
+      {Session.Supervisor, server: server_module, registry: ctx.registry}
+    )
+
     assert registry.supervisor(server_module, :session_supervisor)
 
     # base server
@@ -162,7 +168,10 @@ defmodule Hermes.MCP.Setup do
     assert server = registry.whereis_server(server_module)
 
     # transport
-    start_supervised!({transport, name: transport_name, server: server_name, registry: registry})
+    start_supervised!(
+      {transport, name: transport_name, server: server_name, registry: registry}
+    )
+
     assert registry.whereis_transport(server_module, transport)
 
     request = Builders.init_request(protocol_version, info, capabilities)
@@ -186,7 +195,9 @@ defmodule Hermes.MCP.Setup do
 
     transport_name = Hermes.Server.Registry.transport(server_module, :stdio)
     start_supervised!({Transport.STDIO, name: transport_name, server: server_module})
-    assert transport = Hermes.Server.Registry.whereis_transport(server_module, :stdio)
+
+    assert transport =
+             Hermes.Server.Registry.whereis_transport(server_module, :stdio)
 
     opts = [
       module: server_module,
@@ -219,7 +230,9 @@ defmodule Hermes.MCP.Setup do
           "prompts" => %{}
         }
 
-    client_info = context[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
+    client_info =
+      context[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
+
     client_capabilities = context[:client_capabilities]
 
     client =

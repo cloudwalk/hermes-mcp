@@ -38,11 +38,16 @@ defmodule Mix.Tasks.Hermes.Stdio.Interactive do
     configure_logger(log_level)
 
     cmd = parsed[:command] || "mcp"
-    args = String.split(parsed[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
+
+    args =
+      String.split(parsed[:args] || "run,priv/dev/echo/index.py", ",", trim: true)
 
     header = UI.header("HERMES MCP STDIO INTERACTIVE")
     IO.puts(header)
-    IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
+
+    IO.puts(
+      "#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n"
+    )
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
       IO.puts(

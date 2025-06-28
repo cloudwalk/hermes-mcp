@@ -145,7 +145,8 @@ defmodule Hermes.Server.Transport.SSE do
   Called by the Plug when establishing an SSE connection.
   The calling process becomes the SSE handler for the session.
   """
-  @spec register_sse_handler(GenServer.server(), String.t()) :: :ok | {:error, term()}
+  @spec register_sse_handler(GenServer.server(), String.t()) ::
+          :ok | {:error, term()}
   def register_sse_handler(transport, session_id) do
     GenServer.call(transport, {:register_sse_handler, session_id, self()})
   end
@@ -187,7 +188,8 @@ defmodule Hermes.Server.Transport.SSE do
 
   Used for targeted server notifications to specific clients.
   """
-  @spec route_to_session(GenServer.server(), String.t(), binary()) :: :ok | {:error, term()}
+  @spec route_to_session(GenServer.server(), String.t(), binary()) ::
+          :ok | {:error, term()}
   def route_to_session(transport, session_id, message) do
     GenServer.call(transport, {:route_to_session, session_id, message})
   end
@@ -244,7 +246,8 @@ defmodule Hermes.Server.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message, context}, _from, state) when is_map(message) do
+  def handle_call({:handle_message, session_id, message, context}, _from, state)
+      when is_map(message) do
     server = state.registry.whereis_server(state.server)
 
     if Message.is_notification(message) do
@@ -261,10 +264,12 @@ defmodule Hermes.Server.Transport.SSE do
     end
   end
 
-  def handle_call({:handle_message, session_id, messages, context}, _from, state) when is_list(messages) do
+  def handle_call({:handle_message, session_id, messages, context}, _from, state)
+      when is_list(messages) do
     server = state.registry.whereis_server(state.server)
 
-    with {:batch, responses} <- forward_batch_to_server(server, messages, session_id, context),
+    with {:batch, responses} <-
+           forward_batch_to_server(server, messages, session_id, context),
          {:ok, encoded} <- Message.encode_batch(responses) do
       maybe_send_through_sse(encoded, session_id, state)
     else
@@ -336,7 +341,10 @@ defmodule Hermes.Server.Transport.SSE do
         {:ok, response}
 
       {:error, reason} ->
-        Logging.transport_event("server_error", %{reason: reason, session_id: session_id}, level: :error)
+        Logging.transport_event(
+          "server_error",
+          %{reason: reason, session_id: session_id}, level: :error)
+
         {:error, reason}
     end
   catch
@@ -351,12 +359,18 @@ defmodule Hermes.Server.Transport.SSE do
         {:batch, responses}
 
       {:error, reason} ->
-        Logging.transport_event("batch_server_error", %{reason: reason, session_id: session_id}, level: :error)
+        Logging.transport_event(
+          "batch_server_error",
+          %{reason: reason, session_id: session_id}, level: :error)
+
         {:error, reason}
     end
   catch
     :exit, reason ->
-      Logging.transport_event("batch_server_call_failed", %{reason: reason}, level: :error)
+      Logging.transport_event("batch_server_call_failed", %{reason: reason},
+        level: :error
+      )
+
       {:error, :server_unavailable}
   end
 

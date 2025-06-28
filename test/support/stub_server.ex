@@ -6,7 +6,10 @@ defmodule StubServer do
   This server has no components and provides only the bare minimum implementation.
   """
 
-  use Hermes.Server, name: "Test Server", version: "1.0.0", capabilities: [:tools, :prompts, :resources]
+  use Hermes.Server,
+    name: "Test Server",
+    version: "1.0.0",
+    capabilities: [:tools, :prompts, :resources]
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Response
@@ -17,7 +20,9 @@ defmodule StubServer do
       "description" => "greets someone",
       "inputSchema" => %{
         "type" => "object",
-        "properties" => %{"name" => %{"type" => "string", "description" => "for whom to greet"}},
+        "properties" => %{
+          "name" => %{"type" => "string", "description" => "for whom to greet"}
+        },
         "required" => ["name"]
       }
     }
@@ -65,7 +70,10 @@ defmodule StubServer do
     end
   end
 
-  def handle_request(%{"method" => "resources/" <> action, "params" => params}, frame) do
+  def handle_request(
+        %{"method" => "resources/" <> action, "params" => params},
+        frame
+      ) do
     case action do
       "list" -> {:reply, %{"resources" => @resources}, frame}
       "read" -> handle_read_resource(params, frame)
@@ -81,7 +89,10 @@ defmodule StubServer do
     {:noreply, frame}
   end
 
-  defp handle_tool_call(%{"arguments" => %{"name" => name}, "name" => "greet"}, frame) do
+  defp handle_tool_call(
+         %{"arguments" => %{"name" => name}, "name" => "greet"},
+         frame
+       ) do
     Response.tool()
     |> Response.text("Hello #{name}!")
     |> Response.to_protocol()
@@ -89,7 +100,8 @@ defmodule StubServer do
   end
 
   defp handle_tool_call(%{"name" => name}, frame) do
-    {:error, Error.protocol(:invalid_request, %{message: "tool #{name} not found"}), frame}
+    {:error, Error.protocol(:invalid_request, %{message: "tool #{name} not found"}),
+     frame}
   end
 
   defp handle_read_resource(%{"uri" => uri}, frame) do

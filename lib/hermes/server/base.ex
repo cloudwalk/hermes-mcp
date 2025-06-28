@@ -52,7 +52,8 @@ defmodule Hermes.Server.Base do
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
+    {:session_idle_timeout,
+     {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
   ]
 
   @doc """
@@ -134,7 +135,8 @@ defmodule Hermes.Server.Base do
         %{"status" => "active"}
       )
   """
-  @spec send_notification(GenServer.name(), String.t(), map()) :: :ok | {:error, term()}
+  @spec send_notification(GenServer.name(), String.t(), map()) ::
+          :ok | {:error, term()}
   def send_notification(server, method, params \\ %{}) do
     GenServer.call(server, {:send_notification, method, params})
   end
@@ -160,7 +162,8 @@ defmodule Hermes.Server.Base do
     * `uri` - The URI of the updated resource
     * `title` - Optional human-readable title for the resource
   """
-  @spec send_resource_updated(GenServer.name(), String.t(), String.t() | nil) :: :ok | {:error, term()}
+  @spec send_resource_updated(GenServer.name(), String.t(), String.t() | nil) ::
+          :ok | {:error, term()}
   def send_resource_updated(server, uri, title \\ nil) do
     params = %{"uri" => uri}
     params = if title, do: Map.put(params, "title", title), else: params
@@ -198,7 +201,8 @@ defmodule Hermes.Server.Base do
     * `data` - The log message data
     * `logger` - Optional logger name
   """
-  @spec send_log_message(GenServer.name(), String.t(), String.t(), String.t() | nil) :: :ok | {:error, term()}
+  @spec send_log_message(GenServer.name(), String.t(), String.t(), String.t() | nil) ::
+          :ok | {:error, term()}
   def send_log_message(server, level, data, logger \\ nil) do
     params = %{"level" => level, "data" => data}
     params = if logger, do: Map.put(params, "logger", logger), else: params
@@ -215,7 +219,13 @@ defmodule Hermes.Server.Base do
     * `total` - Optional total value for the operation
     * `message` - Optional message describing the current progress (2025-03-26 spec)
   """
-  @spec send_progress(GenServer.name(), String.t() | integer(), number(), number() | nil, String.t() | nil) ::
+  @spec send_progress(
+          GenServer.name(),
+          String.t() | integer(),
+          number(),
+          number() | nil,
+          String.t() | nil
+        ) ::
           :ok | {:error, term()}
   def send_progress(server, progress_token, progress, total \\ nil, message \\ nil) do
     params = %{"progressToken" => progress_token, "progress" => progress}
@@ -245,7 +255,11 @@ defmodule Hermes.Server.Base do
       frame: Frame.new()
     }
 
-    Logging.server_event("starting", %{module: module, server_info: server_info, capabilities: capabilities})
+    Logging.server_event("starting", %{
+      module: module,
+      server_info: server_info,
+      capabilities: capabilities
+    })
 
     Telemetry.execute(
       Telemetry.event_server_init(),
@@ -257,18 +271,24 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
+  def handle_call({:request, decoded, session_id, context}, _from, state)
+      when is_map(decoded) do
+    with {:ok, {%Session{} = session, state}} <-
+           maybe_attach_session(session_id, context, state) do
       case handle_single_request(decoded, session, state) do
         {:reply, {:ok, %{"result" => result} = response}, new_state} ->
           request_id = response["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
-          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
+
+          {:reply, Message.encode_response(%{"result" => result}, response["id"]),
+           new_state}
 
         {:reply, {:ok, %{"error" => error} = response}, new_state} ->
           request_id = response["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
-          {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
+
+          {:reply, Message.encode_error(%{"error" => error}, response["id"]),
+           new_state}
 
         {:reply, {:error, error}, new_state} ->
           request_id = decoded["id"]
@@ -278,8 +298,10 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  def handle_call({:batch_request, messages, session_id, context}, _from, state) when is_list(messages) do
-    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
+  def handle_call({:batch_request, messages, session_id, context}, _from, state)
+      when is_list(messages) do
+    with {:ok, {%Session{} = session, state}} <-
+           maybe_attach_session(session_id, context, state) do
       handle_batch_request(messages, session, state)
     end
   end
@@ -297,18 +319,31 @@ defmodule Hermes.Server.Base do
 
   def handle_call(request, from, %{module: module} = state) do
     case module.handle_call(request, from, state.frame) do
-      {:reply, reply, frame} -> {:reply, reply, %{state | frame: frame}}
-      {:reply, reply, frame, cont} -> {:reply, reply, %{state | frame: frame}, cont}
-      {:noreply, frame} -> {:noreply, %{state | frame: frame}}
-      {:noreply, frame, cont} -> {:noreply, %{state | frame: frame}, cont}
-      {:stop, reason, reply, frame} -> {:stop, reason, reply, %{state | frame: frame}}
-      {:stop, reason, frame} -> {:stop, reason, %{state | frame: frame}}
+      {:reply, reply, frame} ->
+        {:reply, reply, %{state | frame: frame}}
+
+      {:reply, reply, frame, cont} ->
+        {:reply, reply, %{state | frame: frame}, cont}
+
+      {:noreply, frame} ->
+        {:noreply, %{state | frame: frame}}
+
+      {:noreply, frame, cont} ->
+        {:noreply, %{state | frame: frame}, cont}
+
+      {:stop, reason, reply, frame} ->
+        {:stop, reason, reply, %{state | frame: frame}}
+
+      {:stop, reason, frame} ->
+        {:stop, reason, %{state | frame: frame}}
     end
   end
 
   @impl GenServer
-  def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <- maybe_attach_session(session_id, context, state) do
+  def handle_cast({:notification, decoded, session_id, context}, state)
+      when is_map(decoded) do
+    with {:ok, {%Session{} = session, state}} <-
+           maybe_attach_session(session_id, context, state) do
       if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
         handle_notification(decoded, session, state)
       else
@@ -341,7 +376,10 @@ defmodule Hermes.Server.Base do
 
     case session_entry do
       {session_id, _} ->
-        Logging.server_event("session_terminated", %{session_id: session_id, reason: reason})
+        Logging.server_event("session_terminated", %{
+          session_id: session_id,
+          reason: reason
+        })
 
         sessions = Map.delete(state.sessions, session_id)
         state = cancel_session_expiry(session_id, state)
@@ -404,7 +442,8 @@ defmodule Hermes.Server.Base do
       Message.is_ping(decoded) ->
         handle_server_ping(decoded, state)
 
-      not (Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session)) ->
+      not (Message.is_initialize_lifecycle(decoded) or
+               Session.is_initialized(session)) ->
         Logging.server_event("session_not_initialized_check", %{
           session_id: session.id,
           initialized: session.initialized,
@@ -417,7 +456,11 @@ defmodule Hermes.Server.Base do
         handle_request(decoded, session, state)
 
       true ->
-        error = Error.protocol(:invalid_request, %{message: "Expected request but got different message type"})
+        error =
+          Error.protocol(:invalid_request, %{
+            message: "Expected request but got different message type"
+          })
+
         {:reply, {:error, error}, state}
     end
   end
@@ -446,7 +489,11 @@ defmodule Hermes.Server.Base do
   defp handle_batch_request(messages, session, state) do
     cond do
       Enum.any?(messages, &Message.is_initialize/1) ->
-        error = Error.protocol(:invalid_request, %{message: "Initialize request cannot be part of a batch"})
+        error =
+          Error.protocol(:invalid_request, %{
+            message: "Initialize request cannot be part of a batch"
+          })
+
         {:reply, {:error, error}, state}
 
       is_nil(session.protocol_version) or not Session.is_initialized(session) ->
@@ -496,22 +543,39 @@ defmodule Hermes.Server.Base do
         {response, new_state}
 
       Message.is_request(message) ->
-        {:reply, {:ok, response}, new_state} = handle_request(message, session, state)
+        {:reply, {:ok, response}, new_state} =
+          handle_request(message, session, state)
+
         {response, new_state}
 
       true ->
-        error = Error.protocol(:invalid_request, %{message: "Invalid message in batch"})
+        error =
+          Error.protocol(:invalid_request, %{message: "Invalid message in batch"})
+
         {Error.build_json_rpc(error, Map.get(message, "id")), state}
     end
   end
 
   # Request handling
 
-  defp handle_request(%{"params" => params} = request, session, state) when Message.is_initialize(request) do
-    %{"clientInfo" => client_info, "capabilities" => client_capabilities, "protocolVersion" => requested_version} = params
+  defp handle_request(%{"params" => params} = request, session, state)
+       when Message.is_initialize(request) do
+    %{
+      "clientInfo" => client_info,
+      "capabilities" => client_capabilities,
+      "protocolVersion" => requested_version
+    } = params
 
-    protocol_version = negotiate_protocol_version(state.supported_versions, requested_version)
-    :ok = Session.update_from_initialization(session.name, protocol_version, client_info, client_capabilities)
+    protocol_version =
+      negotiate_protocol_version(state.supported_versions, requested_version)
+
+    :ok =
+      Session.update_from_initialization(
+        session.name,
+        protocol_version,
+        client_info,
+        client_capabilities
+      )
 
     result = %{
       "protocolVersion" => protocol_version,
@@ -534,14 +598,22 @@ defmodule Hermes.Server.Base do
     {:reply, {:ok, Message.build_response(result, request["id"])}, state}
   end
 
-  defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
+  defp handle_request(
+         %{"id" => request_id, "method" => "logging/setLevel"} = request,
+         session,
+         state
+       )
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
     :ok = Session.set_log_level(session.name, level)
     {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
-  defp handle_request(%{"id" => request_id, "method" => method} = request, session, state) do
+  defp handle_request(
+         %{"id" => request_id, "method" => method} = request,
+         session,
+         state
+       ) do
     Logging.server_event("handling_request", %{id: request_id, method: method})
 
     :ok = Session.track_request(session.name, request_id, method)
@@ -564,16 +636,34 @@ defmodule Hermes.Server.Base do
 
   # Notification handling
 
-  defp handle_notification(%{"method" => "notifications/initialized"}, session, %{module: module} = state) do
+  defp handle_notification(
+         %{"method" => "notifications/initialized"},
+         session,
+         %{module: module} = state
+       ) do
     Logging.server_event("client_initialized", %{session_id: session.id})
     :ok = Session.mark_initialized(session.name)
-    Logging.server_event("session_marked_initialized", %{session_id: session.id, initialized: true})
+
+    Logging.server_event("session_marked_initialized", %{
+      session_id: session.id,
+      initialized: true
+    })
+
     frame = %{state.frame | initialized: true}
-    {:ok, frame} = if Hermes.exported?(module, :init, 2), do: module.init(session.client_info, frame), else: {:ok, frame}
+
+    {:ok, frame} =
+      if Hermes.exported?(module, :init, 2),
+        do: module.init(session.client_info, frame),
+        else: {:ok, frame}
+
     {:noreply, %{state | frame: frame}}
   end
 
-  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, session, state) do
+  defp handle_notification(
+         %{"method" => "notifications/cancelled"} = notification,
+         session,
+         state
+       ) do
     params = notification["params"] || %{}
     request_id = params["requestId"]
     reason = Map.get(params, "reason", "cancelled")
@@ -607,7 +697,11 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  defp handle_notification(%{"method" => "notifications/roots/list_changed"} = notification, session, state) do
+  defp handle_notification(
+         %{"method" => "notifications/roots/list_changed"} = notification,
+         session,
+         state
+       ) do
     Logging.server_event("client_roots_list_changed", %{session_id: session.id})
 
     Telemetry.execute(
@@ -619,7 +713,11 @@ defmodule Hermes.Server.Base do
     server_notification(notification, state)
   end
 
-  defp handle_notification(%{"method" => "notifications/progress"} = notification, session, state) do
+  defp handle_notification(
+         %{"method" => "notifications/progress"} = notification,
+         session,
+         state
+       ) do
     params = notification["params"] || %{}
 
     Logging.server_event("client_progress", %{
@@ -632,7 +730,11 @@ defmodule Hermes.Server.Base do
     Telemetry.execute(
       Telemetry.event_server_notification(),
       %{system_time: System.system_time()},
-      %{method: "progress", session_id: session.id, progress_token: params["progressToken"]}
+      %{
+        method: "progress",
+        session_id: session.id,
+        progress_token: params["progressToken"]
+      }
     )
 
     server_notification(notification, state)
@@ -654,7 +756,10 @@ defmodule Hermes.Server.Base do
 
   # Helper functions
 
-  defp server_request(%{"id" => request_id, "method" => method} = request, %{module: module} = state) do
+  defp server_request(
+         %{"id" => request_id, "method" => method} = request,
+         %{module: module} = state
+       ) do
     case module.handle_request(request, state.frame) do
       {:reply, response, %Frame{} = frame} ->
         Telemetry.execute(
@@ -664,7 +769,9 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, {:ok, Message.build_response(response, request_id)}, %{state | frame: frame}}
+
+        {:reply, {:ok, Message.build_response(response, request_id)},
+         %{state | frame: frame}}
 
       {:noreply, %Frame{} = frame} ->
         Telemetry.execute(
@@ -690,11 +797,16 @@ defmodule Hermes.Server.Base do
         )
 
         frame = Frame.clear_request(frame)
-        {:reply, {:ok, Error.build_json_rpc(error, request_id)}, %{state | frame: frame}}
+
+        {:reply, {:ok, Error.build_json_rpc(error, request_id)},
+         %{state | frame: frame}}
     end
   end
 
-  defp server_notification(%{"method" => method} = notification, %{module: module} = state) do
+  defp server_notification(
+         %{"method" => method} = notification,
+         %{module: module} = state
+       ) do
     case module.handle_notification(notification, state.frame) do
       {:noreply, %Frame{} = frame} ->
         {:noreply, %{state | frame: frame}}
@@ -710,8 +822,10 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @spec maybe_attach_session(session_id :: String.t(), map, t) :: {:ok, {session :: Session.t(), t}}
-  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
+  @spec maybe_attach_session(session_id :: String.t(), map, t) ::
+          {:ok, {session :: Session.t(), t}}
+  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state)
+       when is_map_key(sessions, session_id) do
     {session_name, _ref} = sessions[session_id]
     session = Session.get(session_name)
     state = reset_session_expiry(session_id, state)
@@ -719,25 +833,43 @@ defmodule Hermes.Server.Base do
     {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
   end
 
-  defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
+  defp maybe_attach_session(
+         session_id,
+         context,
+         %{sessions: sessions, registry: registry} = state
+       ) do
     session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(registry, state.module, session_id) do
       {:ok, pid} ->
         ref = Process.monitor(pid)
-        state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
+
+        state = %{
+          state
+          | sessions: Map.put(sessions, session_id, {session_name, ref})
+        }
+
         state = reset_session_expiry(session_id, state)
 
         session = Session.get(session_name)
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
+
+        {:ok,
+         {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
-        state = %{state | sessions: Map.put(sessions, session_id, {session_name, ref})}
+
+        state = %{
+          state
+          | sessions: Map.put(sessions, session_id, {session_name, ref})
+        }
+
         state = reset_session_expiry(session_id, state)
 
         session = Session.get(session_name)
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
+
+        {:ok,
+         {session, %{state | frame: populate_frame(state.frame, session, context)}}}
 
       error ->
         error
@@ -759,7 +891,10 @@ defmodule Hermes.Server.Base do
     })
   end
 
-  defp negotiate_protocol_version([latest | _] = supported_versions, requested_version) do
+  defp negotiate_protocol_version(
+         [latest | _] = supported_versions,
+         requested_version
+       ) do
     if requested_version in supported_versions do
       requested_version
     else
@@ -789,7 +924,10 @@ defmodule Hermes.Server.Base do
     Process.send_after(self(), {:session_expired, session_id}, timeout)
   end
 
-  defp reset_session_expiry(session_id, %{expiry_timers: timers, session_idle_timeout: timeout} = state) do
+  defp reset_session_expiry(
+         session_id,
+         %{expiry_timers: timers, session_idle_timeout: timeout} = state
+       ) do
     if timer = Map.get(timers, session_id), do: Process.cancel_timer(timer)
 
     timer = schedule_session_expiry(session_id, timeout)

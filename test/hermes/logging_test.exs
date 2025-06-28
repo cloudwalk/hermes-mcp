@@ -71,11 +71,16 @@ defmodule Hermes.LoggingTest do
 
       log =
         capture_log([level: :warning], fn ->
-          Logging.message("outgoing", "request", 123, %{"id" => 123, "method" => "test"})
+          Logging.message("outgoing", "request", 123, %{
+            "id" => 123,
+            "method" => "test"
+          })
         end)
 
       assert log =~ "[warning] [MCP message] outgoing request: id=123 method=test"
-      assert log =~ ~s([warning] [MCP message] outgoing request data: %{"id" => 123, "method" => "test"})
+
+      assert log =~
+               ~s([warning] [MCP message] outgoing request data: %{"id" => 123, "method" => "test"})
     end
 
     test "falls back to debug for unconfigured event types" do
@@ -194,17 +199,27 @@ defmodule Hermes.LoggingTest do
 
       log =
         capture_log([level: :error], fn ->
-          Logging.message("incoming", "response", 123, %{"id" => 123, "result" => %{}}, level: :error, custom: :metadata)
+          Logging.message(
+            "incoming",
+            "response",
+            123,
+            %{"id" => 123, "result" => %{}}, level: :error, custom: :metadata)
         end)
 
       assert log =~ "[error] [MCP message] incoming response: id=123 success"
-      assert log =~ ~s([error] [MCP message] incoming response data: %{"id" => 123, "result" => %{}})
+
+      assert log =~
+               ~s([error] [MCP message] incoming response data: %{"id" => 123, "result" => %{}})
     end
 
     test "preserves other metadata while removing level" do
       log =
         capture_log([level: :info], fn ->
-          Logging.client_event("test_event", nil, level: :info, custom: :metadata, another: :value)
+          Logging.client_event("test_event", nil,
+            level: :info,
+            custom: :metadata,
+            another: :value
+          )
         end)
 
       assert log =~ "[info] MCP client event: test_event"
@@ -215,10 +230,15 @@ defmodule Hermes.LoggingTest do
     test "formats request messages correctly" do
       log =
         capture_log([level: :debug], fn ->
-          Logging.message("outgoing", "request", 123, %{"id" => 123, "method" => "tools/list", "params" => %{}})
+          Logging.message("outgoing", "request", 123, %{
+            "id" => 123,
+            "method" => "tools/list",
+            "params" => %{}
+          })
         end)
 
-      assert log =~ "[debug] [MCP message] outgoing request: id=123 method=tools/list"
+      assert log =~
+               "[debug] [MCP message] outgoing request: id=123 method=tools/list"
 
       assert log =~
                ~s([debug] [MCP message] outgoing request data: %{"id" => 123, "method" => "tools/list", "params" => %{}})
@@ -227,17 +247,25 @@ defmodule Hermes.LoggingTest do
     test "formats response messages correctly for success" do
       log =
         capture_log([level: :debug], fn ->
-          Logging.message("incoming", "response", 123, %{"id" => 123, "result" => %{"tools" => []}})
+          Logging.message("incoming", "response", 123, %{
+            "id" => 123,
+            "result" => %{"tools" => []}
+          })
         end)
 
       assert log =~ "[debug] [MCP message] incoming response: id=123 success"
-      assert log =~ ~s([debug] [MCP message] incoming response data: %{"id" => 123, "result" => %{"tools" => []}})
+
+      assert log =~
+               ~s([debug] [MCP message] incoming response data: %{"id" => 123, "result" => %{"tools" => []}})
     end
 
     test "formats response messages correctly for error" do
       log =
         capture_log([level: :debug], fn ->
-          Logging.message("incoming", "response", 123, %{"id" => 123, "error" => %{"code" => -1, "message" => "Error"}})
+          Logging.message("incoming", "response", 123, %{
+            "id" => 123,
+            "error" => %{"code" => -1, "message" => "Error"}
+          })
         end)
 
       assert log =~ "[debug] [MCP message] incoming response: id=123 error: -1"
@@ -249,11 +277,16 @@ defmodule Hermes.LoggingTest do
     test "formats notification messages correctly" do
       log =
         capture_log([level: :debug], fn ->
-          Logging.message("incoming", "notification", nil, %{"method" => "progress", "params" => %{}})
+          Logging.message("incoming", "notification", nil, %{
+            "method" => "progress",
+            "params" => %{}
+          })
         end)
 
       assert log =~ "[debug] [MCP message] incoming notification: method=progress"
-      assert log =~ ~s([debug] [MCP message] incoming notification data: %{"method" => "progress", "params" => %{}})
+
+      assert log =~
+               ~s([debug] [MCP message] incoming notification data: %{"method" => "progress", "params" => %{}})
     end
 
     test "handles messages with nil id" do
@@ -263,7 +296,9 @@ defmodule Hermes.LoggingTest do
         end)
 
       assert log =~ "[debug] [MCP message] outgoing request: id=none method=test"
-      assert log =~ ~s([debug] [MCP message] outgoing request data: %{"method" => "test"})
+
+      assert log =~
+               ~s([debug] [MCP message] outgoing request data: %{"method" => "test"})
     end
 
     test "truncates large binary data" do
@@ -305,7 +340,10 @@ defmodule Hermes.LoggingTest do
     end
 
     test "handles request messages with important keys for truncation" do
-      large_map = 1..15 |> Map.new(fn i -> {"key#{i}", "value#{i}"} end) |> Map.merge(%{"id" => 123, "method" => "test"})
+      large_map =
+        1..15
+        |> Map.new(fn i -> {"key#{i}", "value#{i}"} end)
+        |> Map.merge(%{"id" => 123, "method" => "test"})
 
       log =
         capture_log([level: :debug], fn ->

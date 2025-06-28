@@ -169,7 +169,8 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
-  def image(%{type: :tool} = r, data, mime_type) when is_binary(data) and is_binary(mime_type) do
+  def image(%{type: :tool} = r, data, mime_type)
+      when is_binary(data) and is_binary(mime_type) do
     add_content(r, %{"type" => "image", "data" => data, "mimeType" => mime_type})
   end
 
@@ -207,7 +208,12 @@ defmodule Hermes.Server.Response do
   """
   def audio(%{type: :tool} = r, data, mime_type, opts \\ []) do
     content = %{"type" => "audio", "data" => data, "mimeType" => mime_type}
-    content = if opts[:transcription], do: Map.put(content, "transcription", opts[:transcription]), else: content
+
+    content =
+      if opts[:transcription],
+        do: Map.put(content, "transcription", opts[:transcription]),
+        else: content
+
     add_content(r, content)
   end
 
@@ -305,7 +311,10 @@ defmodule Hermes.Server.Response do
       }
   """
   def assistant_message(%{type: :prompt} = r, content) do
-    add_message(r, %{"role" => "assistant", "content" => build_message_content(content)})
+    add_message(r, %{
+      "role" => "assistant",
+      "content" => build_message_content(content)
+    })
   end
 
   @doc """
@@ -405,7 +414,10 @@ defmodule Hermes.Server.Response do
 
   def to_protocol(%{type: :prompt} = r) do
     base = %{"messages" => r.messages}
-    if Map.get(r, :description), do: Map.put(base, "description", r.description), else: base
+
+    if Map.get(r, :description),
+      do: Map.put(base, "description", r.description),
+      else: base
   end
 
   def to_protocol(%{type: :resource} = r, uri, mime_type) do
@@ -420,7 +432,9 @@ defmodule Hermes.Server.Response do
 
   defp add_content(r, content), do: %{r | content: r.content ++ [content]}
   defp add_message(r, message), do: %{r | messages: r.messages ++ [message]}
-  defp put_metadata(r, key, value), do: %{r | metadata: Map.put(r.metadata, key, value)}
+
+  defp put_metadata(r, key, value),
+    do: %{r | metadata: Map.put(r.metadata, key, value)}
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

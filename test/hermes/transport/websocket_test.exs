@@ -54,7 +54,11 @@ if Code.ensure_loaded?(:gun) do
         end
       end
 
-      test "successfully connects to a WebSocket server", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test "successfully connects to a WebSocket server", %{
+        client: client,
+        gun_pid: gun_pid,
+        mock_ref: mock_ref
+      } do
         transport_opts = [
           client: client,
           server: [
@@ -76,7 +80,11 @@ if Code.ensure_loaded?(:gun) do
         assert_receive {:DOWN, _, :process, ^ws_pid, :normal}, 1000
       end
 
-      test "can send messages through the WebSocket", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test "can send messages through the WebSocket", %{
+        client: client,
+        gun_pid: gun_pid,
+        mock_ref: mock_ref
+      } do
         test_message = "test message"
         test_pid = self()
 
@@ -113,7 +121,11 @@ if Code.ensure_loaded?(:gun) do
         assert_receive {:DOWN, ^ref, :process, ^ws_pid, :normal}, 1000
       end
 
-      test "can receive messages from the WebSocket", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test "can receive messages from the WebSocket", %{
+        client: client,
+        gun_pid: gun_pid,
+        mock_ref: mock_ref
+      } do
         test_message = ~s({"jsonrpc":"2.0","method":"test","params":{}})
 
         transport_opts = [
@@ -145,7 +157,11 @@ if Code.ensure_loaded?(:gun) do
         assert_receive {:DOWN, ^ref, :process, ^ws_pid, :normal}, 1000
       end
 
-      test "handles WebSocket close events", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test "handles WebSocket close events", %{
+        client: client,
+        gun_pid: gun_pid,
+        mock_ref: mock_ref
+      } do
         transport_opts = [
           client: client,
           server: [
@@ -166,7 +182,11 @@ if Code.ensure_loaded?(:gun) do
         refute Process.alive?(ws_pid)
       end
 
-      test "handles WebSocket close with code events", %{client: client, gun_pid: gun_pid, mock_ref: mock_ref} do
+      test "handles WebSocket close with code events", %{
+        client: client,
+        gun_pid: gun_pid,
+        mock_ref: mock_ref
+      } do
         Process.flag(:trap_exit, true)
 
         transport_opts = [

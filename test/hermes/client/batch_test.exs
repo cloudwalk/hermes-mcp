@@ -52,7 +52,9 @@ defmodule Hermes.Client.BatchTest do
         Map.new(pending_requests, fn {id, request} -> {id, request.method} end)
 
       ping_id = Enum.find(request_ids, fn id -> request_method_map[id] == "ping" end)
-      tools_id = Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
+
+      tools_id =
+        Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
 
       batch_response = [
         %{
@@ -97,7 +99,9 @@ defmodule Hermes.Client.BatchTest do
         Map.new(pending_requests, fn {id, request} -> {id, request.method} end)
 
       ping_id = Enum.find(request_ids, fn id -> request_method_map[id] == "ping" end)
-      tools_id = Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
+
+      tools_id =
+        Enum.find(request_ids, fn id -> request_method_map[id] == "tools/list" end)
 
       batch_response = [
         %{

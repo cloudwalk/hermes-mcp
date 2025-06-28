@@ -81,7 +81,10 @@ defmodule Hermes.Server.Transport.STDIOTest do
   describe "batch message handling" do
     setup :initialized_base_server
 
-    test "handles batch of messages correctly", %{server: _server, transport: transport} do
+    test "handles batch of messages correctly", %{
+      server: _server,
+      transport: transport
+    } do
       # Send a batch of messages
       batch = [
         build_request("ping", %{}, 1),
@@ -98,7 +101,11 @@ defmodule Hermes.Server.Transport.STDIOTest do
         output =
           capture_io(:stdio, fn ->
             # Process the batch through the transport
-            send(transport, {:io_request, self(), ref, {:put_chars, :unicode, encoded_batch}})
+            send(
+              transport,
+              {:io_request, self(), ref, {:put_chars, :unicode, encoded_batch}}
+            )
+
             Process.sleep(100)
           end)
 

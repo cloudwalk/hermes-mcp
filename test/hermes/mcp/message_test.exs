@@ -317,7 +317,12 @@ defmodule Hermes.MCP.MessageTest do
     end
 
     test "encodes a progress notification without a total" do
-      {:ok, encoded} = Message.encode_progress_notification(%{"progressToken" => "abc123", "progress" => 50})
+      {:ok, encoded} =
+        Message.encode_progress_notification(%{
+          "progressToken" => "abc123",
+          "progress" => 50
+        })
+
       decoded = Jason.decode!(encoded)
 
       assert decoded["jsonrpc"] == "2.0"
@@ -330,7 +335,9 @@ defmodule Hermes.MCP.MessageTest do
 
   describe "encode_log_message/3" do
     test "encodes a log message with a logger name" do
-      {:ok, encoded} = Message.encode_log_message("info", "Test log message", "test-logger")
+      {:ok, encoded} =
+        Message.encode_log_message("info", "Test log message", "test-logger")
+
       decoded = Jason.decode!(encoded)
 
       assert decoded["jsonrpc"] == "2.0"
@@ -341,7 +348,9 @@ defmodule Hermes.MCP.MessageTest do
     end
 
     test "encodes a log message without a logger name" do
-      {:ok, encoded} = Message.encode_log_message("error", %{error: "Something went wrong"})
+      {:ok, encoded} =
+        Message.encode_log_message("error", %{error: "Something went wrong"})
+
       decoded = Jason.decode!(encoded)
 
       assert decoded["jsonrpc"] == "2.0"

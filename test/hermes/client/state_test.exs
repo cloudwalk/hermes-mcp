@@ -37,7 +37,8 @@ defmodule Hermes.Client.StateTest do
           method: "test_method"
         })
 
-      {request_id, updated_state} = State.add_request_from_operation(state, operation, from)
+      {request_id, updated_state} =
+        State.add_request_from_operation(state, operation, from)
 
       assert is_binary(request_id)
       assert Map.has_key?(updated_state.pending_requests, request_id)
@@ -262,7 +263,8 @@ defmodule Hermes.Client.StateTest do
       state = new_test_state()
       state = %{state | capabilities: %{"resources" => %{}}}
 
-      updated_state = State.merge_capabilities(state, %{"tools" => %{"execute" => true}})
+      updated_state =
+        State.merge_capabilities(state, %{"tools" => %{"execute" => true}})
 
       assert updated_state.capabilities == %{
                "resources" => %{},
@@ -274,7 +276,8 @@ defmodule Hermes.Client.StateTest do
       state = new_test_state()
       state = %{state | capabilities: %{"resources" => %{"list" => true}}}
 
-      updated_state = State.merge_capabilities(state, %{"resources" => %{"read" => true}})
+      updated_state =
+        State.merge_capabilities(state, %{"resources" => %{"read" => true}})
 
       assert updated_state.capabilities == %{
                "resources" => %{"list" => true, "read" => true}
@@ -308,7 +311,8 @@ defmodule Hermes.Client.StateTest do
       state = new_test_state()
       state = %{state | server_capabilities: %{"resources" => %{}}}
 
-      assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
+      assert {:error,
+              %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
                State.validate_capability(state, "tools/list")
     end
 

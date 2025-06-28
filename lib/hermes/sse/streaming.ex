@@ -58,7 +58,8 @@ if Code.ensure_loaded?(Plug) do
 
     This is useful for sending events outside of the main loop.
     """
-    @spec send_event(conn, binary(), non_neg_integer()) :: {:ok, conn} | {:error, term()}
+    @spec send_event(conn, binary(), non_neg_integer()) ::
+            {:ok, conn} | {:error, term()}
     def send_event(conn, data, event_id) when is_binary(data) do
       event = %Event{
         id: to_string(event_id),

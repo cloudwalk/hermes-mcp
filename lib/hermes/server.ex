@@ -269,7 +269,8 @@ defmodule Hermes.Server do
   """
   @callback handle_info(event :: term, Frame.t()) ::
               {:noreply, Frame.t()}
-              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Frame.t(),
+                 timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, Frame.t()}
 
   @doc """
@@ -286,9 +287,11 @@ defmodule Hermes.Server do
   """
   @callback handle_call(request :: term, from :: GenServer.from(), Frame.t()) ::
               {:reply, reply :: term, Frame.t()}
-              | {:reply, reply :: term, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:reply, reply :: term, Frame.t(),
+                 timeout() | :hibernate | {:continue, arg :: term}}
               | {:noreply, Frame.t()}
-              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Frame.t(),
+                 timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, reply :: term, Frame.t()}
               | {:stop, reason :: term, Frame.t()}
 
@@ -305,7 +308,8 @@ defmodule Hermes.Server do
   """
   @callback handle_cast(request :: term, Frame.t()) ::
               {:noreply, Frame.t()}
-              | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Frame.t(),
+                 timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, Frame.t()}
 
   @doc """
@@ -358,7 +362,8 @@ defmodule Hermes.Server do
   defguard is_server_capability(capability) when capability in @server_capabilities
 
   @doc false
-  defguard is_supported_capability(capabilities, capability) when is_map_key(capabilities, capability)
+  defguard is_supported_capability(capabilities, capability)
+           when is_map_key(capabilities, capability)
 
   @doc false
   defmacro __using__(opts) do
@@ -425,7 +430,9 @@ defmodule Hermes.Server do
               "Use `use Hermes.Server.Component, type: :tool/:prompt/:resource`"
       end
 
-      @components {Component.get_type(module), opts[:name] || Hermes.Server.__derive_component_name__(module), module}
+      @components {Component.get_type(module),
+                   opts[:name] || Hermes.Server.__derive_component_name__(module),
+                   module}
     end
   end
 
@@ -443,10 +450,17 @@ defmodule Hermes.Server do
     opts = get_server_opts(env.module)
 
     quote do
-      def __components__, do: Hermes.Server.parse_components(unquote(Macro.escape(components)))
-      def __components__(:tool), do: Enum.filter(__components__(), &match?(%Tool{}, &1))
-      def __components__(:prompt), do: Enum.filter(__components__(), &match?(%Prompt{}, &1))
-      def __components__(:resource), do: Enum.filter(__components__(), &match?(%Resource{}, &1))
+      def __components__,
+        do: Hermes.Server.parse_components(unquote(Macro.escape(components)))
+
+      def __components__(:tool),
+        do: Enum.filter(__components__(), &match?(%Tool{}, &1))
+
+      def __components__(:prompt),
+        do: Enum.filter(__components__(), &match?(%Prompt{}, &1))
+
+      def __components__(:resource),
+        do: Enum.filter(__components__(), &match?(%Resource{}, &1))
 
       @impl Hermes.Server
       def handle_request(%{} = request, frame) do
@@ -538,10 +552,12 @@ defmodule Hermes.Server do
   end
 
   defp maybe_define_server_info(module, name, version) do
-    if not Module.defines?(module, {:server_info, 0}) or is_nil(name) or is_nil(version) do
+    if not Module.defines?(module, {:server_info, 0}) or is_nil(name) or
+         is_nil(version) do
       quote do
         @impl Hermes.Server
-        def server_info, do: %{"name" => unquote(name), "version" => unquote(version)}
+        def server_info,
+          do: %{"name" => unquote(name), "version" => unquote(version)}
       end
     end
   end
@@ -569,7 +585,8 @@ defmodule Hermes.Server do
   end
 
   @doc false
-  def parse_capability(capability, %{} = capabilities) when is_server_capability(capability) do
+  def parse_capability(capability, %{} = capabilities)
+      when is_server_capability(capability) do
     Map.put(capabilities, to_string(capability), %{})
   end
 
@@ -579,16 +596,29 @@ defmodule Hermes.Server do
 
     capabilities
     |> Map.put("resources", %{})
-    |> then(&if(is_nil(subscribe?), do: &1, else: Map.put(&1, :subscribe, subscribe?)))
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
+    |> then(
+      &if(is_nil(subscribe?), do: &1, else: Map.put(&1, :subscribe, subscribe?))
+    )
+    |> then(
+      &if(is_nil(list_changed?),
+        do: &1,
+        else: Map.put(&1, :listChanged, list_changed?)
+      )
+    )
   end
 
-  def parse_capability({capability, opts}, %{} = capabilities) when is_server_capability(capability) do
+  def parse_capability({capability, opts}, %{} = capabilities)
+      when is_server_capability(capability) do
     list_changed? = opts[:list_changed?]
 
     capabilities
     |> Map.put(to_string(capability), %{})
-    |> then(&if(is_nil(list_changed?), do: &1, else: Map.put(&1, :listChanged, list_changed?)))
+    |> then(
+      &if(is_nil(list_changed?),
+        do: &1,
+        else: Map.put(&1, :listChanged, list_changed?)
+      )
+    )
   end
 
   @doc false
@@ -623,5 +653,6 @@ defmodule Hermes.Server do
     raise ConfigurationError, module: module, missing_key: :version
   end
 
-  def validate_server_info!(_, name, version) when is_binary(name) and is_binary(version), do: :ok
+  def validate_server_info!(_, name, version)
+      when is_binary(name) and is_binary(version), do: :ok
 end

@@ -49,10 +49,15 @@ defmodule Hermes.Server.BaseTest do
 
     test "rejects requests when not initialized", %{server: server} do
       request = build_request("tools/list", 123)
-      assert {:ok, _} = GenServer.call(server, {:request, request, "not_initialized", %{}})
+
+      assert {:ok, _} =
+               GenServer.call(server, {:request, request, "not_initialized", %{}})
     end
 
-    test "accept ping requests when not initialized", %{server: server, session_id: session_id} do
+    test "accept ping requests when not initialized", %{
+      server: server,
+      session_id: session_id
+    } do
       request = build_request("ping", 123)
       assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
     end
@@ -62,13 +67,18 @@ defmodule Hermes.Server.BaseTest do
     setup :initialized_server
 
     test "handles notifications", %{server: server, session_id: session_id} do
-      notification = build_notification("notifications/cancelled", %{"requestId" => 1})
-      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+      notification =
+        build_notification("notifications/cancelled", %{"requestId" => 1})
+
+      assert :ok =
+               GenServer.cast(server, {:notification, notification, session_id, %{}})
     end
 
     test "handles initialize notification", %{server: server, session_id: session_id} do
       notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+      assert :ok =
+               GenServer.cast(server, {:notification, notification, session_id, %{}})
     end
   end
 
@@ -85,7 +95,11 @@ defmodule Hermes.Server.BaseTest do
   describe "session expiration" do
     setup do
       start_supervised!(Hermes.Server.Registry)
-      start_supervised!({Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry})
+
+      start_supervised!(
+        {Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry}
+      )
+
       :ok
     end
 
@@ -103,11 +117,19 @@ defmodule Hermes.Server.BaseTest do
          ]})
 
       session_id = "test_session_#{System.unique_integer()}"
-      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
+      init_msg =
+        init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
       assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
 
       init_notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      assert :ok =
+               GenServer.cast(
+                 server,
+                 {:notification, init_notification, session_id, %{}}
+               )
 
       session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
       assert Session.get(session_name)
@@ -134,11 +156,19 @@ defmodule Hermes.Server.BaseTest do
         )
 
       session_id = "reset_session_#{System.unique_integer()}"
-      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
+      init_msg =
+        init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
       assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
 
       init_notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      assert :ok =
+               GenServer.cast(
+                 server,
+                 {:notification, init_notification, session_id, %{}}
+               )
 
       session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
 
@@ -171,18 +201,37 @@ defmodule Hermes.Server.BaseTest do
         )
 
       session_id = "notif_session_#{System.unique_integer()}"
-      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
+      init_msg =
+        init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
       assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
 
       init_notification = build_notification("notifications/initialized", %{})
-      assert :ok = GenServer.cast(server, {:notification, init_notification, session_id, %{}})
+
+      assert :ok =
+               GenServer.cast(
+                 server,
+                 {:notification, init_notification, session_id, %{}}
+               )
 
       session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
 
       for _ <- 1..3 do
         Process.sleep(100)
-        notification = build_notification("notifications/message", %{"level" => "info", "data" => "test"})
-        assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+        notification =
+          build_notification("notifications/message", %{
+            "level" => "info",
+            "data" => "test"
+          })
+
+        assert :ok =
+                 GenServer.cast(
+                   server,
+                   {:notification, notification, session_id, %{}}
+                 )
+
         assert Session.get(session_name)
       end
 
@@ -197,13 +246,18 @@ defmodule Hermes.Server.BaseTest do
   describe "batch request handling" do
     setup :initialized_server
 
-    test "processes batch with multiple requests", %{server: server, session_id: session_id} do
+    test "processes batch with multiple requests", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
         build_request("ping", %{}, 1),
         build_request("tools/list", %{}, 2)
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
+
       assert length(responses) == 2
 
       ids = Enum.map(responses, & &1["id"])
@@ -218,66 +272,101 @@ defmodule Hermes.Server.BaseTest do
     end
 
     test "returns error for empty batch", %{server: server, session_id: session_id} do
-      assert {:error, error} = GenServer.call(server, {:batch_request, [], session_id, %{}})
+      assert {:error, error} =
+               GenServer.call(server, {:batch_request, [], session_id, %{}})
+
       assert error.reason == :invalid_request
       assert error.data.message == "Batch cannot be empty"
     end
 
-    test "returns error when initialize is in batch", %{server: server, session_id: session_id} do
+    test "returns error when initialize is in batch", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
         init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"}),
         build_request("ping", %{}, 2)
       ]
 
-      assert {:error, error} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:error, error} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
+
       assert error.reason == :invalid_request
       assert error.data.message == "Initialize request cannot be part of a batch"
     end
 
-    test "handles mixed requests and notifications", %{server: server, session_id: session_id} do
+    test "handles mixed requests and notifications", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
         build_request("ping", %{}, 1),
-        build_notification("notifications/message", %{"level" => "info", "data" => "test"}),
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test"
+        }),
         build_request("tools/list", %{}, 2)
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
+
       assert length(responses) == 2
       assert Enum.all?(responses, &Map.has_key?(&1, "id"))
     end
 
-    test "handles batch with all notifications", %{server: server, session_id: session_id} do
+    test "handles batch with all notifications", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
-        build_notification("notifications/message", %{"level" => "info", "data" => "test1"}),
-        build_notification("notifications/message", %{"level" => "debug", "data" => "test2"})
+        build_notification("notifications/message", %{
+          "level" => "info",
+          "data" => "test1"
+        }),
+        build_notification("notifications/message", %{
+          "level" => "debug",
+          "data" => "test2"
+        })
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
+
       assert responses == []
     end
 
-    test "handles errors in individual batch requests", %{server: server, session_id: session_id} do
+    test "handles errors in individual batch requests", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
         build_request("ping", %{}, 1),
         build_request("unknown/method", %{}, 2),
         build_request("tools/list", %{}, 3)
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
+
       assert length(responses) == 3
 
       error_response = Enum.find(responses, &(&1["id"] == 2))
       assert error_response["error"]["code"] == -32_601
     end
 
-    test "maintains response order matching request order", %{server: server, session_id: session_id} do
+    test "maintains response order matching request order", %{
+      server: server,
+      session_id: session_id
+    } do
       batch = [
         build_request("tools/list", %{}, "first"),
         build_request("ping", %{}, "second"),
         build_request("prompts/list", %{}, "third")
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, session_id, %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, session_id, %{}})
 
       assert [
                %{"id" => "first"},
@@ -292,23 +381,35 @@ defmodule Hermes.Server.BaseTest do
         build_request("prompts/list", %{}, 2)
       ]
 
-      assert {:batch, responses} = GenServer.call(server, {:batch_request, batch, "new_session", %{}})
+      assert {:batch, responses} =
+               GenServer.call(server, {:batch_request, batch, "new_session", %{}})
+
       assert length(responses) == 2
 
       assert Enum.all?(responses, &(&1["error"]["code"] == -32_600))
     end
 
-    test "returns error when protocol version doesn't support batching", %{server: server, session_id: session_id} do
+    test "returns error when protocol version doesn't support batching", %{
+      server: server,
+      session_id: session_id
+    } do
       alias Hermes.Server.Session
 
-      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
-      assert {:ok, response} = GenServer.call(server, {:request, init_msg, session_id, %{}})
+      init_msg =
+        init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+
+      assert {:ok, response} =
+               GenServer.call(server, {:request, init_msg, session_id, %{}})
+
       assert {:ok, [decoded]} = Message.decode(response)
       assert decoded["result"]["protocolVersion"] == "2025-03-26"
 
-      session_name = {:via, Registry, {Hermes.Server.Registry, {:session, StubServer, "old_protocol_session"}}}
+      session_name =
+        {:via, Registry,
+         {Hermes.Server.Registry, {:session, StubServer, "old_protocol_session"}}}
 
-      {:ok, session} = Session.start_link(session_id: "old_protocol_session", name: session_name)
+      {:ok, session} =
+        Session.start_link(session_id: "old_protocol_session", name: session_name)
 
       Agent.update(session, fn state ->
         %{
@@ -325,7 +426,12 @@ defmodule Hermes.Server.BaseTest do
         build_request("ping", %{}, "ping_id")
       ]
 
-      assert {:error, error} = GenServer.call(server, {:batch_request, batch, "old_protocol_session", %{}})
+      assert {:error, error} =
+               GenServer.call(
+                 server,
+                 {:batch_request, batch, "old_protocol_session", %{}}
+               )
+
       assert error.reason == :invalid_request
       assert error.data.feature == "batch operations"
       assert error.data.protocol_version == "2024-11-05"

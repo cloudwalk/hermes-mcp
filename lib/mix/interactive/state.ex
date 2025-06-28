@@ -27,10 +27,12 @@ defmodule Mix.Interactive.State do
   defp get_transport_info(client_state) do
     transport_info = client_state.transport
 
-    layer = if is_map(transport_info), do: transport_info[:layer], else: transport_info
+    layer =
+      if is_map(transport_info), do: transport_info[:layer], else: transport_info
 
     transport_pid =
-      if is_map(transport_info) and Map.has_key?(transport_info, :name) and is_pid(transport_info.name) do
+      if is_map(transport_info) and Map.has_key?(transport_info, :name) and
+           is_pid(transport_info.name) do
         transport_info.name
       else
         Process.whereis(layer)
@@ -40,7 +42,9 @@ defmodule Mix.Interactive.State do
   end
 
   defp print_client_state(client, state, verbose) do
-    IO.puts("\n#{UI.colors().success}Client State (#{inspect(client)}):#{UI.colors().reset}")
+    IO.puts(
+      "\n#{UI.colors().success}Client State (#{inspect(client)}):#{UI.colors().reset}"
+    )
 
     print_protocol_info(state)
     print_client_info(state, verbose)
@@ -54,7 +58,9 @@ defmodule Mix.Interactive.State do
   end
 
   defp print_protocol_info(state) do
-    IO.puts("  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}")
+    IO.puts(
+      "  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}"
+    )
   end
 
   defp print_client_info(state, _verbose) do
@@ -75,7 +81,9 @@ defmodule Mix.Interactive.State do
         IO.puts("    #{inspect(capability_keys)}")
       end
     else
-      IO.puts("  #{UI.colors().warning}Server Capabilities: Not yet established#{UI.colors().reset}")
+      IO.puts(
+        "  #{UI.colors().warning}Server Capabilities: Not yet established#{UI.colors().reset}"
+      )
     end
   end
 
@@ -84,7 +92,9 @@ defmodule Mix.Interactive.State do
       IO.puts("  #{UI.colors().info}Server Info:#{UI.colors().reset}")
       print_map(state.server_info, 4)
     else
-      IO.puts("  #{UI.colors().warning}Server Info: Not yet established#{UI.colors().reset}")
+      IO.puts(
+        "  #{UI.colors().warning}Server Info: Not yet established#{UI.colors().reset}"
+      )
     end
   end
 
@@ -94,14 +104,20 @@ defmodule Mix.Interactive.State do
     if request_count == 0 do
       IO.puts("  #{UI.colors().info}Pending Requests:#{UI.colors().reset} None")
     else
-      IO.puts("  #{UI.colors().info}Pending Requests (#{request_count}):#{UI.colors().reset}")
+      IO.puts(
+        "  #{UI.colors().info}Pending Requests (#{request_count}):#{UI.colors().reset}"
+      )
+
       Enum.each(pending_requests, &print_request(&1, verbose))
     end
   end
 
   defp print_request({id, request}, verbose) do
     elapsed_ms = Request.elapsed_time(request)
-    IO.puts("    #{UI.colors().command}#{id}#{UI.colors().reset} - Method: #{request.method}, Elapsed: #{elapsed_ms}ms")
+
+    IO.puts(
+      "    #{UI.colors().command}#{id}#{UI.colors().reset} - Method: #{request.method}, Elapsed: #{elapsed_ms}ms"
+    )
 
     if verbose do
       print_request_details(request)
@@ -120,7 +136,9 @@ defmodule Mix.Interactive.State do
     progress_count = map_size(state.progress_callbacks)
 
     if progress_count > 0 do
-      IO.puts("    #{UI.colors().info}Progress Callbacks (#{progress_count}):#{UI.colors().reset}")
+      IO.puts(
+        "    #{UI.colors().info}Progress Callbacks (#{progress_count}):#{UI.colors().reset}"
+      )
 
       Enum.each(state.progress_callbacks, fn {token, _callback} ->
         IO.puts("      #{UI.colors().command}#{token}#{UI.colors().reset}")
@@ -143,15 +161,27 @@ defmodule Mix.Interactive.State do
     )
   end
 
-  defp print_transport_state(transport_pid, transport_layer, verbose) when is_pid(transport_pid) do
+  defp print_transport_state(transport_pid, transport_layer, verbose)
+       when is_pid(transport_pid) do
     if Process.alive?(transport_pid) do
       transport_state = :sys.get_state(transport_pid)
 
       case transport_layer do
-        SSE -> print_sse_transport_state(transport_pid, transport_state, verbose)
-        STDIO -> print_stdio_transport_state(transport_pid, transport_state, verbose)
-        StreamableHTTP -> print_streamable_http_transport_state(transport_pid, transport_state, verbose)
-        _ -> print_unknown_transport_state(transport_pid, transport_state, verbose)
+        SSE ->
+          print_sse_transport_state(transport_pid, transport_state, verbose)
+
+        STDIO ->
+          print_stdio_transport_state(transport_pid, transport_state, verbose)
+
+        StreamableHTTP ->
+          print_streamable_http_transport_state(
+            transport_pid,
+            transport_state,
+            verbose
+          )
+
+        _ ->
+          print_unknown_transport_state(transport_pid, transport_state, verbose)
       end
     else
       IO.puts(
@@ -167,8 +197,14 @@ defmodule Mix.Interactive.State do
   end
 
   defp print_sse_transport_state(pid, state, verbose) do
-    IO.puts("\n#{UI.colors().success}SSE Transport State (#{inspect(pid)}):#{UI.colors().reset}")
-    IO.puts("  #{UI.colors().info}Server URL:#{UI.colors().reset} #{state[:server_url]}")
+    IO.puts(
+      "\n#{UI.colors().success}SSE Transport State (#{inspect(pid)}):#{UI.colors().reset}"
+    )
+
+    IO.puts(
+      "  #{UI.colors().info}Server URL:#{UI.colors().reset} #{state[:server_url]}"
+    )
+
     IO.puts("  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{state[:sse_url]}")
 
     print_sse_connection_status(state)
@@ -182,21 +218,30 @@ defmodule Mix.Interactive.State do
       end
 
       if state[:transport_opts] do
-        IO.puts("  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state[:transport_opts])}")
+        IO.puts(
+          "  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state[:transport_opts])}"
+        )
       end
 
       if state[:http_options] do
-        IO.puts("  #{UI.colors().info}HTTP Options:#{UI.colors().reset} #{inspect(state[:http_options])}")
+        IO.puts(
+          "  #{UI.colors().info}HTTP Options:#{UI.colors().reset} #{inspect(state[:http_options])}"
+        )
       end
     end
   end
 
   defp print_sse_connection_status(state) do
     if state[:message_url] do
-      IO.puts("  #{UI.colors().info}Message URL:#{UI.colors().reset} #{state[:message_url]}")
+      IO.puts(
+        "  #{UI.colors().info}Message URL:#{UI.colors().reset} #{state[:message_url]}"
+      )
+
       IO.puts("  #{UI.colors().success}Status:#{UI.colors().reset} Connected")
     else
-      IO.puts("  #{UI.colors().warning}Status:#{UI.colors().reset} Connecting/Not connected")
+      IO.puts(
+        "  #{UI.colors().warning}Status:#{UI.colors().reset} Connecting/Not connected"
+      )
     end
   end
 
@@ -204,12 +249,18 @@ defmodule Mix.Interactive.State do
     if state[:stream_task] do
       task = state[:stream_task]
       status = if Process.alive?(task.pid), do: "alive", else: "dead"
-      IO.puts("  #{UI.colors().info}Stream Task:#{UI.colors().reset} #{inspect(task.pid)} (#{status})")
+
+      IO.puts(
+        "  #{UI.colors().info}Stream Task:#{UI.colors().reset} #{inspect(task.pid)} (#{status})"
+      )
     end
   end
 
   defp print_stdio_transport_state(pid, state, verbose) do
-    IO.puts("\n#{UI.colors().success}STDIO Transport State (#{inspect(pid)}):#{UI.colors().reset}")
+    IO.puts(
+      "\n#{UI.colors().success}STDIO Transport State (#{inspect(pid)}):#{UI.colors().reset}"
+    )
+
     IO.puts("  #{UI.colors().info}Command:#{UI.colors().reset} #{state.command}")
 
     print_stdio_args(state)
@@ -218,7 +269,9 @@ defmodule Mix.Interactive.State do
     if verbose do
       # Print additional transport details in verbose mode
       if state.cwd do
-        IO.puts("  #{UI.colors().info}Working Directory:#{UI.colors().reset} #{state.cwd}")
+        IO.puts(
+          "  #{UI.colors().info}Working Directory:#{UI.colors().reset} #{state.cwd}"
+        )
       end
 
       if state.env do
@@ -230,14 +283,20 @@ defmodule Mix.Interactive.State do
 
   defp print_stdio_args(state) do
     if state.args do
-      IO.puts("  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}")
+      IO.puts(
+        "  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}"
+      )
     end
   end
 
   defp print_stdio_connection_status(state) do
     if state.port do
       status = if Port.info(state.port), do: "open", else: "closed"
-      IO.puts("  #{UI.colors().info}Port:#{UI.colors().reset} #{inspect(state.port)} (#{status})")
+
+      IO.puts(
+        "  #{UI.colors().info}Port:#{UI.colors().reset} #{inspect(state.port)} (#{status})"
+      )
+
       IO.puts("  #{UI.colors().success}Status:#{UI.colors().reset} Connected")
     else
       IO.puts("  #{UI.colors().warning}Status:#{UI.colors().reset} Not connected")
@@ -245,8 +304,13 @@ defmodule Mix.Interactive.State do
   end
 
   defp print_streamable_http_transport_state(pid, state, verbose) do
-    IO.puts("\n#{UI.colors().success}Streamable HTTP Transport State (#{inspect(pid)}):#{UI.colors().reset}")
-    IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(state.mcp_url)}")
+    IO.puts(
+      "\n#{UI.colors().success}Streamable HTTP Transport State (#{inspect(pid)}):#{UI.colors().reset}"
+    )
+
+    IO.puts(
+      "  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(state.mcp_url)}"
+    )
 
     print_streamable_http_session_status(state)
 
@@ -258,28 +322,43 @@ defmodule Mix.Interactive.State do
       end
 
       if state.transport_opts != [] do
-        IO.puts("  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state.transport_opts)}")
+        IO.puts(
+          "  #{UI.colors().info}Transport Options:#{UI.colors().reset} #{inspect(state.transport_opts)}"
+        )
       end
 
       if state.http_options do
-        IO.puts("  #{UI.colors().info}HTTP Options:#{UI.colors().reset} #{inspect(state.http_options)}")
+        IO.puts(
+          "  #{UI.colors().info}HTTP Options:#{UI.colors().reset} #{inspect(state.http_options)}"
+        )
       end
     end
   end
 
   defp print_streamable_http_session_status(state) do
     if state.session_id do
-      IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{state.session_id}")
-      IO.puts("  #{UI.colors().success}Status:#{UI.colors().reset} Connected with session")
+      IO.puts(
+        "  #{UI.colors().info}Session ID:#{UI.colors().reset} #{state.session_id}"
+      )
+
+      IO.puts(
+        "  #{UI.colors().success}Status:#{UI.colors().reset} Connected with session"
+      )
     else
-      IO.puts("  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)")
+      IO.puts(
+        "  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)"
+      )
     end
 
-    IO.puts("  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}")
+    IO.puts(
+      "  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}"
+    )
   end
 
   defp print_unknown_transport_state(pid, state, verbose) do
-    IO.puts("\n#{UI.colors().success}Unknown Transport State (#{inspect(pid)}):#{UI.colors().reset}")
+    IO.puts(
+      "\n#{UI.colors().success}Unknown Transport State (#{inspect(pid)}):#{UI.colors().reset}"
+    )
 
     if verbose do
       # In verbose mode, show the full state with pretty printing
@@ -309,7 +388,9 @@ defmodule Mix.Interactive.State do
         print_list(value, indent_level + 2)
 
       true ->
-        IO.puts("#{indent}#{UI.colors().command}#{key}:#{UI.colors().reset} #{inspect(value)}")
+        IO.puts(
+          "#{indent}#{UI.colors().command}#{key}:#{UI.colors().reset} #{inspect(value)}"
+        )
     end
   end
 

@@ -64,9 +64,17 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       result = Schema.to_json_schema(schema)
 
-      assert result["properties"]["pattern"] == %{"type" => "string", "pattern" => "^[A-Z]+$"}
+      assert result["properties"]["pattern"] == %{
+               "type" => "string",
+               "pattern" => "^[A-Z]+$"
+             }
+
       assert result["properties"]["short"] == %{"type" => "string", "minLength" => 5}
-      assert result["properties"]["long"] == %{"type" => "string", "maxLength" => 100}
+
+      assert result["properties"]["long"] == %{
+               "type" => "string",
+               "maxLength" => 100
+             }
     end
 
     test "converts numeric constraints" do
@@ -81,12 +89,37 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       result = Schema.to_json_schema(schema)
 
-      assert result["properties"]["min_int"] == %{"type" => "integer", "minimum" => 0}
-      assert result["properties"]["max_int"] == %{"type" => "integer", "maximum" => 100}
-      assert result["properties"]["range_int"] == %{"type" => "integer", "minimum" => 1, "maximum" => 10}
-      assert result["properties"]["min_float"] == %{"type" => "number", "minimum" => 0.0}
-      assert result["properties"]["max_float"] == %{"type" => "number", "maximum" => 100.0}
-      assert result["properties"]["range_float"] == %{"type" => "number", "minimum" => 1.0, "maximum" => 10.0}
+      assert result["properties"]["min_int"] == %{
+               "type" => "integer",
+               "minimum" => 0
+             }
+
+      assert result["properties"]["max_int"] == %{
+               "type" => "integer",
+               "maximum" => 100
+             }
+
+      assert result["properties"]["range_int"] == %{
+               "type" => "integer",
+               "minimum" => 1,
+               "maximum" => 10
+             }
+
+      assert result["properties"]["min_float"] == %{
+               "type" => "number",
+               "minimum" => 0.0
+             }
+
+      assert result["properties"]["max_float"] == %{
+               "type" => "number",
+               "maximum" => 100.0
+             }
+
+      assert result["properties"]["range_float"] == %{
+               "type" => "number",
+               "minimum" => 1.0,
+               "maximum" => 10.0
+             }
     end
 
     test "converts enum types" do
@@ -97,7 +130,10 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       result = Schema.to_json_schema(schema)
 
-      assert result["properties"]["status"] == %{"enum" => ["active", "inactive", "pending"]}
+      assert result["properties"]["status"] == %{
+               "enum" => ["active", "inactive", "pending"]
+             }
+
       assert result["properties"]["role"] == %{"enum" => [:admin, :user, :guest]}
       assert result["required"] == ["role"]
     end
@@ -263,7 +299,10 @@ defmodule Hermes.Server.Component.SchemaTest do
       assert descriptions["count"] == "Optional integer parameter"
       assert descriptions["rate"] == "Optional number parameter"
       assert descriptions["enabled"] == "Optional boolean parameter"
-      assert descriptions["tags"] == "Optional array of string parameter elements parameter"
+
+      assert descriptions["tags"] ==
+               "Optional array of string parameter elements parameter"
+
       assert descriptions["data"] == "Optional object parameter"
       assert descriptions["status"] == ~s(Optional one of: ["on", "off"])
       assert descriptions["config"] == "Optional nested object"
@@ -285,7 +324,8 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       result = Schema.format_errors(errors)
 
-      assert result == "user.email: is required; age: must be a positive integer; invalid schema"
+      assert result ==
+               "user.email: is required; age: must be a positive integer; invalid schema"
     end
 
     test "handles mixed error formats" do
@@ -297,14 +337,17 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       result = Schema.format_errors(errors)
 
-      assert result == "Simple error; field: complex error; {:unexpected, \"format\"}"
+      assert result ==
+               "Simple error; field: complex error; {:unexpected, \"format\"}"
     end
   end
 
   describe "to_json_schema/1 with mcp_field" do
     test "converts mcp_field with format and description" do
       schema = %{
-        email: {:mcp_field, {:required, :string}, format: "email", description: "User's email address"},
+        email:
+          {:mcp_field, {:required, :string},
+           format: "email", description: "User's email address"},
         age: {:mcp_field, :integer, description: "Age in years"}
       }
 
@@ -330,7 +373,9 @@ defmodule Hermes.Server.Component.SchemaTest do
     test "handles nested mcp_field with constraints" do
       schema = %{
         website: {:mcp_field, :string, format: "uri"},
-        score: {:mcp_field, {:integer, {:range, {0, 100}}}, description: "Score percentage"}
+        score:
+          {:mcp_field, {:integer, {:range, {0, 100}}},
+           description: "Score percentage"}
       }
 
       result = Schema.to_json_schema(schema)
@@ -375,7 +420,8 @@ defmodule Hermes.Server.Component.SchemaTest do
   describe "to_prompt_arguments/1 with mcp_field" do
     test "uses custom description from mcp_field" do
       schema = %{
-        language: {:mcp_field, {:required, :string}, description: "Programming language"},
+        language:
+          {:mcp_field, {:required, :string}, description: "Programming language"},
         focus: {:mcp_field, :string, description: "Areas to focus on"}
       }
 
@@ -416,7 +462,9 @@ defmodule Hermes.Server.Component.SchemaTest do
     test "handles nested schemas with mcp_field metadata" do
       schema = %{
         user: %{
-          email: {:mcp_field, {:required, :string}, format: "email", description: "Email address"},
+          email:
+            {:mcp_field, {:required, :string},
+             format: "email", description: "Email address"},
           profile: %{
             age: {:mcp_field, :integer, description: "User age"},
             website: {:mcp_field, :string, format: "uri"}
@@ -501,8 +549,11 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               text: {:mcp_field, {:string, {:max, 150}}, [description: "Sample text"]},
-               count: {:mcp_field, {:integer, {:range, {1, 100}}}, [description: "Count value"]}
+               text:
+                 {:mcp_field, {:string, {:max, 150}}, [description: "Sample text"]},
+               count:
+                 {:mcp_field, {:integer, {:range, {1, 100}}},
+                  [description: "Count value"]}
              }
     end
 
@@ -514,7 +565,9 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               name: {:mcp_field, {:required, :string}, [max: 50, description: "User name"]}
+               name:
+                 {:mcp_field, {:required, :string},
+                  [max: 50, description: "User name"]}
              }
     end
 
@@ -588,13 +641,16 @@ defmodule Hermes.Server.Component.SchemaTest do
 
     test "handles field macro output format" do
       schema = [
-        {:text, {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}}
+        {:text,
+         {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}}
       ]
 
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               text: {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}
+               text:
+                 {:mcp_field, {:required, :string},
+                  [max: 150, description: "Text field"]}
              }
     end
 
@@ -614,7 +670,9 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               limit: {:mcp_field, {:integer, {:range, {1, 100}}}, [default: 10, description: "Page limit"]}
+               limit:
+                 {:mcp_field, {:integer, {:range, {1, 100}}},
+                  [default: 10, description: "Page limit"]}
              }
     end
   end
@@ -627,7 +685,9 @@ defmodule Hermes.Server.Component.SchemaTest do
         filters:
           {:object,
            %{
-             status: {:required, {:enum, ["active", "inactive"]}, type: "string", description: "possible statuses"},
+             status:
+               {:required, {:enum, ["active", "inactive"]},
+                type: "string", description: "possible statuses"},
              created_after: :datetime
            }, description: "Search filters"}
       }
@@ -657,7 +717,10 @@ defmodule Hermes.Server.Component.SchemaTest do
                        "type" => "string",
                        "description" => "possible statuses"
                      },
-                     "created_after" => %{"type" => "string", "format" => "date-time"}
+                     "created_after" => %{
+                       "type" => "string",
+                       "format" => "date-time"
+                     }
                    },
                    "description" => "Search filters"
                  }
