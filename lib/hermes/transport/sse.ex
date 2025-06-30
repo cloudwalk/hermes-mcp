@@ -22,6 +22,8 @@ defmodule Hermes.Transport.SSE do
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
+  require Hermes.Logging
+
   @type t :: GenServer.server()
 
   @typedoc """

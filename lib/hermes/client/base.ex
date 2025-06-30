@@ -27,6 +27,7 @@ defmodule Hermes.Client.Base do
   alias Hermes.Protocol
   alias Hermes.Telemetry
 
+  require Hermes.Logging
   require Hermes.MCP.Message
 
   @default_protocol_version Protocol.latest_version()

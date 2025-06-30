@@ -52,6 +52,8 @@ defmodule Hermes.Transport.StreamableHTTP do
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
+  require Hermes.Logging
+
   @type t :: GenServer.server()
   @type params_t :: Enumerable.t(option)
 

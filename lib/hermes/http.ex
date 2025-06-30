@@ -1,7 +1,7 @@
 defmodule Hermes.HTTP do
   @moduledoc false
 
-  require Logger
+  require Hermes.Logging
 
   @default_headers %{
     "content-type" => "application/json"

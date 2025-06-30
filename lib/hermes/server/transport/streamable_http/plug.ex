@@ -66,6 +66,7 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.SSE.Streaming
     alias Plug.Conn.Unfetched
 
+    require Hermes.Logging
     require Message
 
     @default_session_header "mcp-session-id"

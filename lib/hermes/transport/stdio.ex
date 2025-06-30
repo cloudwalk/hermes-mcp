@@ -18,7 +18,7 @@ defmodule Hermes.Transport.STDIO do
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
-  require Logger
+  require Hermes.Logging
 
   @type t :: GenServer.server()
 

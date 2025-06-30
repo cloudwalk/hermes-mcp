@@ -3,7 +3,7 @@ defmodule Hermes.SSE do
 
   alias Hermes.SSE.Parser
 
-  require Logger
+  require Hermes.Logging
 
   @connection_headers %{
     "accept" => "text/event-stream",

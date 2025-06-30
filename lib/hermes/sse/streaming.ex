@@ -5,6 +5,8 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.Logging
     alias Hermes.SSE.Event
 
+    require Hermes.Logging
+
     @type conn :: Plug.Conn.t()
     @type transport :: GenServer.server()
     @type session_id :: String.t()

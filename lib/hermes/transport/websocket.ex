@@ -20,6 +20,8 @@ if Code.ensure_loaded?(:gun) do
     alias Hermes.Telemetry
     alias Hermes.Transport.Behaviour, as: Transport
 
+    require Hermes.Logging
+
     @type t :: GenServer.server()
 
     @typedoc """

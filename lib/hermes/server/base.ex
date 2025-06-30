@@ -15,6 +15,7 @@ defmodule Hermes.Server.Base do
   alias Hermes.Server.Session.Supervisor, as: SessionSupervisor
   alias Hermes.Telemetry
 
+  require Hermes.Logging
   require Message
   require Server
   require Session
