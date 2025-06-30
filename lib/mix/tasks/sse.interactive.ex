@@ -121,8 +121,6 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     |> Map.new()
   end
 
-  defp parse_headers(nil), do: %{}
-
   defp parse_header(header_string) do
     case String.split(header_string, ":", parts: 2) do
       [key, value] ->
