@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.5...v0.11.0) (2025-06-30)
+
+
+### Features
+
+* runtime server components, simplified api ([#153](https://github.com/cloudwalk/hermes-mcp/issues/153)) ([8af35d6](https://github.com/cloudwalk/hermes-mcp/commit/8af35d67cd15d125e40ab9b115ff6900c3487ea5))
+
+
+### Bug Fixes
+
+* allow users to control external process messages ([#149](https://github.com/cloudwalk/hermes-mcp/issues/149)) ([8fef4eb](https://github.com/cloudwalk/hermes-mcp/commit/8fef4eb753f38a325a1d3a94c310e5fd1c478ede))
+* correctly encode prompt/resource ([#155](https://github.com/cloudwalk/hermes-mcp/issues/155)) ([4249b13](https://github.com/cloudwalk/hermes-mcp/commit/4249b137e43587862de2e59acba4660ac785702a))
+* more genserver mcp server callbacks, plug based startup and documentation ([#152](https://github.com/cloudwalk/hermes-mcp/issues/152)) ([9c26b1c](https://github.com/cloudwalk/hermes-mcp/commit/9c26b1ce4d033e3c69bc872a5ed01a037ec68f59))
+* server behaviour with optional callbacks ([#151](https://github.com/cloudwalk/hermes-mcp/issues/151)) ([91aa191](https://github.com/cloudwalk/hermes-mcp/commit/91aa1916f28da5972f6b100861a2547697c1ddb7))
+
+
+### Code Refactoring
+
+* improve runtime components schema def ([#154](https://github.com/cloudwalk/hermes-mcp/issues/154)) ([96ff2a9](https://github.com/cloudwalk/hermes-mcp/commit/96ff2a97be02f0f35ee4a288838a1dbf518bbac3))
+
 ## [0.10.5](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.4...v0.10.5) (2025-06-25)
 
 
