@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.2...v0.11.3) (2025-06-30)
+
+
+### Bug Fixes
+
+* correctly parse dates when default values are passed ([58f6368](https://github.com/cloudwalk/hermes-mcp/commit/58f63686574e230269f847ee793d9561976653bb))
+* include frame helpers on module-based component ([#163](https://github.com/cloudwalk/hermes-mcp/issues/163)) ([15ba2c7](https://github.com/cloudwalk/hermes-mcp/commit/15ba2c7fbdd0a776eabe028aef0350f4f52a43a8))
+
 ## [0.11.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.1...v0.11.2) (2025-06-30)
 
 
