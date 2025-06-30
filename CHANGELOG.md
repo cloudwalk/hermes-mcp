@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.0...v0.11.1) (2025-06-30)
+
+
+### Bug Fixes
+
+* loggin should respect the logger config ([#157](https://github.com/cloudwalk/hermes-mcp/issues/157)) ([0fbf6a6](https://github.com/cloudwalk/hermes-mcp/commit/0fbf6a652ed9dd5da64716d47ece675192442ea0))
+
 ## [0.11.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.10.5...v0.11.0) (2025-06-30)
 
 
