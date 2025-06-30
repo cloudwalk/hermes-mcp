@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.11.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.1...v0.11.2) (2025-06-30)
+
+
+### Bug Fixes
+
+* correctly parse peri numeric contrainsts to json-schema ([#160](https://github.com/cloudwalk/hermes-mcp/issues/160)) ([808c2c0](https://github.com/cloudwalk/hermes-mcp/commit/808c2c09e490bf9a866d5575abbf08d355c8324b))
+* interactive http tasks should accept custom headers ([#159](https://github.com/cloudwalk/hermes-mcp/issues/159)) ([c2fe91e](https://github.com/cloudwalk/hermes-mcp/commit/c2fe91eff5a701e42a636ee1a291ea51a93f7983))
+
 ## [0.11.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.0...v0.11.1) (2025-06-30)
 
 
