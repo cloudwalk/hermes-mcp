@@ -1,9 +1,9 @@
 defmodule Hermes.SSE do
   @moduledoc false
 
-  alias Hermes.SSE.Parser
-
   use Hermes.Logging
+
+  alias Hermes.SSE.Parser
 
   @connection_headers %{
     "accept" => "text/event-stream",
