@@ -598,9 +598,21 @@ end
 | `{:enum, choices}` | Value must be one of the choices | `{:enum, ["active", "inactive"]}` * |
 | `{:string, {:min, n}}` | String with minimum length | `{:string, {:min, 3}}` |
 | `{:string, {:max, n}}` | String with maximum length | `{:string, {:max, 100}}` |
-| `{:integer, {:min, n}}` | Integer >= n | `{:integer, {:min, 0}}` |
-| `{:integer, {:max, n}}` | Integer <= n | `{:integer, {:max, 100}}` |
-| `{:integer, {:range, {min, max}}}` | Integer in range | `{:integer, {:range, {1, 100}}}` |
+| `{:string, {:regex, pattern}}` | String matching regex pattern | `{:string, {:regex, ~r/^[A-Z]+$/}}` |
+| `{:integer, {:eq, n}}` | Integer equal to n | `{:integer, {:eq, 42}}` |
+| `{:integer, {:neq, n}}` | Integer not equal to n | `{:integer, {:neq, 0}}` |
+| `{:integer, {:gt, n}}` | Integer > n | `{:integer, {:gt, 0}}` |
+| `{:integer, {:gte, n}}` | Integer >= n | `{:integer, {:gte, 18}}` |
+| `{:integer, {:lt, n}}` | Integer < n | `{:integer, {:lt, 100}}` |
+| `{:integer, {:lte, n}}` | Integer <= n | `{:integer, {:lte, 99}}` |
+| `{:integer, {:range, {min, max}}}` | Integer in range [min, max] | `{:integer, {:range, {1, 100}}}` |
+| `{:float, {:eq, n}}` | Float equal to n | `{:float, {:eq, 3.14}}` |
+| `{:float, {:neq, n}}` | Float not equal to n | `{:float, {:neq, 0.0}}` |
+| `{:float, {:gt, n}}` | Float > n | `{:float, {:gt, 0.0}}` |
+| `{:float, {:gte, n}}` | Float >= n | `{:float, {:gte, 1.5}}` |
+| `{:float, {:lt, n}}` | Float < n | `{:float, {:lt, 100.0}}` |
+| `{:float, {:lte, n}}` | Float <= n | `{:float, {:lte, 99.9}}` |
+| `{:float, {:range, {min, max}}}` | Float in range [min, max] | `{:float, {:range, {1.0, 100.0}}}` |
 
 \* Note: When using enum with the field macro, add `type: :string` for proper JSON Schema generation.
 
