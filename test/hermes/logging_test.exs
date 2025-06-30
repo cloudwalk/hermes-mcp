@@ -1,5 +1,5 @@
 defmodule Hermes.LoggingTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: false
   use Hermes.Logging
 
   import ExUnit.CaptureLog
