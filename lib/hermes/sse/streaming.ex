@@ -2,10 +2,9 @@ if Code.ensure_loaded?(Plug) do
   defmodule Hermes.SSE.Streaming do
     @moduledoc false
 
-    alias Hermes.Logging
-    alias Hermes.SSE.Event
+    use Hermes.Logging
 
-    require Hermes.Logging
+    alias Hermes.SSE.Event
 
     @type conn :: Plug.Conn.t()
     @type transport :: GenServer.server()

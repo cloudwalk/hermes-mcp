@@ -54,15 +54,14 @@ defmodule Hermes.Server.Transport.SSE do
   @behaviour Hermes.Transport.Behaviour
 
   use GenServer
+  use Hermes.Logging
 
   import Peri
 
-  alias Hermes.Logging
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
-  require Hermes.Logging
   require Message
 
   @type t :: GenServer.server()

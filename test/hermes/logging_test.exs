@@ -1,9 +1,8 @@
 defmodule Hermes.LoggingTest do
   use ExUnit.Case
+  use Hermes.Logging
 
   import ExUnit.CaptureLog
-
-  alias Hermes.Logging
 
   @moduletag capture_log: true
 

@@ -2,10 +2,10 @@ defmodule Hermes.Server.Base do
   @moduledoc false
 
   use GenServer
+  use Hermes.Logging
 
   import Peri
 
-  alias Hermes.Logging
   alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.Protocol
@@ -15,7 +15,6 @@ defmodule Hermes.Server.Base do
   alias Hermes.Server.Session.Supervisor, as: SessionSupervisor
   alias Hermes.Telemetry
 
-  require Hermes.Logging
   require Message
   require Server
   require Session

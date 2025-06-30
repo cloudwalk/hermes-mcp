@@ -3,6 +3,16 @@ defmodule Hermes.Logging do
 
   require Logger
 
+  @doc false
+  defmacro __using__(_) do
+    quote do
+      alias Hermes.Logging
+
+      require Hermes.Logging
+      require Logger
+    end
+  end
+
   @doc """
   Log protocol messages with automatic formatting and context.
 
@@ -142,7 +152,15 @@ defmodule Hermes.Logging do
     Keyword.get(logging_config, event_type, :debug)
   end
 
-  defp log_by_level(level, msg, metadata), do: apply(Logger, level, [msg, metadata])
+  defp log_by_level(:debug, msg, metadata), do: Logger.debug(msg, metadata)
+  defp log_by_level(:info, msg, metadata), do: Logger.info(msg, metadata)
+  defp log_by_level(:notice, msg, metadata), do: Logger.notice(msg, metadata)
+  defp log_by_level(:warning, msg, metadata), do: Logger.warning(msg, metadata)
+  defp log_by_level(:error, msg, metadata), do: Logger.error(msg, metadata)
+  defp log_by_level(:critical, msg, metadata), do: Logger.critical(msg, metadata)
+  defp log_by_level(:alert, msg, metadata), do: Logger.alert(msg, metadata)
+  defp log_by_level(:emergency, msg, metadata), do: Logger.emergency(msg, metadata)
+  defp log_by_level(_, msg, metadata), do: Logger.info(msg, metadata)
 
   @doc false
   def create_message_summary("request", id, data) when is_map(data) do

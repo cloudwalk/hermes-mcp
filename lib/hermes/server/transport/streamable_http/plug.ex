@@ -56,9 +56,10 @@ if Code.ensure_loaded?(Plug) do
 
     @behaviour Plug
 
+    use Hermes.Logging
+
     import Plug.Conn
 
-    alias Hermes.Logging
     alias Hermes.MCP.Error
     alias Hermes.MCP.ID
     alias Hermes.MCP.Message
@@ -66,7 +67,6 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.SSE.Streaming
     alias Plug.Conn.Unfetched
 
-    require Hermes.Logging
     require Message
 
     @default_session_header "mcp-session-id"
