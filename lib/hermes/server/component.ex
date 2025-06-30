@@ -143,6 +143,7 @@ defmodule Hermes.Server.Component do
     quote do
       @behaviour unquote(behaviour_module)
 
+      import Hermes.Server.Frame
       import Hermes.Server.Component, only: [schema: 1, field: 3, field: 2]
 
       @doc false
