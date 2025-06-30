@@ -9,7 +9,7 @@ In `mix.exs`:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.11.2"} # x-release-please-version
+    {:hermes_mcp, "~> 0.11.3"} # x-release-please-version
   ]
 end
 ```
