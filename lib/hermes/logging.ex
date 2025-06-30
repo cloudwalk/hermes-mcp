@@ -73,7 +73,7 @@ defmodule Hermes.Logging do
 
       Hermes.Logging.log(level, "MCP server event: #{unquote(event)}", metadata)
 
-      if unquote(details) do
+      if Hermes.Logging.should_log_details?(unquote(details)) do
         Hermes.Logging.log(
           level,
           "MCP event details: #{inspect(unquote(details))}",
@@ -98,7 +98,7 @@ defmodule Hermes.Logging do
 
       Hermes.Logging.log(level, "MCP client event: #{unquote(event)}", metadata)
 
-      if unquote(details) do
+      if Hermes.Logging.should_log_details?(unquote(details)) do
         Hermes.Logging.log(
           level,
           "MCP event details: #{inspect(unquote(details))}",
@@ -123,7 +123,7 @@ defmodule Hermes.Logging do
 
       Hermes.Logging.log(level, "MCP transport event: #{unquote(event)}", metadata)
 
-      if unquote(details) do
+      if Hermes.Logging.should_log_details?(unquote(details)) do
         Hermes.Logging.log(
           level,
           "MCP transport details: #{inspect(unquote(details))}",
@@ -191,6 +191,7 @@ defmodule Hermes.Logging do
   @doc false
   def should_log_details?(data) when is_binary(data), do: byte_size(data) < 500
   def should_log_details?(data) when is_map(data), do: map_size(data) < 10
+  def should_log_details?(nil), do: false
   def should_log_details?(_), do: true
 
   @doc false

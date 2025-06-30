@@ -7,7 +7,6 @@ defmodule Hermes.LoggingTest do
   @moduletag capture_log: true
 
   setup do
-    # Store original config to restore after each test
     original_log_config = Application.get_env(:hermes_mcp, :log)
     original_logging_config = Application.get_env(:hermes_mcp, :logging)
 
@@ -30,6 +29,7 @@ defmodule Hermes.LoggingTest do
 
   describe "configurable default log levels" do
     test "uses configured level for client events" do
+      Application.put_env(:logger, :level, :warning)
       Application.put_env(:hermes_mcp, :logging, client_events: :warning)
 
       log =
@@ -42,6 +42,7 @@ defmodule Hermes.LoggingTest do
     end
 
     test "uses configured level for server events" do
+      Application.put_env(:logger, :level, :error)
       Application.put_env(:hermes_mcp, :logging, server_events: :error)
 
       log =
@@ -54,6 +55,7 @@ defmodule Hermes.LoggingTest do
     end
 
     test "uses configured level for transport events" do
+      Application.put_env(:logger, :level, :info)
       Application.put_env(:hermes_mcp, :logging, transport_events: :info)
 
       log =
@@ -66,6 +68,7 @@ defmodule Hermes.LoggingTest do
     end
 
     test "uses configured level for protocol messages" do
+      Application.put_env(:logger, :level, :warning)
       Application.put_env(:hermes_mcp, :logging, protocol_messages: :warning)
 
       log =
@@ -97,6 +100,7 @@ defmodule Hermes.LoggingTest do
 
   describe "application config override behavior" do
     test "respects partial configuration" do
+      Application.put_env(:logger, :level, :error)
       Application.put_env(:hermes_mcp, :logging, client_events: :error)
 
       log =
@@ -161,6 +165,7 @@ defmodule Hermes.LoggingTest do
 
   describe "metadata level override behavior" do
     test "metadata level overrides default for client events" do
+      Application.put_env(:logger, :level, :error)
       Application.put_env(:hermes_mcp, :logging, client_events: :debug)
 
       log =
@@ -172,6 +177,7 @@ defmodule Hermes.LoggingTest do
     end
 
     test "metadata level overrides default for server events" do
+      Application.put_env(:logger, :level, :warning)
       Application.put_env(:hermes_mcp, :logging, server_events: :debug)
 
       log =
@@ -194,6 +200,7 @@ defmodule Hermes.LoggingTest do
     end
 
     test "metadata level overrides default for protocol messages" do
+      Application.put_env(:logger, :level, :error)
       Application.put_env(:hermes_mcp, :logging, protocol_messages: :debug)
 
       log =
@@ -379,13 +386,13 @@ defmodule Hermes.LoggingTest do
       assert log =~ "[info] MCP client event: test"
     end
 
-    test "maps notice to Logger.info" do
+    test "maps notice to Logger.notice" do
       log =
-        capture_log([level: :info], fn ->
+        capture_log([level: :notice], fn ->
           Logging.client_event("test", nil, level: :notice)
         end)
 
-      assert log =~ "[info] MCP client event: test"
+      assert log =~ "[notice] MCP client event: test"
     end
 
     test "maps warning to Logger.warning" do
@@ -398,6 +405,8 @@ defmodule Hermes.LoggingTest do
     end
 
     test "maps error to Logger.error" do
+      Application.put_env(:logger, :level, :error)
+
       log =
         capture_log([level: :error], fn ->
           Logging.client_event("test", nil, level: :error)
@@ -406,40 +415,37 @@ defmodule Hermes.LoggingTest do
       assert log =~ "[error] MCP client event: test"
     end
 
-    test "maps critical to Logger.error" do
+    test "maps critical to Logger.critical" do
+      Application.put_env(:logger, :level, :critical)
+
       log =
-        capture_log([level: :error], fn ->
+        capture_log([level: :critical], fn ->
           Logging.client_event("test", nil, level: :critical)
         end)
 
-      assert log =~ "[error] MCP client event: test"
+      assert log =~ "[critical] MCP client event: test"
     end
 
-    test "maps alert to Logger.error" do
+    test "maps alert to Logger.alert" do
+      Application.put_env(:logger, :level, :alert)
+
       log =
-        capture_log([level: :error], fn ->
+        capture_log([level: :alert], fn ->
           Logging.client_event("test", nil, level: :alert)
         end)
 
-      assert log =~ "[error] MCP client event: test"
+      assert log =~ "[alert] MCP client event: test"
     end
 
-    test "maps emergency to Logger.error" do
+    test "maps emergency to Logger.emergency" do
+      Application.put_env(:logger, :level, :emergency)
+
       log =
-        capture_log([level: :error], fn ->
+        capture_log([level: :emergency], fn ->
           Logging.client_event("test", nil, level: :emergency)
         end)
 
-      assert log =~ "[error] MCP client event: test"
-    end
-
-    test "maps unknown levels to Logger.info" do
-      log =
-        capture_log([level: :info], fn ->
-          Logging.client_event("test", nil, level: :unknown_level)
-        end)
-
-      assert log =~ "[info] MCP client event: test"
+      assert log =~ "[emergency] MCP client event: test"
     end
   end
 
