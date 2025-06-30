@@ -79,24 +79,52 @@ defmodule Hermes.Server.Component.SchemaTest do
 
     test "converts numeric constraints" do
       schema = %{
-        min_int: {:integer, {:min, 0}},
-        max_int: {:integer, {:max, 100}},
+        eq_int: {:integer, {:eq, 42}},
+        neq_int: {:integer, {:neq, 0}},
+        gt_int: {:integer, {:gt, 0}},
+        gte_int: {:integer, {:gte, 18}},
+        lt_int: {:integer, {:lt, 100}},
+        lte_int: {:integer, {:lte, 99}},
         range_int: {:integer, {:range, {1, 10}}},
-        min_float: {:float, {:min, 0.0}},
-        max_float: {:float, {:max, 100.0}},
+        eq_float: {:float, {:eq, 3.14}},
+        neq_float: {:float, {:neq, 0.0}},
+        gt_float: {:float, {:gt, 0.0}},
+        gte_float: {:float, {:gte, 1.5}},
+        lt_float: {:float, {:lt, 100.0}},
+        lte_float: {:float, {:lte, 99.9}},
         range_float: {:float, {:range, {1.0, 10.0}}}
       }
 
       result = Schema.to_json_schema(schema)
 
-      assert result["properties"]["min_int"] == %{
+      assert result["properties"]["eq_int"] == %{
                "type" => "integer",
-               "minimum" => 0
+               "const" => 42
              }
 
-      assert result["properties"]["max_int"] == %{
+      assert result["properties"]["neq_int"] == %{
                "type" => "integer",
-               "maximum" => 100
+               "not" => %{"const" => 0}
+             }
+
+      assert result["properties"]["gt_int"] == %{
+               "type" => "integer",
+               "exclusiveMinimum" => 0
+             }
+
+      assert result["properties"]["gte_int"] == %{
+               "type" => "integer",
+               "minimum" => 18
+             }
+
+      assert result["properties"]["lt_int"] == %{
+               "type" => "integer",
+               "exclusiveMaximum" => 100
+             }
+
+      assert result["properties"]["lte_int"] == %{
+               "type" => "integer",
+               "maximum" => 99
              }
 
       assert result["properties"]["range_int"] == %{
@@ -105,14 +133,34 @@ defmodule Hermes.Server.Component.SchemaTest do
                "maximum" => 10
              }
 
-      assert result["properties"]["min_float"] == %{
+      assert result["properties"]["eq_float"] == %{
                "type" => "number",
-               "minimum" => 0.0
+               "const" => 3.14
              }
 
-      assert result["properties"]["max_float"] == %{
+      assert result["properties"]["neq_float"] == %{
                "type" => "number",
-               "maximum" => 100.0
+               "not" => %{"const" => 0.0}
+             }
+
+      assert result["properties"]["gt_float"] == %{
+               "type" => "number",
+               "exclusiveMinimum" => 0.0
+             }
+
+      assert result["properties"]["gte_float"] == %{
+               "type" => "number",
+               "minimum" => 1.5
+             }
+
+      assert result["properties"]["lt_float"] == %{
+               "type" => "number",
+               "exclusiveMaximum" => 100.0
+             }
+
+      assert result["properties"]["lte_float"] == %{
+               "type" => "number",
+               "maximum" => 99.9
              }
 
       assert result["properties"]["range_float"] == %{

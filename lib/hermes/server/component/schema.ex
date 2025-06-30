@@ -102,24 +102,56 @@ defmodule Hermes.Server.Component.Schema do
     %{"type" => "string", "maxLength" => max}
   end
 
-  defp convert_type({:integer, {:min, min}}) do
-    %{"type" => "integer", "minimum" => min}
+  defp convert_type({:integer, {:eq, value}}) do
+    %{"type" => "integer", "const" => value}
   end
 
-  defp convert_type({:integer, {:max, max}}) do
-    %{"type" => "integer", "maximum" => max}
+  defp convert_type({:integer, {:neq, value}}) do
+    %{"type" => "integer", "not" => %{"const" => value}}
+  end
+
+  defp convert_type({:integer, {:gt, value}}) do
+    %{"type" => "integer", "exclusiveMinimum" => value}
+  end
+
+  defp convert_type({:integer, {:gte, value}}) do
+    %{"type" => "integer", "minimum" => value}
+  end
+
+  defp convert_type({:integer, {:lt, value}}) do
+    %{"type" => "integer", "exclusiveMaximum" => value}
+  end
+
+  defp convert_type({:integer, {:lte, value}}) do
+    %{"type" => "integer", "maximum" => value}
   end
 
   defp convert_type({:integer, {:range, {min, max}}}) do
     %{"type" => "integer", "minimum" => min, "maximum" => max}
   end
 
-  defp convert_type({:float, {:min, min}}) do
-    %{"type" => "number", "minimum" => min}
+  defp convert_type({:float, {:eq, value}}) do
+    %{"type" => "number", "const" => value}
   end
 
-  defp convert_type({:float, {:max, max}}) do
-    %{"type" => "number", "maximum" => max}
+  defp convert_type({:float, {:neq, value}}) do
+    %{"type" => "number", "not" => %{"const" => value}}
+  end
+
+  defp convert_type({:float, {:gt, value}}) do
+    %{"type" => "number", "exclusiveMinimum" => value}
+  end
+
+  defp convert_type({:float, {:gte, value}}) do
+    %{"type" => "number", "minimum" => value}
+  end
+
+  defp convert_type({:float, {:lt, value}}) do
+    %{"type" => "number", "exclusiveMaximum" => value}
+  end
+
+  defp convert_type({:float, {:lte, value}}) do
+    %{"type" => "number", "maximum" => value}
   end
 
   defp convert_type({:float, {:range, {min, max}}}) do
