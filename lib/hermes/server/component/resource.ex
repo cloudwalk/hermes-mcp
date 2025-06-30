@@ -141,7 +141,8 @@ defmodule Hermes.Server.Component.Resource do
 
     def encode(%Resource{} = resource, _) do
       resource
-      |> Map.from_struct()
+      |> Map.take([:name, :uri, :description])
+      |> Map.put(:mimeType, resource.mime_type)
       |> JSON.encode!()
     end
   end

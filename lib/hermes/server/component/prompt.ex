@@ -165,7 +165,7 @@ defmodule Hermes.Server.Component.Prompt do
 
     def encode(%Prompt{} = prompt, _) do
       prompt
-      |> Map.from_struct()
+      |> Map.take([:name, :description, :arguments])
       |> JSON.encode!()
     end
   end

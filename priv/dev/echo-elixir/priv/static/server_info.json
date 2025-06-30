@@ -1,0 +1,10 @@
+{
+  "server": {
+    "name": "Echo MCP Server",
+    "version": "1.0.0",
+    "uptime_seconds": 3600,
+    "features": ["echo", "notes", "greetings"],
+    "status": "healthy",
+    "last_updated": "2025-01-28T10:00:00Z"
+  }
+}
