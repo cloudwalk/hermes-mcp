@@ -103,137 +103,6 @@ defmodule Hermes.Server.Base do
     GenServer.start_link(__MODULE__, Map.new(opts), name: server_name)
   end
 
-  @doc """
-  Sends a notification to the client.
-
-  Notifications are fire-and-forget messages that don't expect a response.
-  This function is useful for server-initiated communication like progress
-  updates or status changes.
-
-  ## Parameters
-    * `server` - The server process name or PID
-    * `method` - The notification method (e.g., "notifications/message")
-    * `params` - Optional parameters for the notification (defaults to `%{}`)
-
-  ## Returns
-    * `:ok` if notification was sent successfully
-    * `{:error, reason}` if transport fails
-
-  ## Examples
-
-      # Send a log message notification
-      Hermes.Server.Base.send_notification(
-        server,
-        "notifications/message",
-        %{"level" => "info", "data" => "Processing started"}
-      )
-
-      # Send a custom notification
-      Hermes.Server.Base.send_notification(
-        server,
-        "custom/status_changed",
-        %{"status" => "active"}
-      )
-  """
-  @spec send_notification(GenServer.name(), String.t(), map()) ::
-          :ok | {:error, term()}
-  def send_notification(server, method, params \\ %{}) do
-    GenServer.call(server, {:send_notification, method, params})
-  end
-
-  @doc """
-  Sends a resources list changed notification to the client.
-
-  This notification informs the client that the list of available resources has changed.
-  The server must have declared the `resources.listChanged` capability.
-  """
-  @spec send_resources_list_changed(GenServer.name()) :: :ok | {:error, term()}
-  def send_resources_list_changed(server) do
-    send_notification(server, "notifications/resources/list_changed", %{})
-  end
-
-  @doc """
-  Sends a resource updated notification to the client.
-
-  This notification informs the client that a specific resource has been updated.
-
-  ## Parameters
-    * `server` - The server process
-    * `uri` - The URI of the updated resource
-    * `title` - Optional human-readable title for the resource
-  """
-  @spec send_resource_updated(GenServer.name(), String.t(), String.t() | nil) ::
-          :ok | {:error, term()}
-  def send_resource_updated(server, uri, title \\ nil) do
-    params = %{"uri" => uri}
-    params = if title, do: Map.put(params, "title", title), else: params
-    send_notification(server, "notifications/resources/updated", params)
-  end
-
-  @doc """
-  Sends a prompts list changed notification to the client.
-
-  This notification informs the client that the list of available prompts has changed.
-  The server must have declared the `prompts.listChanged` capability.
-  """
-  @spec send_prompts_list_changed(GenServer.name()) :: :ok | {:error, term()}
-  def send_prompts_list_changed(server) do
-    send_notification(server, "notifications/prompts/list_changed", %{})
-  end
-
-  @doc """
-  Sends a tools list changed notification to the client.
-
-  This notification informs the client that the list of available tools has changed.
-  The server must have declared the `tools.listChanged` capability.
-  """
-  @spec send_tools_list_changed(GenServer.name()) :: :ok | {:error, term()}
-  def send_tools_list_changed(server) do
-    send_notification(server, "notifications/tools/list_changed", %{})
-  end
-
-  @doc """
-  Sends a log message notification to the client.
-
-  ## Parameters
-    * `server` - The server process
-    * `level` - Log level (debug, info, notice, warning, error, critical, alert, emergency)
-    * `data` - The log message data
-    * `logger` - Optional logger name
-  """
-  @spec send_log_message(GenServer.name(), String.t(), String.t(), String.t() | nil) ::
-          :ok | {:error, term()}
-  def send_log_message(server, level, data, logger \\ nil) do
-    params = %{"level" => level, "data" => data}
-    params = if logger, do: Map.put(params, "logger", logger), else: params
-    send_notification(server, "notifications/message", params)
-  end
-
-  @doc """
-  Sends a progress notification to the client.
-
-  ## Parameters
-    * `server` - The server process
-    * `progress_token` - The progress token (string or integer)
-    * `progress` - The current progress value
-    * `total` - Optional total value for the operation
-    * `message` - Optional message describing the current progress (2025-03-26 spec)
-  """
-  @spec send_progress(
-          GenServer.name(),
-          String.t() | integer(),
-          number(),
-          number() | nil,
-          String.t() | nil
-        ) ::
-          :ok | {:error, term()}
-  def send_progress(server, progress_token, progress, total \\ nil, message \\ nil) do
-    params = %{"progressToken" => progress_token, "progress" => progress}
-    params = if total, do: Map.put(params, "total", total), else: params
-    params = if message, do: Map.put(params, "message", message), else: params
-    send_notification(server, "notifications/progress", params)
-  end
-
   # GenServer callbacks
 
   @impl GenServer
@@ -306,17 +175,6 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @impl GenServer
-  def handle_call({:send_notification, method, params}, _from, state) do
-    case encode_notification(method, params) do
-      {:ok, notification_data} ->
-        {:reply, send_to_transport(state.transport, notification_data), state}
-
-      error ->
-        {:reply, error, state}
-    end
-  end
-
   def handle_call(request, from, %{module: module} = state) do
     case module.handle_call(request, from, state.frame) do
       {:reply, reply, frame} ->
@@ -383,17 +241,35 @@ defmodule Hermes.Server.Base do
 
         sessions = Map.delete(state.sessions, session_id)
         state = cancel_session_expiry(session_id, state)
+        frame = state.frame
 
         frame =
-          if state.frame.private[:session_id] == session_id do
-            Frame.clear_session(state.frame)
-          else
-            state.frame
-          end
+          if frame.private[:session_id] == session_id,
+            do: Frame.clear_session(frame),
+            else: frame
 
         {:noreply, %{state | sessions: sessions, frame: frame}}
 
       nil ->
+        {:noreply, state}
+    end
+  end
+
+  def handle_info({:send_notification, method, params}, state) do
+    with {:ok, notification} <- encode_notification(method, params),
+         :ok <- send_to_transport(state.transport, notification) do
+      {:noreply, state}
+    else
+      {:error, err} ->
+        Logging.server_event(
+          "failed_send_notification",
+          %{
+            method: method,
+            error: err
+          },
+          level: :error
+        )
+
         {:noreply, state}
     end
   end

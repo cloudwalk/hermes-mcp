@@ -370,21 +370,7 @@ defmodule Hermes.Server do
     quote do
       @behaviour Hermes.Server
 
-      import Hermes.Server, only: [component: 1, component: 2, initialized?: 1]
-
-      import Hermes.Server.Base,
-        only: [
-          send_resources_list_changed: 1,
-          send_resource_updated: 2,
-          send_resource_updated: 3,
-          send_prompts_list_changed: 1,
-          send_tools_list_changed: 1,
-          send_log_message: 3,
-          send_log_message: 4,
-          send_progress: 4,
-          send_progress: 5
-        ]
-
+      import Hermes.Server
       import Hermes.Server.Component, only: [field: 3]
       import Hermes.Server.Frame
 
@@ -655,4 +641,106 @@ defmodule Hermes.Server do
 
   def validate_server_info!(_, name, version)
       when is_binary(name) and is_binary(version), do: :ok
+
+  # Notification Functions
+
+  @doc """
+  Sends a resources list changed notification to connected clients.
+
+  Use this when the available resources have changed (added, removed, or modified).
+  The client will typically re-fetch the resource list in response.
+  """
+  @spec send_resources_list_changed(server :: GenServer.server()) :: :ok
+  def send_resources_list_changed(server) do
+    queue_notification(server, "notifications/resources/list_changed", %{})
+  end
+
+  @doc """
+  Sends a resource updated notification for a specific resource.
+
+  Use this when the content of a specific resource has changed.
+  Clients that have subscribed to this resource will be notified.
+  """
+  @spec send_resource_updated(
+          server :: GenServer.server(),
+          uri :: String.t(),
+          timestamp :: DateTime.t() | nil
+        ) ::
+          :ok
+  def send_resource_updated(server, uri, timestamp \\ nil) do
+    params = %{"uri" => uri}
+    params = if timestamp, do: Map.put(params, "timestamp", timestamp), else: params
+    queue_notification(server, "notifications/resources/updated", params)
+  end
+
+  @doc """
+  Sends a prompts list changed notification to connected clients.
+
+  Use this when the available prompts have changed (added, removed, or modified).
+  The client will typically re-fetch the prompt list in response.
+  """
+  @spec send_prompts_list_changed(server :: GenServer.server()) :: :ok
+  def send_prompts_list_changed(server) do
+    queue_notification(server, "notifications/prompts/list_changed", %{})
+  end
+
+  @doc """
+  Sends a tools list changed notification to connected clients.
+
+  Use this when the available tools have changed (added, removed, or modified).
+  The client will typically re-fetch the tool list in response.
+  """
+  @spec send_tools_list_changed(server :: GenServer.server()) :: :ok
+  def send_tools_list_changed(server) do
+    queue_notification(server, "notifications/tools/list_changed", %{})
+  end
+
+  @doc """
+  Sends a log message to the client.
+
+  Use this to send diagnostic or informational messages to the client's logging system.
+  """
+  @spec send_log_message(
+          server :: GenServer.server(),
+          level :: Logger.level(),
+          message :: String.t(),
+          metadata :: map() | nil
+        ) :: :ok
+  def send_log_message(server, level, message, data \\ nil) do
+    params = %{"level" => level, "message" => message}
+    params = if data, do: Map.put(params, "data", data), else: params
+
+    queue_notification(server, "notifications/log/message", params)
+  end
+
+  @type progress_token :: String.t() | non_neg_integer
+  @type progress_step :: number
+  @type progress_total :: number
+
+  @doc """
+  Sends a progress notification for an ongoing operation.
+
+  Use this to update the client on the progress of long-running operations.
+  """
+  @spec send_progress(
+          server :: GenServer.server(),
+          progress_token,
+          progress_step,
+          opts
+        ) :: :ok
+        when opts: list({:total, progress_total} | {:message, String.t()})
+  def send_progress(server, progress_token, progress, opts \\ []) do
+    total = opts[:total]
+    message = opts[:message]
+    params = %{"progressToken" => progress_token, "progress" => progress}
+    params = if total, do: Map.put(params, "total", total), else: params
+    params = if message, do: Map.put(params, "message", message), else: params
+
+    queue_notification(server, "notifications/progress", params)
+  end
+
+  defp queue_notification(server, method, params) do
+    send(server, {:send_notification, method, params})
+    :ok
+  end
 end

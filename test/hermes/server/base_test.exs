@@ -86,9 +86,7 @@ defmodule Hermes.Server.BaseTest do
     setup :initialized_server
 
     test "sends notification to transport", %{server: server} do
-      params = %{"logger" => "database", "level" => "error", "data" => %{}}
-      assert :ok = Base.send_notification(server, "notifications/message", params)
-      # TODO(zoedsoupe): assert on StubTransport
+      assert :ok = Hermes.Server.send_log_message(server, :info, "hello")
     end
   end
 

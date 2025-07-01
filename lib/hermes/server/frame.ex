@@ -50,7 +50,7 @@ defmodule Hermes.Server.Frame do
   These fields are reserved for framework usage:
 
     * `private` - shared framework data as a map. Contains MCP session context:
-      * `session_id` - unique identifier for the client session
+      * `session_id` - unique identifier for the current client session being handled
       * `client_info` - client information from initialization, example: `%{"name" => "my-client", "version" => "1.0.0"}`
       * `client_capabilities` - negotiated client capabilities
       * `protocol_version` - active MCP protocol version, example: `"2025-03-26"`
