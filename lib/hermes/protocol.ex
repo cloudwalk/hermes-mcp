@@ -1,26 +1,5 @@
 defmodule Hermes.Protocol do
-  @moduledoc """
-  Protocol version management and feature validation for MCP.
-
-  This module handles protocol version compatibility, feature detection,
-  and transport validation following the MCP specification.
-
-  ## Protocol Versions
-
-  - `2024-11-05`: Initial stable release with SSE and basic features
-  - `2025-03-26`: Enhanced version with Streamable HTTP, authorization, batching, and extended features
-
-  ## Examples
-
-      iex> Hermes.Protocol.validate_transport("2024-11-05", Hermes.Transport.SSE)
-      :ok
-
-      iex> Hermes.Protocol.validate_transport("2024-11-05", Hermes.Transport.StreamableHTTP)
-      {:error, %Hermes.MCP.Error{reason: :incompatible_transport}}
-
-      iex> Hermes.Protocol.supports_feature?("2025-03-26", :json_rpc_batching)
-      true
-  """
+  @moduledoc false
 
   alias Hermes.MCP.Error
 

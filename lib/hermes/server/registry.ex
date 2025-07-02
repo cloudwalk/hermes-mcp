@@ -1,21 +1,5 @@
 defmodule Hermes.Server.Registry do
-  @moduledoc """
-  Registry for MCP server and transport processes.
-
-  This module provides a safe way to manage process names without creating
-  atoms dynamically at runtime. It uses a via tuple pattern with Registry.
-
-  ## Usage
-
-      # Register a server process
-      {:ok, _pid} = GenServer.start_link(MyServer, arg, name: Registry.server(MyModule))
-      
-      # Register a transport process
-      {:ok, _pid} = GenServer.start_link(Transport, arg, name: Registry.transport(MyModule, :stdio))
-      
-      # Look up a process
-      GenServer.call(Registry.server(MyModule), :ping)
-  """
+  @moduledoc false
 
   def child_spec(_) do
     Registry.child_spec(keys: :unique, name: __MODULE__)

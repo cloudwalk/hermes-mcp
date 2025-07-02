@@ -72,7 +72,7 @@ defmodule Hermes.Server do
       component MyServer.FileReader           # Auto-named as "file_reader"
       component MyServer.ApiClient, name: "api"   # Custom name
 
-  Components are modules that implement specific behaviors (`Hermes.Server.Component`)
+  Components are modules that implement specific behaviors
   and are automatically discovered by clients through the protocol.
 
   ## Server Lifecycle

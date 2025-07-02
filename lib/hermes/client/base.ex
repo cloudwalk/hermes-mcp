@@ -1,16 +1,5 @@
 defmodule Hermes.Client.Base do
-  @moduledoc """
-  A GenServer implementation of an MCP (Model Context Protocol) client.
-
-  This module handles the client-side implementation of the MCP protocol,
-  including initialization, request/response handling, and maintaining
-  protocol state.
-
-  > ## Notes {: .info}
-  >
-  > For initialization and setup, check our [Installation & Setup](./installation.html) and
-  > the [Client Usage](./client_usage.html) guides for reference.
-  """
+  @moduledoc false
 
   use GenServer
   use Hermes.Logging

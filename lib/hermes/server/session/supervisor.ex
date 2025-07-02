@@ -1,50 +1,5 @@
 defmodule Hermes.Server.Session.Supervisor do
-  @moduledoc """
-  Dynamic supervisor for managing per-session server processes.
-
-  This module provides a clean API for starting and stopping session-specific
-  server instances without creating atoms dynamically. It enables multi-session
-  support for transports like StreamableHTTP that handle multiple concurrent
-  client connections.
-
-  ## Architecture
-
-  The session supervisor is part of the server supervision tree:
-  ```
-  Server.Supervisor
-  ├── Server.Base (message handler)
-  ├── Server.Session.Supervisor (this module)
-  │   ├── Session Agent 1
-  │   ├── Session Agent 2
-  │   └── Session Agent N
-  └── Transport (STDIO, StreamableHTTP, etc.)
-  ```
-
-  ## Session Lifecycle
-
-  1. **Creation**: When a new client connects, a session is created via `create_session/2`
-  2. **State Management**: Each session maintains its own state (protocol version,
-     client info, initialization status)
-  3. **Isolation**: Sessions are isolated from each other, preventing cross-contamination
-  4. **Cleanup**: Sessions are terminated when clients disconnect or on server shutdown
-
-  ## Usage
-
-  Sessions are typically managed automatically by the Base server:
-
-      # Base server creates a session when needed
-      {:ok, pid} = Session.Supervisor.create_session(MyServer, session_id)
-
-      # Sessions can be explicitly closed
-      :ok = Session.Supervisor.close_session(MyServer, session_id)
-
-  ## Benefits
-
-  - **Resource Management**: Automatic cleanup of disconnected sessions
-  - **Fault Tolerance**: Session crashes don't affect other sessions
-  - **Scalability**: Support for many concurrent clients
-  - **State Isolation**: Each client has independent state
-  """
+  @moduledoc false
 
   use DynamicSupervisor
 

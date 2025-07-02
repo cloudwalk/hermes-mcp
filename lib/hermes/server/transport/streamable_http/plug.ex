@@ -35,7 +35,7 @@ if Code.ensure_loaded?(Plug) do
     - `:server` - The server process name (required)
     - `:session_header` - Custom header name for session ID (default: "mcp-session-id")
     - `:timeout` - Request timeout in milliseconds (default: 30000)
-    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: `Hermes.Server.Registry`)
+    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: Elixir's Registry implementation)
 
     ## Security Features
 

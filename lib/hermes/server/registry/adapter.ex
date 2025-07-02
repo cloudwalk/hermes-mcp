@@ -44,7 +44,6 @@ defmodule Hermes.Server.Registry.Adapter do
   ## Default Implementation
 
   The default implementation uses Elixir's built-in Registry module.
-  See `Hermes.Server.Registry` for the reference implementation.
   """
 
   @doc """

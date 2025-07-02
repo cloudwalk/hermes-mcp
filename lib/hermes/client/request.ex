@@ -1,15 +1,5 @@
 defmodule Hermes.Client.Request do
-  @moduledoc """
-  Represents a pending request in the MCP client.
-
-  This struct encapsulates all information about an in-progress request:
-  - `id` - The unique request ID
-  - `method` - The MCP method being called
-  - `from` - The GenServer caller reference
-  - `timer_ref` - Reference to the request-specific timeout timer
-  - `start_time` - When the request started (monotonic time in milliseconds)
-  - `batch_id` - The batch ID if this request is part of a batch (nil for single requests)
-  """
+  @moduledoc false
 
   @type t :: %__MODULE__{
           id: String.t(),

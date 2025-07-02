@@ -52,7 +52,7 @@ if Code.ensure_loaded?(Plug) do
     - `:server` - The server process name (required)
     - `:mode` - Either `:sse` or `:post` to determine endpoint behavior (required)
     - `:timeout` - Request timeout in milliseconds (default: 30000)
-    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: `Hermes.Server.Registry`)
+    - `:registry` - The registry to use. See `Hermes.Server.Registry.Adapter` for more information (default: Elixir's Registry implementation)
 
     ## Security Features
 
