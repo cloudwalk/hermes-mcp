@@ -1,11 +1,12 @@
 # Hermes MCP Development Guide
 
 ## Build & Test Commands
+
 ```bash
 # Setup dependencies
 mix deps.get
 
-# Compile code 
+# Compile code
 mix compile --force --warnings-as-errors
 
 # Run all tests
@@ -30,6 +31,7 @@ mix docs
 ## Core Architecture & Design Patterns
 
 ### MCP Protocol Handling
+
 - **Message Processing**: ALWAYS use `Hermes.MCP.Message` for all MCP/JSON-RPC message encoding/decoding
   - Use `Message.decode/1` to parse incoming messages
   - Use `Message.encode_request/2`, `Message.encode_response/2`, `Message.encode_notification/1`, `Message.encode_error/2`
@@ -40,6 +42,7 @@ mix docs
   - Convert between JSON-RPC: `Error.from_json_rpc/1`, `Error.to_json_rpc!/2`
 
 ### Transport Layer Architecture
+
 - **Transport Behaviour**: All transports implement `Hermes.Transport.Behaviour`
   - Required callbacks: `start_link/1`, `send_message/2`, `shutdown/1`
   - Transport modules: `Hermes.Transport.STDIO`, `Hermes.Transport.SSE`, `Hermes.Transport.WebSocket`, `Hermes.Transport.StreamableHTTP`
@@ -48,6 +51,7 @@ mix docs
   - Send messages via `transport.layer.send_message(transport.name, data)`
 
 ### Client Architecture Patterns
+
 - **State Management**: Use `Hermes.Client.State` for all client state operations
   - Create state: `State.new/1`
   - Request tracking: `State.add_request_from_operation/3`, `State.remove_request/2`
@@ -59,6 +63,7 @@ mix docs
   - ID generation, timing, caller reference management
 
 ### Server Architecture Patterns
+
 - **Base Server**: Use `Hermes.Server.Base` as foundation for all MCP servers
   - Implement `Hermes.Server.Behaviour` callbacks in your server module
   - Required: `init/1`, `handle_request/2`, `handle_notification/2`, `server_info/0`
@@ -68,25 +73,29 @@ mix docs
   - Use `Hermes.Server.Transport.STDIO`, `Hermes.Server.Transport.StreamableHTTP`
 
 ### OTP Compliance & GenServer Patterns
+
 - **Process Structure**: All core components are GenServers with proper OTP supervision
 - **GenServer Naming**: Use `Hermes.genserver_name/1` validator with Peri schemas
-- **State Immutability**: Always return updated state from handle_* callbacks
+- **State Immutability**: Always return updated state from handle\_\* callbacks
 - **Hibernation**: Use `:hibernate` for reduced memory footprint in init
 - **Graceful Shutdown**: Implement proper `terminate/2` callbacks with cleanup
 
 ### Validation & Schema Patterns
+
 - **Peri Integration**: Use `import Peri` and `defschema` for all validation
 - **Option Parsing**: Use `parse_options!/1` pattern for GenServer initialization
 - **Schema Definitions**: Define validation schemas as module attributes
 - **Custom Validators**: Use `{:custom, &validator_function/1}` for complex validation
 
 ### ID Generation & Request Tracking
+
 - **Unique IDs**: Use `Hermes.MCP.ID` for generating request/response IDs
   - `ID.generate_request_id/0`, `ID.generate_error_id/0`
 - **Timer Management**: Use `Process.send_after/3` for request timeouts
 - **Request Lifecycle**: Track requests with timers, cleanup on completion/timeout
 
 ### Telemetry & Observability
+
 - **Event Emission**: Use `Hermes.Telemetry` for consistent telemetry events
   - Client events: `event_client_init/0`, `event_client_request/0`, `event_client_response/0`
   - Server events: `event_server_init/0`, `event_server_request/0`, `event_server_response/0`
@@ -94,6 +103,7 @@ mix docs
   - `client_event/2`, `server_event/2`, `message/4` for protocol message logging
 
 ### Testing Patterns
+
 - **MCP Framework**: Use `Hermes.MCP.Case` for comprehensive MCP protocol testing
   - Provides builders, setup functions, helpers, and domain-specific assertions
   - Reduces test boilerplate by ~90% while maintaining flexibility
@@ -111,16 +121,18 @@ mix docs
   - `assert_success/2`, `assert_resources/2`, `assert_tools/2`
 
 ## Code Style Guidelines
+
 - **Code Comments**: Only add code comments if strictly necessary, avoid it generally
 - **Formatting**: Follow .formatter.exs rules with Peri imports
 - **Types**: Use @type/@spec for all public functions
 - **Naming**: snake_case for functions, PascalCase modules
 - **Imports**: Group imports at top, organize by category (Elixir stdlib, deps, project modules)
 - **Documentation**: Include @moduledoc and @doc with examples
-- **Error Handling**: Pattern match with {:ok, _} and {:error, reason}
+- **Error Handling**: Pattern match with {:ok, \_} and {:error, reason}
 - **Testing**: Descriptive test blocks
-- **Constants**: Define defaults as module attributes (@default_*)
+- **Constants**: Define defaults as module attributes (@default\_\*)
 - **Module Structure**: Follow pattern: moduledoc, types, constants, public API, GenServer callbacks, private helpers
 
 ### Testing Guidelines
+
 - Always implement test helper modules in @test/support/ context, analyzing if there aren't any existing ones that could be used

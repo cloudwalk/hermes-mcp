@@ -96,28 +96,22 @@ defmodule Hermes.MixProject do
   defp aliases do
     [
       setup: ["deps.get", "compile --force"],
-      lint: ["format --check-formatted", "credo --strict", "dialyzer"]
+      lint: ["format --check-formatted", "credo --strict", "dialyzer"],
+      format_doc: ["cmd npx prettier -w ./**/*.md"]
     ]
   end
 
   defp docs do
     [
-      main: "readme",
+      main: "home",
       before_closing_head_tag: &before_closing_head_tag/1,
       extras: [
         "README.md",
-        "pages/installation.md",
-        "pages/transport.md",
-        "pages/client_usage.md",
-        "pages/server_quickstart.md",
-        "pages/server_components.md",
-        "pages/server_transport.md",
-        "pages/server_architecture.md",
-        "pages/message_handling.md",
-        "pages/progress_tracking.md",
-        "pages/logging.md",
-        "pages/error_handling.md",
-        "pages/cli_usage.md",
+        "pages/home.md",
+        "pages/building-a-client.md",
+        "pages/building-a-server.md",
+        "pages/recipes.md",
+        "pages/reference.md",
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "LICENSE"
@@ -125,26 +119,20 @@ defmodule Hermes.MixProject do
       groups_for_extras: [
         "Getting Started": [
           "README.md",
-          "pages/installation.md"
+          "pages/home.md"
         ],
-        "Client Development": [
-          "pages/client_usage.md",
-          "pages/transport.md"
+        "Building with Hermes": [
+          "pages/building-a-client.md",
+          "pages/building-a-server.md"
         ],
-        "Server Development": [
-          "pages/server_quickstart.md",
-          "pages/server_components.md",
-          "pages/server_transport.md",
-          "pages/server_architecture.md"
+        "Patterns & Reference": [
+          "pages/recipes.md",
+          "pages/reference.md"
         ],
-        "Core Concepts": [
-          "pages/message_handling.md",
-          "pages/error_handling.md",
-          "pages/progress_tracking.md",
-          "pages/logging.md"
-        ],
-        "Additional Tools": [
-          "pages/cli_usage.md"
+        "Project Info": [
+          "CHANGELOG.md",
+          "CONTRIBUTING.md",
+          "LICENSE"
         ]
       ]
     ]

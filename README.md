@@ -27,9 +27,9 @@ end
 ```elixir
 # Define a server with tools capabilities
 defmodule MyApp.MCPServer do
-  use Hermes.Server, 
-    name: "My Server", 
-    version: "1.0.0", 
+  use Hermes.Server,
+    name: "My Server",
+    version: "1.0.0",
     capabilities: [:tools]
 
   @impl true
@@ -65,7 +65,7 @@ forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug, server: MyApp.MCPSe
 
 Now you can achieve your MCP server on `http://localhost:<port>/mcp`
 
-### Client  
+### Client
 
 ```elixir
 # Define a client module
@@ -78,13 +78,12 @@ end
 
 # Add to your application supervisor
 children = [
-  {MyApp.AnthropicClient, 
+  {MyApp.MCPClient,
    transport: {:streamable_http, base_url: "http://localhost:4000"}}
 ]
 
 # Use the client
-{:ok, tools} = MyApp.MCPClient.list_tools()
-{:ok, result} = MyApp.MCPClient.call_tool("search", %{query: "elixir"})
+{:ok, result} = MyApp.MCPClient.call_tool("echo", %{text: "this will be echoed!"})
 ```
 
 ## Why Hermes?
@@ -94,6 +93,14 @@ Named after Hermes, the Greek god of boundaries and communication, this library 
 ## Documentation
 
 For detailed guides and examples, visit the [official documentation](https://hexdocs.pm/hermes_mcp).
+
+## Examples
+
+We have build some elixir implementation examples using `plug` based and `phoenix` apps:
+
+1. [upcase-server](/priv/dev/upcase/README.md): `plug` based MCP server using streamable_http
+2. [echo-elixir](/priv/dev/echo-elixir/README.md): `phoenix` based MCP server using sse
+3. [ascii-server](/priv/dev/ascii/README.md): `phoenix_live_view` based MCP server using streamable_http and UI
 
 ## License
 

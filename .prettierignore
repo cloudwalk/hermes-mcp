@@ -1,0 +1,15 @@
+/_build/
+/deps/
+/node_modules/
+
+/priv/dev/upcase/_build/
+/priv/dev/upcase/deps/
+
+/priv/dev/ascii/_build/
+/priv/dev/ascii/deps/
+
+/priv/dev/echo-elixir/_build/
+/priv/dev/echo-elixir/deps/
+
+/priv/dev/client/_build/
+/priv/dev/client/deps/

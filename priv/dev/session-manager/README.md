@@ -30,6 +30,7 @@ npm start
 ## Architecture
 
 The server implements:
+
 - **Session Management**: Each client connection gets a unique session ID
 - **Stateful Tools**: Tools can store and retrieve session-specific data
 - **Streamable HTTP Transport**: Uses Express with proper session isolation

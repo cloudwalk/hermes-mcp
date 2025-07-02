@@ -36,7 +36,7 @@
     devShells = forAllSystems (pkgs: {
       default = pkgs.mkShell {
         name = "hermes-mcp-dev";
-        buildInputs = with pkgs; [
+        packages = with pkgs; [
           elixir-bin."1.19.0-rc.0"
           erlang
           uv

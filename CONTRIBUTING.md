@@ -17,12 +17,14 @@ Firstly, have sure to follow the official MCP (Model Context Protocol) [specific
 ### Getting Started
 
 1. Clone the repository
+
    ```bash
    git clone https://github.com/cloudwalk/hermes-mcp.git
    cd hermes-mcp
    ```
 
 2. Install dependencies
+
    ```bash
    mix setup
    ```
@@ -74,6 +76,7 @@ mix test
 ## Submitting Contributions
 
 1. Create a new branch for your feature or bugfix
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
@@ -81,6 +84,7 @@ mix test
 2. Make your changes and commit them with clear, descriptive messages
 
 3. Push your branch to GitHub
+
    ```bash
    git push origin feature/your-feature-name
    ```
