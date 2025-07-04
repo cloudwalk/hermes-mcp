@@ -13,9 +13,9 @@ defmodule Mix.Interactive.Commands do
     "help" => "Show this help message",
     "ping" => "Send a ping to the server to check connection health",
     "list_tools" => "List server tools",
-    "call_tool" => "Call a server tool with arguments",
+    "call_tool" => "Call a server tool with arguments (JSON or @filepath)",
     "list_prompts" => "List server prompts",
-    "get_prompt" => "Get a server prompt",
+    "get_prompt" => "Get a server prompt with arguments (JSON or @filepath)",
     "list_resources" => "List server resources",
     "read_resource" => "Read a server resource",
     "initialize" => "Retry server connection initialization",
@@ -71,14 +71,23 @@ defmodule Mix.Interactive.Commands do
       )
     end)
 
+    IO.puts(
+      "\n#{UI.colors().info}Note:#{UI.colors().reset} All commands that make server requests support custom timeouts."
+    )
+
+    IO.puts(
+      "      You will be prompted for timeout value (in milliseconds) when running commands."
+    )
+
     IO.puts("")
     loop_fn.()
   end
 
   defp list_tools(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching tools...#{UI.colors().reset}")
+    timeout_opts = prompt_for_timeout()
 
-    case Hermes.Client.Base.list_tools(client) do
+    case Hermes.Client.Base.list_tools(client, timeout_opts) do
       {:ok, %Response{result: %{"tools" => tools}}} ->
         UI.print_items("tools", tools, "name")
 
@@ -93,26 +102,30 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Tool name: #{UI.colors().reset}")
     tool_name = "" |> IO.gets() |> String.trim()
 
-    IO.write("#{UI.colors().prompt}Tool arguments (JSON): #{UI.colors().reset}")
+    IO.write(
+      "#{UI.colors().prompt}Tool arguments (JSON or @filepath): #{UI.colors().reset}"
+    )
+
     args_input = "" |> IO.gets() |> String.trim()
 
-    case JSON.decode(args_input) do
-      {:ok, tool_args} ->
-        perform_tool_call(client, tool_name, tool_args)
+    tool_args = parse_tool_arguments(args_input)
+    timeout_opts = prompt_for_timeout()
+
+    case tool_args do
+      {:ok, args} ->
+        perform_tool_call(client, tool_name, args, timeout_opts)
 
       {:error, error} ->
-        IO.puts(
-          "#{UI.colors().error}Error parsing JSON: #{inspect(error)}#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().error}Error: #{error}#{UI.colors().reset}")
     end
 
     loop_fn.()
   end
 
-  defp perform_tool_call(client, tool_name, tool_args) do
+  defp perform_tool_call(client, tool_name, tool_args, timeout_opts) do
     IO.puts("\n#{UI.colors().info}Calling tool #{tool_name}...#{UI.colors().reset}")
 
-    case Hermes.Client.Base.call_tool(client, tool_name, tool_args) do
+    case Hermes.Client.Base.call_tool(client, tool_name, tool_args, timeout_opts) do
       {:ok, %Response{result: result}} ->
         IO.puts("#{UI.colors().success}Tool call successful#{UI.colors().reset}")
         IO.puts("\n#{UI.colors().info}Result:#{UI.colors().reset}")
@@ -127,8 +140,9 @@ defmodule Mix.Interactive.Commands do
 
   defp list_prompts(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching prompts...#{UI.colors().reset}")
+    timeout_opts = prompt_for_timeout()
 
-    case Hermes.Client.Base.list_prompts(client) do
+    case Hermes.Client.Base.list_prompts(client, timeout_opts) do
       {:ok, %Response{result: %{"prompts" => prompts}}} ->
         UI.print_items("prompts", prompts, "name")
 
@@ -143,28 +157,37 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Prompt name: #{UI.colors().reset}")
     prompt_name = "" |> IO.gets() |> String.trim()
 
-    IO.write("#{UI.colors().prompt}Prompt arguments (JSON): #{UI.colors().reset}")
+    IO.write(
+      "#{UI.colors().prompt}Prompt arguments (JSON or @filepath): #{UI.colors().reset}"
+    )
+
     args_input = "" |> IO.gets() |> String.trim()
 
-    case JSON.decode(args_input) do
-      {:ok, prompt_args} ->
-        perform_get_prompt(client, prompt_name, prompt_args)
+    prompt_args = parse_tool_arguments(args_input)
+    timeout_opts = prompt_for_timeout()
+
+    case prompt_args do
+      {:ok, args} ->
+        perform_get_prompt(client, prompt_name, args, timeout_opts)
 
       {:error, error} ->
-        IO.puts(
-          "#{UI.colors().error}Error parsing JSON: #{inspect(error)}#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().error}Error: #{error}#{UI.colors().reset}")
     end
 
     loop_fn.()
   end
 
-  defp perform_get_prompt(client, prompt_name, prompt_args) do
+  defp perform_get_prompt(client, prompt_name, prompt_args, timeout_opts) do
     IO.puts(
       "\n#{UI.colors().info}Getting prompt #{prompt_name}...#{UI.colors().reset}"
     )
 
-    case Hermes.Client.Base.get_prompt(client, prompt_name, prompt_args) do
+    case Hermes.Client.Base.get_prompt(
+           client,
+           prompt_name,
+           prompt_args,
+           timeout_opts
+         ) do
       {:ok, %Response{result: result}} ->
         IO.puts("#{UI.colors().success}Got prompt successfully#{UI.colors().reset}")
         IO.puts("\n#{UI.colors().info}Result:#{UI.colors().reset}")
@@ -179,8 +202,9 @@ defmodule Mix.Interactive.Commands do
 
   defp list_resources(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Fetching resources...#{UI.colors().reset}")
+    timeout_opts = prompt_for_timeout()
 
-    case Hermes.Client.Base.list_resources(client) do
+    case Hermes.Client.Base.list_resources(client, timeout_opts) do
       {:ok, %Response{result: %{"resources" => resources}}} ->
         UI.print_items("resources", resources, "uri")
 
@@ -195,11 +219,13 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Resource URI: #{UI.colors().reset}")
     resource_uri = "" |> IO.gets() |> String.trim()
 
+    timeout_opts = prompt_for_timeout()
+
     IO.puts(
       "\n#{UI.colors().info}Reading resource #{resource_uri}...#{UI.colors().reset}"
     )
 
-    case Hermes.Client.Base.read_resource(client, resource_uri) do
+    case Hermes.Client.Base.read_resource(client, resource_uri, timeout_opts) do
       {:ok, %Response{result: result}} ->
         IO.puts(
           "#{UI.colors().success}Read resource successfully#{UI.colors().reset}"
@@ -418,8 +444,9 @@ defmodule Mix.Interactive.Commands do
 
   defp ping_server(client, loop_fn) do
     IO.puts("\n#{UI.colors().info}Pinging server...#{UI.colors().reset}")
+    timeout_opts = prompt_for_timeout()
 
-    case Hermes.Client.Base.ping(client) do
+    case Hermes.Client.Base.ping(client, timeout_opts) do
       :pong ->
         IO.puts(
           "#{UI.colors().success}✓ Pong! Server is responding#{UI.colors().reset}"
@@ -448,6 +475,59 @@ defmodule Mix.Interactive.Commands do
       IO.puts(
         "  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}"
       )
+    end
+  end
+
+  defp parse_tool_arguments("@" <> file_path) do
+    read_json_from_file(file_path)
+  end
+
+  defp parse_tool_arguments(""), do: {:ok, %{}}
+
+  defp parse_tool_arguments(input) do
+    case JSON.decode(input) do
+      {:ok, args} -> {:ok, args}
+      {:error, error} -> {:error, "Invalid JSON: #{inspect(error)}"}
+    end
+  end
+
+  defp read_json_from_file(file_path) do
+    file_path = Path.expand(file_path)
+
+    with {:ok, content} <- File.read(file_path),
+         {:ok, json} <- JSON.decode(content) do
+      {:ok, json}
+    else
+      {:error, :enoent} ->
+        {:error, "File not found: #{file_path}"}
+
+      {:error, reason} ->
+        {:error, "Error reading file: #{inspect(reason)}"}
+    end
+  end
+
+  defp prompt_for_timeout do
+    IO.write(
+      "#{UI.colors().prompt}Timeout in ms (optional, press Enter for default): #{UI.colors().reset}"
+    )
+
+    timeout_input = "" |> IO.gets() |> String.trim()
+    parse_timeout_option(timeout_input)
+  end
+
+  defp parse_timeout_option(""), do: []
+
+  defp parse_timeout_option(input) do
+    case Integer.parse(input) do
+      {timeout_ms, ""} when timeout_ms > 0 ->
+        [timeout: timeout_ms]
+
+      _ ->
+        IO.puts(
+          "#{UI.colors().warning}Invalid timeout value, using default#{UI.colors().reset}"
+        )
+
+        []
     end
   end
 end
