@@ -246,12 +246,18 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
 
-    if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id, context})
-      {:reply, {:ok, nil}, state}
-    else
-      {:reply, forward_request_to_server(server, message, session_id, context),
-       state}
+    cond do
+      Message.is_notification(message) ->
+        GenServer.cast(server, {:notification, message, session_id, context})
+        {:reply, {:ok, nil}, state}
+
+      Message.is_response(message) or Message.is_error(message) ->
+        GenServer.cast(server, {:response, message, session_id, context})
+        {:reply, {:ok, nil}, state}
+
+      true ->
+        {:reply, forward_request_to_server(server, message, session_id, context),
+         state}
     end
   end
 

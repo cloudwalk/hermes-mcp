@@ -11,6 +11,8 @@ defmodule StubServer do
     version: "1.0.0",
     capabilities: [:tools, :prompts, :resources]
 
+  import Hermes.Server.Frame, only: [assign: 3]
+
   alias Hermes.MCP.Error
   alias Hermes.Server.Response
 
@@ -86,6 +88,13 @@ defmodule StubServer do
 
   @impl true
   def handle_notification(_notification, frame) do
+    {:noreply, frame}
+  end
+
+  @impl true
+  def handle_sampling_response(response, request_id, frame) do
+    frame = assign(frame, :last_sampling_response, response)
+    frame = assign(frame, :last_sampling_request_id, request_id)
     {:noreply, frame}
   end
 

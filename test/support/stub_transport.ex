@@ -17,7 +17,8 @@ defmodule StubTransport do
   @type state :: %{
           messages: [String.t()],
           client: GenServer.name() | nil,
-          session_id: String.t()
+          session_id: String.t(),
+          test_pid: pid() | nil
         }
 
   @doc """
@@ -28,7 +29,7 @@ defmodule StubTransport do
   """
   @impl true
   def start_link(opts \\ []) do
-    state = %{messages: [], client: nil, server: nil}
+    state = %{messages: [], client: nil, server: nil, test_pid: nil}
 
     if name = opts[:name] do
       GenServer.start_link(__MODULE__, state, name: name)
@@ -50,6 +51,13 @@ defmodule StubTransport do
 
   def set_client(transport \\ __MODULE__, client) do
     GenServer.call(transport, {:set_client, client})
+  end
+
+  @doc """
+  Sets the test process to receive message notifications.
+  """
+  def set_test_pid(transport \\ __MODULE__, test_pid) do
+    GenServer.call(transport, {:set_test_pid, test_pid})
   end
 
   @doc """
@@ -110,12 +118,21 @@ defmodule StubTransport do
     {:reply, :ok, %{state | client: client}}
   end
 
+  def handle_call({:set_test_pid, test_pid}, _from, state) do
+    {:reply, :ok, %{state | test_pid: test_pid}}
+  end
+
   def handle_call(:count, _from, state) do
     {:reply, length(state.messages), state}
   end
 
   def handle_call({:send_message, message}, _from, state) do
     new_messages = [message | state.messages]
+
+    # Send to test process if configured
+    if state.test_pid do
+      send(state.test_pid, {:send_message, message})
+    end
 
     if is_binary(message) do
       message = decode_message(message)
@@ -142,9 +159,22 @@ defmodule StubTransport do
   end
 
   defp forward_to_server(message, state) when Message.is_request(message) do
+    if message["method"] == "sampling/createMessage" do
+      :ok
+    else
+      name = Hermes.Server.Registry.server(StubServer)
+
+      {:ok, response} =
+        GenServer.call(name, {:request, message, state.session_id, %{}})
+
+      GenServer.cast(state.client, {:response, response})
+    end
+  end
+
+  defp forward_to_server(message, state)
+       when Message.is_response(message) or Message.is_error(message) do
     name = Hermes.Server.Registry.server(StubServer)
-    {:ok, response} = GenServer.call(name, {:request, message, state.session_id})
-    GenServer.cast(state.client, {:response, response})
+    GenServer.cast(name, {:response, message, state.session_id, %{}})
   end
 
   defp forward_to_server(message, state) when Message.is_notification(message) do

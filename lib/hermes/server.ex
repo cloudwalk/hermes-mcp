@@ -325,6 +325,43 @@ defmodule Hermes.Server do
   """
   @callback terminate(reason :: term, Frame.t()) :: term
 
+  @doc """
+  Handles the response from a sampling/createMessage request sent to the client.
+
+  This callback is invoked when the client responds to a sampling request initiated
+  by the server. The response contains the generated message from the client's LLM.
+
+  ## Parameters
+
+    * `response` - The response from the client containing:
+      * `"role"` - The role of the generated message (typically "assistant")
+      * `"content"` - The content object with type and data
+      * `"model"` - The model used for generation
+      * `"stopReason"` - Why generation stopped (e.g., "endTurn")
+    * `request_id` - The ID of the original request for correlation
+    * `frame` - The current server frame
+
+  ## Returns
+
+    * `{:noreply, frame}` - Continue processing
+    * `{:stop, reason, frame}` - Stop the server
+
+  ## Examples
+
+      def handle_sampling_response(response, request_id, frame) do
+        %{"content" => %{"text" => text}} = response
+        # Process the generated text...
+        {:noreply, frame}
+      end
+  """
+  @callback handle_sampling_response(
+              response :: map(),
+              request_id :: String.t(),
+              Frame.t()
+            ) ::
+              {:noreply, Frame.t()}
+              | {:stop, reason :: term(), Frame.t()}
+
   @optional_callbacks handle_notification: 2,
                       handle_info: 2,
                       handle_call: 3,
@@ -334,7 +371,8 @@ defmodule Hermes.Server do
                       handle_resource_read: 2,
                       handle_prompt_get: 3,
                       handle_request: 2,
-                      init: 2
+                      init: 2,
+                      handle_sampling_response: 3
 
   @doc """
   Checks if the MCP session has been initialized.
@@ -741,6 +779,62 @@ defmodule Hermes.Server do
 
   defp queue_notification(server, method, params) do
     send(server, {:send_notification, method, params})
+    :ok
+  end
+
+  # Sampling Request Functions
+
+  @doc """
+  Sends a sampling/createMessage request to the client.
+
+  This function is used when the server needs the client to generate a message
+  using its language model. The client must have declared the sampling capability
+  during initialization.
+
+  Note: This is an asynchronous operation. The response will be delivered to your
+  `handle_sampling_response/3` callback.
+
+  ## Parameters
+
+    * `server` - The server process
+    * `messages` - List of message objects with role and content
+    * `opts` - Optional parameters:
+      * `:model_preferences` - Hints about model selection
+      * `:system_prompt` - System prompt to guide generation
+      * `:max_tokens` - Maximum tokens to generate
+      * `:metadata` - Any metadata to attach for correlation in the callback
+
+  ## Returns
+
+    * `:ok` - Request queued for sending
+
+  ## Examples
+
+      messages = [
+        %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+      ]
+      
+      :ok = Hermes.Server.send_sampling_request(self(), messages,
+        system_prompt: "You are a helpful assistant",
+        max_tokens: 100,
+        metadata: %{request_type: :greeting}
+      )
+  """
+  @spec send_sampling_request(GenServer.server(), list(map()), keyword()) :: :ok
+  def send_sampling_request(server, messages, opts \\ []) when is_list(messages) do
+    params = %{"messages" => messages}
+
+    params =
+      opts
+      |> Keyword.take([:model_preferences, :system_prompt, :max_tokens])
+      |> Enum.reduce(params, fn
+        {:model_preferences, prefs}, acc -> Map.put(acc, "modelPreferences", prefs)
+        {:system_prompt, prompt}, acc -> Map.put(acc, "systemPrompt", prompt)
+        {:max_tokens, max}, acc -> Map.put(acc, "maxTokens", max)
+      end)
+
+    metadata = Keyword.get(opts, :metadata, %{})
+    send(server, {:send_sampling_request, params, metadata})
     :ok
   end
 end
