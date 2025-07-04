@@ -98,8 +98,8 @@ defmodule Hermes.MCP.Setup do
 
     Process.sleep(80)
 
-    assert_client_initialized client
-    assert_server_initialized server
+    assert_client_initialized(client)
+    assert_server_initialized(server)
 
     :ok = StubTransport.clear(transport)
 
@@ -126,7 +126,7 @@ defmodule Hermes.MCP.Setup do
 
     Process.sleep(50)
 
-    assert_server_initialized server
+    assert_server_initialized(server)
 
     :ok = StubTransport.clear(transport)
 
@@ -181,7 +181,7 @@ defmodule Hermes.MCP.Setup do
 
     Process.sleep(50)
 
-    assert_server_initialized server
+    assert_server_initialized(server)
 
     :ok = StubTransport.clear(transport)
 
@@ -233,7 +233,7 @@ defmodule Hermes.MCP.Setup do
     client_info =
       context[:client_info] || %{"name" => "TestClient", "version" => "1.0.0"}
 
-    client_capabilities = context[:client_capabilities]
+    client_capabilities = context[:client_capabilities] || %{}
 
     client =
       start_supervised!(

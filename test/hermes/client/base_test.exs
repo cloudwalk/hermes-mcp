@@ -30,7 +30,8 @@ defmodule Hermes.Client.BaseTest do
         start_supervised!(
           {Hermes.Client.Base,
            transport: [layer: Hermes.MockTransport, name: MockTransport],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"},
+           capabilities: %{}},
           restart: :temporary
         )
 
@@ -728,7 +729,8 @@ defmodule Hermes.Client.BaseTest do
         start_supervised!(
           {Hermes.Client.Base,
            transport: [layer: Hermes.MockTransport, name: MockTransport],
-           client_info: %{"name" => "TestClient", "version" => "1.0.0"}},
+           client_info: %{"name" => "TestClient", "version" => "1.0.0"},
+           capabilities: %{}},
           restart: :temporary
         )
 
@@ -1094,6 +1096,201 @@ defmodule Hermes.Client.BaseTest do
       GenServer.cast(client, {:response, encoded})
 
       Process.sleep(50)
+    end
+  end
+
+  describe "sampling" do
+    setup :initialized_client
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "register_sampling_callback sets the callback", %{client: client} do
+      callback = fn _params ->
+        {:ok, %{role: "assistant", content: %{type: "text", text: "Hello"}}}
+      end
+
+      :ok = Hermes.Client.Base.register_sampling_callback(client, callback)
+
+      state = :sys.get_state(client)
+      assert is_function(state.sampling_callback, 1)
+    end
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "unregister_sampling_callback removes the callback", %{client: client} do
+      callback = fn _params ->
+        {:ok, %{role: "assistant", content: %{type: "text", text: "Hello"}}}
+      end
+
+      assert :ok = Hermes.Client.Base.register_sampling_callback(client, callback)
+      assert :ok = Hermes.Client.Base.unregister_sampling_callback(client)
+
+      state = :sys.get_state(client)
+      assert is_nil(state.sampling_callback)
+    end
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "handles sampling/createMessage request from server", %{client: client} do
+      test_pid = self()
+
+      # Register a sampling callback
+      :ok =
+        Hermes.Client.Base.register_sampling_callback(client, fn params ->
+          send(test_pid, {:sampling_called, params})
+
+          {:ok,
+           %{
+             "role" => "assistant",
+             "content" => %{"type" => "text", "text" => "Generated response"},
+             "model" => "test-model",
+             "stopReason" => "endTurn"
+           }}
+        end)
+
+      request_id = "server_sampling_req_123"
+
+      params = %{
+        "messages" => [
+          %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+        ],
+        "maxTokens" => 100,
+        "modelPreferences" => %{}
+      }
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["jsonrpc"] == "2.0"
+        assert decoded["id"] == request_id
+        assert Map.has_key?(decoded, "result")
+
+        result = decoded["result"]
+        assert result["role"] == "assistant"
+        assert result["content"]["type"] == "text"
+        assert result["content"]["text"] == "Generated response"
+        assert result["model"] == "test-model"
+
+        :ok
+      end)
+
+      assert {:ok, encoded} =
+               Message.encode_request(
+                 %{"method" => "sampling/createMessage", "params" => params},
+                 request_id
+               )
+
+      GenServer.cast(client, {:response, encoded})
+      Process.sleep(100)
+      assert_receive {:sampling_called, ^params}
+    end
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "handles sampling error when no callback registered", %{client: client} do
+      request_id = "server_sampling_req_456"
+
+      params = %{
+        "messages" => [
+          %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+        ],
+        "modelPreferences" => %{}
+      }
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["jsonrpc"] == "2.0"
+        assert decoded["id"] == request_id
+        assert Map.has_key?(decoded, "error")
+
+        error = decoded["error"]
+        assert error["code"] == -1
+        assert error["message"] =~ "No sampling callback registered"
+
+        :ok
+      end)
+
+      assert {:ok, encoded} =
+               Message.encode_request(
+                 %{"method" => "sampling/createMessage", "params" => params},
+                 request_id
+               )
+
+      GenServer.cast(client, {:response, encoded})
+
+      Process.sleep(100)
+    end
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "handles sampling callback error", %{client: client} do
+      test_pid = self()
+
+      # Register a callback that returns an error
+      :ok =
+        Hermes.Client.Base.register_sampling_callback(client, fn params ->
+          send(test_pid, {:sampling_called, params})
+          {:error, "Model unavailable"}
+        end)
+
+      request_id = "server_sampling_req_789"
+      params = %{"messages" => [], "modelPreferences" => %{}}
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["jsonrpc"] == "2.0"
+        assert decoded["id"] == request_id
+        assert Map.has_key?(decoded, "error")
+
+        error = decoded["error"]
+        assert error["message"] == "Model unavailable"
+
+        :ok
+      end)
+
+      assert {:ok, encoded} =
+               Message.encode_request(
+                 %{"method" => "sampling/createMessage", "params" => params},
+                 request_id
+               )
+
+      GenServer.cast(client, {:response, encoded})
+      Process.sleep(100)
+
+      assert_receive {:sampling_called, ^params}
+    end
+
+    @tag client_capabilities: %{"sampling" => %{}}
+    test "handles sampling callback exception", %{client: client} do
+      test_pid = self()
+
+      # Register a callback that raises an exception
+      :ok =
+        Hermes.Client.Base.register_sampling_callback(client, fn params ->
+          send(test_pid, {:sampling_called, params})
+          raise "Something went wrong!"
+        end)
+
+      request_id = "server_sampling_req_999"
+      params = %{"messages" => [], "modelPreferences" => %{}}
+
+      expect(Hermes.MockTransport, :send_message, fn _, message ->
+        decoded = JSON.decode!(message)
+        assert decoded["jsonrpc"] == "2.0"
+        assert decoded["id"] == request_id
+        assert Map.has_key?(decoded, "error")
+
+        error = decoded["error"]
+        assert error["message"] =~ "Sampling callback error"
+        assert error["message"] =~ "Something went wrong!"
+
+        :ok
+      end)
+
+      assert {:ok, encoded} =
+               Message.encode_request(
+                 %{"method" => "sampling/createMessage", "params" => params},
+                 request_id
+               )
+
+      GenServer.cast(client, {:response, encoded})
+      Process.sleep(100)
+
+      assert_receive {:sampling_called, ^params}
     end
   end
 

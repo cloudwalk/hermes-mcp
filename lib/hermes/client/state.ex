@@ -18,6 +18,7 @@ defmodule Hermes.Client.State do
           pending_requests: %{String.t() => Request.t()},
           progress_callbacks: %{String.t() => Base.progress_callback()},
           log_callback: Base.log_callback() | nil,
+          sampling_callback: (map() -> {:ok, map()} | {:error, String.t()}) | nil,
           # Use a map with URI as key for faster access
           roots: %{String.t() => Base.root()}
         }
@@ -32,6 +33,7 @@ defmodule Hermes.Client.State do
     pending_requests: %{},
     progress_callbacks: %{},
     log_callback: nil,
+    sampling_callback: nil,
     roots: %{}
   ]
 
@@ -652,6 +654,63 @@ defmodule Hermes.Client.State do
   @spec batch_complete?(t(), String.t()) :: boolean()
   def batch_complete?(state, batch_id) do
     get_batch_requests(state, batch_id) == []
+  end
+
+  @doc """
+  Sets the sampling callback function.
+
+  ## Parameters
+
+    * `state` - The current client state
+    * `callback` - The callback function to handle sampling requests
+
+  ## Examples
+
+      iex> callback = fn params -> {:ok, %{role: "assistant", content: %{type: "text", text: "Hello"}}} end
+      iex> updated_state = Hermes.Client.State.set_sampling_callback(state, callback)
+      iex> is_function(updated_state.sampling_callback, 1)
+      true
+  """
+  @spec set_sampling_callback(t(), (map() -> {:ok, map()} | {:error, String.t()})) ::
+          t()
+  def set_sampling_callback(state, callback) when is_function(callback, 1) do
+    %{state | sampling_callback: callback}
+  end
+
+  @doc """
+  Gets the sampling callback function.
+
+  ## Parameters
+
+    * `state` - The current client state
+
+  ## Examples
+
+      iex> Hermes.Client.State.get_sampling_callback(state)
+      nil
+  """
+  @spec get_sampling_callback(t()) ::
+          (map() -> {:ok, map()} | {:error, String.t()}) | nil
+  def get_sampling_callback(state) do
+    state.sampling_callback
+  end
+
+  @doc """
+  Clears the sampling callback function.
+
+  ## Parameters
+
+    * `state` - The current client state
+
+  ## Examples
+
+      iex> updated_state = Hermes.Client.State.clear_sampling_callback(state)
+      iex> updated_state.sampling_callback
+      nil
+  """
+  @spec clear_sampling_callback(t()) :: t()
+  def clear_sampling_callback(state) do
+    %{state | sampling_callback: nil}
   end
 
   # Helper functions

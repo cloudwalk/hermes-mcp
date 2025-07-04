@@ -9,7 +9,7 @@ defmodule Hermes.MCP.Message do
 
   # MCP message schemas
 
-  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete roots/list)
+  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete roots/list sampling/createMessage)
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
@@ -82,12 +82,50 @@ defmodule Hermes.MCP.Message do
     }
   }
 
-  defschema :request_schema, %{
+  @text_content_schema %{
+    "type" => {:required, {:literal, "text"}},
+    "text" => {:required, :string}
+  }
+
+  @image_content_schema %{
+    "type" => {:required, {:literal, "image"}},
+    "data" => {:required, :string},
+    "mimeType" => {:required, :string}
+  }
+
+  @audio_content_schema %{
+    "type" => {:required, {:literal, "audio"}},
+    "data" => {:required, :string},
+    "mimeType" => {:required, :string}
+  }
+
+  @message_schema %{
+    "role" => {:required, {:enum, ~w(user assistant system)}},
+    "content" =>
+      {:required,
+       {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}}
+  }
+
+  @model_preferences_schema %{
+    "intelligencePriority" => :float,
+    "speedPriority" => :float,
+    "costPriority" => :float,
+    "hints" => {:list, %{"name" => :string}}
+  }
+
+  @sampling_create_params %{
+    "messages" => {:list, @message_schema},
+    "modelPreferences" => @model_preferences_schema,
+    "systemPrompt" => :string,
+    "maxTokens" => :integer
+  }
+
+  defschema(:request_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" => {:required, {:enum, @request_methods}},
     "params" => {:dependent, &params_with_progress_token/1},
     "id" => {:required, {:either, {:string, :integer}}}
-  }
+  })
 
   defp params_with_progress_token(attrs) do
     with {:ok, %{} = schema} <- parse_request_params_by_method(attrs) do
@@ -130,6 +168,9 @@ defmodule Hermes.MCP.Message do
   defp parse_request_params_by_method(%{"method" => "completion/complete"}),
     do: {:ok, @completion_complete_params_schema}
 
+  defp parse_request_params_by_method(%{"method" => "sampling/createMessage"}),
+    do: {:ok, @sampling_create_params}
+
   defp parse_request_params_by_method(%{"method" => "roots/list"}), do: {:ok, :map}
   defp parse_request_params_by_method(_), do: {:ok, :map}
 
@@ -157,14 +198,14 @@ defmodule Hermes.MCP.Message do
     "logger" => :string
   }
 
-  defschema :notification_schema, %{
+  defschema(:notification_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "method" =>
       {:required,
        {:enum,
         ~w(notifications/initialized notifications/cancelled notifications/progress notifications/message notifications/roots/list_changed)}},
     "params" => {:dependent, &parse_notification_params_by_method/1}
-  }
+  })
 
   defp parse_notification_params_by_method(%{
          "method" => "notifications/initialized"
@@ -185,13 +226,31 @@ defmodule Hermes.MCP.Message do
 
   defp parse_notification_params_by_method(_), do: {:ok, :map}
 
-  defschema :response_schema, %{
+  defschema(:response_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "result" => {:required, :any},
     "id" => {:required, {:either, {:string, :integer}}}
-  }
+  })
 
-  defschema :error_schema, %{
+  defschema(:sampling_result_schema, %{
+    "role" => {:required, {:literal, "assistant"}},
+    "content" =>
+      {:required,
+       {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}},
+    "model" => {:required, :string},
+    "stopReason" => {:string, {:default, "endTurn"}}
+  })
+
+  defschema(
+    :sampling_response_schema,
+    Map.put(
+      get_schema(:response_schema),
+      "result",
+      get_schema(:sampling_result_schema)
+    )
+  )
+
+  defschema(:error_schema, %{
     "jsonrpc" => {:required, {:string, {:eq, "2.0"}}},
     "error" => %{
       "code" => {:required, :integer},
@@ -199,19 +258,21 @@ defmodule Hermes.MCP.Message do
       "data" => :any
     },
     "id" => {:required, {:either, {:string, :integer}}}
-  }
+  })
 
-  defschema :mcp_message_schema,
-            {:oneof,
-             [
-               get_schema(:request_schema),
-               get_schema(:notification_schema),
-               get_schema(:response_schema),
-               get_schema(:error_schema)
-             ]}
+  defschema(
+    :mcp_message_schema,
+    {:oneof,
+     [
+       get_schema(:request_schema),
+       get_schema(:notification_schema),
+       get_schema(:response_schema),
+       get_schema(:error_schema)
+     ]}
+  )
 
   # Batch schema for JSON-RPC batching (2025-03-26)
-  defschema :batch_schema, {:list, get_schema(:mcp_message_schema)}
+  defschema(:batch_schema, {:list, get_schema(:mcp_message_schema)})
 
   # generic guards
 
@@ -510,6 +571,10 @@ defmodule Hermes.MCP.Message do
   """
   def encode_response(response, id) do
     encode_response(response, id, get_schema(:response_schema))
+  end
+
+  def encode_sampling_response(response, id) do
+    encode_response(response, id, get_schema(:sampling_response_schema))
   end
 
   @doc """
