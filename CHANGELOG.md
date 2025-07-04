@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.12.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.3...v0.12.0) (2025-07-04)
+
+
+### Features
+
+* client sampling capability ([#170](https://github.com/cloudwalk/hermes-mcp/issues/170)) ([da617a6](https://github.com/cloudwalk/hermes-mcp/commit/da617a694dbeff1d363e7b671a31f484e202e685))
+* server-side sampling capability ([#173](https://github.com/cloudwalk/hermes-mcp/issues/173)) ([c09e7f3](https://github.com/cloudwalk/hermes-mcp/commit/c09e7f3a5e95e59f5644ef12e1602b3b8621df7f))
+
+
+### Code Refactoring
+
+* interactive tasks now support JSON file input ([#172](https://github.com/cloudwalk/hermes-mcp/issues/172)) ([9465266](https://github.com/cloudwalk/hermes-mcp/commit/946526617171094ccf929a5d9f3bbd8e3a591f18))
+
 ## [0.11.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.2...v0.11.3) (2025-07-02)
 
 
