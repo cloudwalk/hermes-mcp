@@ -436,4 +436,118 @@ defmodule Hermes.Server.BaseTest do
       assert error.data.required_version == "2025-03-26"
     end
   end
+
+  describe "sampling requests" do
+    setup context do
+      context
+      |> Map.put(:client_capabilities, %{"sampling" => %{}})
+      |> initialized_server()
+    end
+
+    test "server can send sampling request to client", %{
+      server: server,
+      transport: transport,
+      session_id: session_id
+    } do
+      :ok = StubTransport.set_test_pid(transport, self())
+
+      messages = [
+        %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+      ]
+
+      :ok =
+        Hermes.Server.send_sampling_request(server, messages,
+          system_prompt: "You are a helpful assistant",
+          max_tokens: 100,
+          metadata: %{test: true}
+        )
+
+      Process.sleep(10)
+
+      assert_receive {:send_message, request_data}
+      assert {:ok, [decoded]} = Message.decode(request_data)
+
+      assert Message.is_request(decoded)
+      assert decoded["method"] == "sampling/createMessage"
+      assert decoded["params"]["messages"] == messages
+      assert decoded["params"]["systemPrompt"] == "You are a helpful assistant"
+      assert decoded["params"]["maxTokens"] == 100
+
+      request_id = decoded["id"]
+
+      response = %{
+        "id" => request_id,
+        "result" => %{
+          "role" => "assistant",
+          "content" => %{"type" => "text", "text" => "Hello! How can I help you?"},
+          "model" => "test-model",
+          "stopReason" => "endTurn"
+        }
+      }
+
+      :ok = GenServer.cast(server, {:response, response, session_id, %{}})
+
+      Process.sleep(10)
+
+      state = :sys.get_state(server)
+      assert state.frame.assigns.last_sampling_response == response["result"]
+      assert state.frame.assigns.last_sampling_request_id == request_id
+    end
+
+    test "server handles sampling request timeout", %{
+      server: server,
+      transport: transport
+    } do
+      :ok = StubTransport.set_test_pid(transport, self())
+
+      messages = [
+        %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+      ]
+
+      :ok = Hermes.Server.send_sampling_request(server, messages)
+
+      Process.sleep(10)
+
+      assert_receive {:send_message, _request_data}
+
+      state = :sys.get_state(server)
+      assert map_size(state.server_requests) == 1
+    end
+
+    test "server handles sampling error response", %{
+      server: server,
+      transport: transport,
+      session_id: session_id
+    } do
+      :ok = StubTransport.set_test_pid(transport, self())
+
+      messages = [
+        %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+      ]
+
+      :ok = Hermes.Server.send_sampling_request(server, messages)
+
+      Process.sleep(10)
+
+      assert_receive {:send_message, request_data}
+      assert {:ok, [decoded]} = Message.decode(request_data)
+      request_id = decoded["id"]
+
+      error_response = %{
+        "id" => request_id,
+        "error" => %{
+          "code" => -32_600,
+          "message" => "Client doesn't support sampling"
+        }
+      }
+
+      :ok =
+        GenServer.cast(server, {:response, error_response, session_id, %{}})
+
+      Process.sleep(10)
+
+      state = :sys.get_state(server)
+      assert map_size(state.server_requests) == 0
+    end
+  end
 end

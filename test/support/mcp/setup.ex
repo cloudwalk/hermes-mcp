@@ -114,8 +114,22 @@ defmodule Hermes.MCP.Setup do
 
     start_supervised!(Hermes.Server.Registry)
     transport = start_supervised!(StubTransport)
-    start_supervised!({StubServer, transport: StubTransport})
-    assert server = Hermes.Server.Registry.whereis_server(StubServer)
+
+    # Start session supervisor
+    start_supervised!(
+      {Hermes.Server.Session.Supervisor,
+       server: StubServer, registry: Hermes.Server.Registry}
+    )
+
+    server_opts = [
+      module: StubServer,
+      name: Hermes.Server.Registry.server(StubServer),
+      registry: Hermes.Server.Registry,
+      transport: [layer: StubTransport, name: transport]
+    ]
+
+    server = start_supervised!({Hermes.Server.Base, server_opts})
+    assert server == Hermes.Server.Registry.whereis_server(StubServer)
 
     request = Builders.init_request(protocol_version, info, capabilities)
     assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})

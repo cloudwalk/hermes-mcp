@@ -7,6 +7,7 @@ defmodule Hermes.Server.Base do
   import Peri
 
   alias Hermes.MCP.Error
+  alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.Protocol
   alias Hermes.Server
@@ -31,7 +32,15 @@ defmodule Hermes.Server.Base do
           registry: module,
           sessions: %{required(String.t()) => {GenServer.name(), reference()}},
           session_idle_timeout: pos_integer(),
-          expiry_timers: %{required(String.t()) => reference()}
+          expiry_timers: %{required(String.t()) => reference()},
+          server_requests: %{
+            required(String.t()) => %{
+              method: String.t(),
+              session_id: String.t(),
+              metadata: map(),
+              timer_ref: reference()
+            }
+          }
         }
 
   @typedoc """
@@ -47,14 +56,14 @@ defmodule Hermes.Server.Base do
           | {:session_idle_timeout, pos_integer()}
           | GenServer.option()
 
-  defschema :parse_options, [
+  defschema(:parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
     {:session_idle_timeout,
      {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
-  ]
+  ])
 
   @doc """
   Starts a new MCP server process.
@@ -121,7 +130,8 @@ defmodule Hermes.Server.Base do
       sessions: %{},
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
-      frame: Frame.new()
+      frame: Frame.new(),
+      server_requests: %{}
     }
 
     Logging.server_event("starting", %{
@@ -216,6 +226,26 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  def handle_cast({:response, decoded, _session_id, _context}, state)
+      when is_map(decoded) do
+    cond do
+      Message.is_response(decoded) and server_request?(decoded["id"], state) ->
+        handle_server_request_response(decoded, state)
+
+      Message.is_error(decoded) and server_request?(decoded["id"], state) ->
+        handle_server_request_error(decoded, state)
+
+      true ->
+        Logging.server_event(
+          "unexpected_response",
+          %{message: decoded},
+          level: :warning
+        )
+
+        {:noreply, state}
+    end
+  end
+
   def handle_cast(request, %{module: module} = state) do
     case module.handle_cast(request, state.frame) do
       {:noreply, frame} -> {:noreply, %{state | frame: frame}}
@@ -284,6 +314,15 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  def handle_info({:send_sampling_request, params, metadata}, state) do
+    request_id = ID.generate_request_id()
+    handle_sampling_request_send(request_id, params, metadata, state)
+  end
+
+  def handle_info({:sampling_request_timeout, request_id}, state) do
+    handle_sampling_timeout(request_id, state)
+  end
+
   def handle_info(event, %{module: module} = state) do
     if Hermes.exported?(module, :handle_info, 2) do
       case module.handle_info(event, state.frame) do
@@ -313,31 +352,29 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  defguardp is_server_initialized(decoded, session)
+            when Message.is_initialize_lifecycle(decoded) or
+                   Session.is_initialized(session)
+
   defp handle_single_request(decoded, session, state) do
     cond do
+      Message.is_response(decoded) and server_request?(decoded["id"], state) ->
+        handle_server_request_response(decoded, state)
+
+      Message.is_error(decoded) and server_request?(decoded["id"], state) ->
+        handle_server_request_error(decoded, state)
+
       Message.is_ping(decoded) ->
         handle_server_ping(decoded, state)
 
-      not (Message.is_initialize_lifecycle(decoded) or
-               Session.is_initialized(session)) ->
-        Logging.server_event("session_not_initialized_check", %{
-          session_id: session.id,
-          initialized: session.initialized,
-          method: decoded["method"]
-        })
-
+      not is_server_initialized(decoded, session) ->
         handle_server_not_initialized(state)
 
       Message.is_request(decoded) ->
         handle_request(decoded, session, state)
 
       true ->
-        error =
-          Error.protocol(:invalid_request, %{
-            message: "Expected request but got different message type"
-          })
-
-        {:reply, {:error, error}, state}
+        handle_invalid_request(state)
     end
   end
 
@@ -355,6 +392,15 @@ defmodule Hermes.Server.Base do
     )
 
     {:reply, {:ok, Error.build_json_rpc(error)}, state}
+  end
+
+  defp handle_invalid_request(state) do
+    error =
+      Error.protocol(:invalid_request, %{
+        message: "Expected request but got different message type"
+      })
+
+    {:reply, {:error, error}, state}
   end
 
   defp handle_batch_request([], _session, state) do
@@ -816,6 +862,166 @@ defmodule Hermes.Server.Base do
       %{state | expiry_timers: Map.delete(timers, session_id)}
     else
       state
+    end
+  end
+
+  # Sampling request helpers
+
+  defp handle_sampling_request_send(request_id, params, metadata, state) do
+    timer_ref =
+      Process.send_after(self(), {:sampling_request_timeout, request_id}, 30_000)
+
+    request_info = %{
+      method: "sampling/createMessage",
+      session_id: nil,
+      metadata: metadata,
+      timer_ref: timer_ref
+    }
+
+    state = put_in(state.server_requests[request_id], request_info)
+
+    with :ok <- validate_client_capability(state, "sampling"),
+         {:ok, request_data} <-
+           encode_request("sampling/createMessage", params, request_id),
+         :ok <- send_to_transport(state.transport, request_data) do
+      Logging.server_event("sent_sampling_request", %{request_id: request_id})
+      {:noreply, state}
+    else
+      {:error, error} ->
+        Process.cancel_timer(timer_ref)
+
+        state = %{
+          state
+          | server_requests: Map.delete(state.server_requests, request_id)
+        }
+
+        Logging.server_event(
+          "failed_send_sampling_request",
+          %{
+            request_id: request_id,
+            error: error
+          },
+          level: :error
+        )
+
+        {:noreply, state}
+    end
+  end
+
+  defp validate_client_capability(%{frame: frame} = state, capability) do
+    current_session = Frame.get_mcp_session_id(frame)
+
+    session_name =
+      Enum.find_value(state.sessions, fn {id, {name, _ref}} ->
+        if id == current_session, do: name
+      end)
+
+    session = Session.get(session_name)
+
+    if Map.has_key?(session.client_capabilities || %{}, capability) do
+      :ok
+    else
+      {:error, "No session initialzied for sending sampling request"}
+    end
+  end
+
+  defp handle_sampling_timeout(request_id, state) do
+    case Map.pop(state.server_requests, request_id) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {_request_info, updated_requests} ->
+        Logging.server_event(
+          "sampling_request_timeout",
+          %{
+            request_id: request_id
+          },
+          level: :warning
+        )
+
+        {:noreply, %{state | server_requests: updated_requests}}
+    end
+  end
+
+  defp encode_request(method, params, request_id) do
+    request = %{
+      "method" => method,
+      "params" => params
+    }
+
+    Logging.message("outgoing", "request", request_id, request)
+    Message.encode_request(request, request_id)
+  end
+
+  defp server_request?(request_id, %{server_requests: requests})
+       when is_binary(request_id) do
+    Map.has_key?(requests, request_id)
+  end
+
+  defp server_request?(_, _), do: false
+
+  defp handle_server_request_response(
+         %{"id" => request_id, "result" => result},
+         state
+       ) do
+    {request_info, updated_requests} = Map.pop(state.server_requests, request_id)
+    Process.cancel_timer(request_info.timer_ref)
+
+    state = %{state | server_requests: updated_requests}
+
+    if request_info.method == "sampling/createMessage" do
+      handle_sampling_response(result, request_id, request_info.metadata, state)
+    else
+      {:noreply, state}
+    end
+  end
+
+  defp handle_server_request_error(%{"id" => request_id, "error" => error}, state) do
+    {request_info, updated_requests} = Map.pop(state.server_requests, request_id)
+    Process.cancel_timer(request_info.timer_ref)
+
+    state = %{state | server_requests: updated_requests}
+
+    Logging.server_event(
+      "server_request_error",
+      %{
+        request_id: request_id,
+        method: request_info.method,
+        error: error
+      },
+      level: :error
+    )
+
+    # Just acknowledge we handled it
+    {:noreply, state}
+  end
+
+  defp handle_sampling_response(
+         result,
+         request_id,
+         metadata,
+         %{module: module} = state
+       ) do
+    if Hermes.exported?(module, :handle_sampling_response, 3) do
+      frame = Frame.assign(state.frame, :sampling_metadata, metadata)
+
+      case module.handle_sampling_response(result, request_id, frame) do
+        {:noreply, new_frame} ->
+          {:noreply, %{state | frame: new_frame}}
+
+        {:stop, reason, new_frame} ->
+          {:stop, reason, %{state | frame: new_frame}}
+      end
+    else
+      Logging.server_event(
+        "sampling_response_no_handler",
+        %{
+          request_id: request_id
+        },
+        level: :warning
+      )
+
+      {:noreply, state}
     end
   end
 end
