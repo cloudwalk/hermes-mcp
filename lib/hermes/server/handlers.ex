@@ -14,26 +14,64 @@ defmodule Hermes.Server.Handlers do
           | {:error, error :: Error.t(), new_state :: Frame.t()}
   def handle(%{"method" => "tools/" <> action} = request, module, frame) do
     case action do
-      "list" -> Tools.handle_list(frame, module)
+      "list" -> Tools.handle_list(request, frame, module)
       "call" -> Tools.handle_call(request, frame, module)
     end
   end
 
   def handle(%{"method" => "prompts/" <> action} = request, module, frame) do
     case action do
-      "list" -> Prompts.handle_list(frame, module)
+      "list" -> Prompts.handle_list(request, frame, module)
       "get" -> Prompts.handle_get(request, frame, module)
     end
   end
 
   def handle(%{"method" => "resources/" <> action} = request, module, frame) do
     case action do
-      "list" -> Resources.handle_list(frame, module)
+      "list" -> Resources.handle_list(request, frame, module)
       "read" -> Resources.handle_read(request, frame, module)
     end
   end
 
   def handle(%{"method" => method}, _module, frame) do
     {:error, Error.protocol(:method_not_found, %{method: method}), frame}
+  end
+
+  def get_server_tools(module, frame) do
+    Enum.sort_by(module.__components__(:tool) ++ Frame.get_tools(frame), & &1.name)
+  end
+
+  def get_server_prompts(module, frame) do
+    Enum.sort_by(module.__components__(:prompt) ++ Frame.get_prompts(frame), & &1.name)
+  end
+
+  def get_server_resources(module, frame) do
+    Enum.sort_by(
+      module.__components__(:resource) ++ Frame.get_resources(frame),
+      & &1.name
+    )
+  end
+
+  @spec maybe_paginate(map, list(struct), non_neg_integer | nil) ::
+          {list(struct), cursor :: String.t() | nil}
+  def maybe_paginate(_, components, nil), do: {components, nil}
+
+  def maybe_paginate(%{"params" => %{"cursor" => cursor}}, components, limit)
+      when limit > 0 do
+    last_name = Base.decode64!(cursor, padding: false)
+    {_taken, remain} = Enum.split_while(components, &(&1.name <= last_name))
+    maybe_paginate(%{}, remain, limit)
+  end
+
+  def maybe_paginate(_, components, limit) when limit > 0 do
+    if length(components) > limit do
+      taken = Enum.take(components, limit)
+      next_name = List.last(taken).name
+      remain = length(components -- taken)
+
+      {taken, if(next_name && remain > 0, do: Base.encode64(next_name, padding: false))}
+    else
+      {components, nil}
+    end
   end
 end

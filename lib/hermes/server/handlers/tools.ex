@@ -5,43 +5,23 @@ defmodule Hermes.Server.Handlers.Tools do
   alias Hermes.Server.Component.Schema
   alias Hermes.Server.Component.Tool
   alias Hermes.Server.Frame
+  alias Hermes.Server.Handlers
   alias Hermes.Server.Response
 
-  @doc """
-  Handles the tools/list request with optional pagination.
-
-  ## Parameters
-
-  - `request` - The MCP request containing optional cursor in params
-  - `frame` - The server frame
-  - `server_module` - The server module implementing tool components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - List of tools with optional nextCursor
-  - `{:error, error, frame}` - If pagination cursor is invalid
-  """
-  @spec handle_list(Frame.t(), module()) ::
+  @spec handle_list(map, Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_list(frame, server_module) do
-    tools = server_module.__components__(:tool) ++ Frame.get_tools(frame)
-    {:reply, %{"tools" => tools}, frame}
+  def handle_list(request, frame, server_module) do
+    tools = Handlers.get_server_tools(server_module, frame)
+    limit = frame.private[:pagination_limit]
+    {tools, cursor} = Handlers.maybe_paginate(request, tools, limit)
+
+    {:reply,
+     then(
+       %{"tools" => tools},
+       &if(cursor, do: Map.put(&1, "nextCursor", cursor), else: &1)
+     ), frame}
   end
 
-  @doc """
-  Handles the tools/call request to execute a specific tool.
-
-  ## Parameters
-
-  - `request` - The MCP request containing tool name and arguments
-  - `frame` - The server frame
-  - `server_module` - The server module implementing tool components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - Tool execution result
-  - `{:error, error, frame}` - If tool not found or execution fails
-  """
   @spec handle_call(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_call(
@@ -49,7 +29,7 @@ defmodule Hermes.Server.Handlers.Tools do
         frame,
         server
       ) do
-    registered_tools = server.__components__(:tool) ++ Frame.get_tools(frame)
+    registered_tools = Handlers.get_server_tools(server, frame)
 
     if tool = find_tool_module(registered_tools, tool_name) do
       with {:ok, params} <- validate_params(params, tool, frame),

@@ -496,7 +496,9 @@ defmodule Hermes.Server do
 
   @doc false
   def parse_components(components) when is_list(components) do
-    Enum.flat_map(components, &parse_components/1)
+    components
+    |> Enum.flat_map(&parse_components/1)
+    |> Enum.sort_by(& &1.name)
   end
 
   def parse_components({:tool, name, mod}) do

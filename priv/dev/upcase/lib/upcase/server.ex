@@ -31,7 +31,7 @@ defmodule Upcase.Server do
   def init(client_info, frame) do
     Logger.info("We had the client_info: #{inspect(client_info)}")
     schedule_hello()
-    {:ok, assign(frame, counter: 0)}
+    {:ok, assign(frame, counter: 0) |> put_pagination_limit(1)}
   end
 
   @impl true

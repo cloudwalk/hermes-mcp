@@ -5,43 +5,23 @@ defmodule Hermes.Server.Handlers.Prompts do
   alias Hermes.Server.Component.Prompt
   alias Hermes.Server.Component.Schema
   alias Hermes.Server.Frame
+  alias Hermes.Server.Handlers
   alias Hermes.Server.Response
 
-  @doc """
-  Handles the prompts/list request with optional pagination.
-
-  ## Parameters
-
-  - `request` - The MCP request containing optional cursor in params
-  - `frame` - The server frame
-  - `server_module` - The server module implementing prompt components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - List of prompts with optional nextCursor
-  - `{:error, error, frame}` - If pagination cursor is invalid
-  """
-  @spec handle_list(Frame.t(), module()) ::
+  @spec handle_list(map, Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_list(frame, server_module) do
-    prompts = server_module.__components__(:prompt) ++ Frame.get_prompts(frame)
-    {:reply, %{"prompts" => prompts}, frame}
+  def handle_list(request, frame, server_module) do
+    prompts = Handlers.get_server_prompts(server_module, frame)
+    limit = frame.private[:pagination_limit]
+    {prompts, cursor} = Handlers.maybe_paginate(request, prompts, limit)
+
+    {:reply,
+     then(
+       %{"prompts" => prompts},
+       &if(cursor, do: Map.put(&1, "nextCursor", cursor), else: &1)
+     ), frame}
   end
 
-  @doc """
-  Handles the prompts/get request to retrieve messages for a specific prompt.
-
-  ## Parameters
-
-  - `request` - The MCP request containing prompt name and arguments
-  - `frame` - The server frame
-  - `server_module` - The server module implementing prompt components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - Generated messages from the prompt
-  - `{:error, error, frame}` - If prompt not found or generation fails
-  """
   @spec handle_get(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_get(
@@ -49,7 +29,7 @@ defmodule Hermes.Server.Handlers.Prompts do
         frame,
         server
       ) do
-    registered_prompts = server.__components__(:prompt) ++ Frame.get_prompts(frame)
+    registered_prompts = Handlers.get_server_prompts(server, frame)
 
     if prompt = find_prompt_module(registered_prompts, prompt_name) do
       with {:ok, params} <- validate_params(params, prompt, frame),

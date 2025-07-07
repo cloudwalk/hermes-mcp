@@ -4,51 +4,27 @@ defmodule Hermes.Server.Handlers.Resources do
   alias Hermes.MCP.Error
   alias Hermes.Server.Component.Resource
   alias Hermes.Server.Frame
+  alias Hermes.Server.Handlers
   alias Hermes.Server.Response
 
-  @doc """
-  Handles the resources/list request with optional pagination.
-
-  ## Parameters
-
-  - `request` - The MCP request containing optional cursor in params
-  - `frame` - The server frame
-  - `server_module` - The server module implementing resource components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - List of resources with optional nextCursor
-  - `{:error, error, frame}` - If pagination cursor is invalid
-  """
-  @spec handle_list(Frame.t(), module()) ::
+  @spec handle_list(map, Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_list(frame, server_module) do
-    resources = server_module.__components__(:resource) ++ Frame.get_resources(frame)
-    {:reply, %{"resources" => resources}, frame}
+  def handle_list(request, frame, server_module) do
+    resources = Handlers.get_server_resources(server_module, frame)
+    limit = frame.private[:pagination_limit]
+    {resources, cursor} = Handlers.maybe_paginate(request, resources, limit)
+
+    {:reply,
+     then(
+       %{"resources" => resources},
+       &if(cursor, do: Map.put(&1, "nextCursor", cursor), else: &1)
+     ), frame}
   end
 
-  @doc """
-  Handles the resources/read request to read content from one or more resources.
-
-  Supports both single URI and multiple URIs formats:
-  - Single: `%{"uri" => "file:///example.txt"}`
-  - Multiple: `%{"uris" => ["file:///a.txt", "file:///b.txt"]}`
-
-  ## Parameters
-
-  - `request` - The MCP request containing URI(s) to read
-  - `frame` - The server frame
-  - `server_module` - The server module implementing resource components
-
-  ## Returns
-
-  - `{:reply, result, frame}` - Resource contents wrapped in "contents" array
-  - `{:error, error, frame}` - If resource not found or read fails
-  """
   @spec handle_read(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_read(%{"params" => %{"uri" => uri}}, frame, server) when is_binary(uri) do
-    resources = server.__components__(:resource) ++ Frame.get_resources(frame)
+    resources = Handlers.get_server_resources(server, frame)
 
     if resource = find_resource_module(resources, uri) do
       read_single_resource(server, resource, frame)

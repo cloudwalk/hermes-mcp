@@ -69,6 +69,9 @@ defmodule Hermes.Server.Frame do
           optional(:client_info) => map(),
           optional(:client_capabilities) => map(),
           optional(:protocol_version) => String.t(),
+          optional(:server_module) => module(),
+          optional(:server_registry) => module(),
+          optional(:pagination_limit) => non_neg_integer(),
           optional(:__mcp_components__) => list(server_component_t)
         }
 
@@ -252,6 +255,28 @@ defmodule Hermes.Server.Frame do
   @spec put_request(t, map) :: t
   def put_request(%__MODULE__{} = frame, request) when is_map(request) do
     %{frame | request: request}
+  end
+
+  @doc """
+  Sets the pagination limit for listing operations.
+
+  This limit is used by handlers when returning lists of tools, prompts, or resources
+  to control the maximum number of items returned in a single response. When the limit
+  is set and the total number of items exceeds it, the response will include a
+  `nextCursor` field for pagination.
+
+  ## Examples
+
+      # Set pagination limit to 10 items per page
+      frame = Frame.put_pagination_limit(frame, 10)
+
+      # The limit is stored in private data
+      frame.private.pagination_limit
+      # => 10
+  """
+  @spec put_pagination_limit(t, non_neg_integer) :: t
+  def put_pagination_limit(%__MODULE__{} = frame, limit) when limit > 0 do
+    put_private(frame, %{pagination_limit: limit})
   end
 
   @doc """
