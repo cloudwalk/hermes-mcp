@@ -3,6 +3,7 @@ defmodule Hermes.Server.BaseTest do
 
   alias Hermes.MCP.Message
   alias Hermes.Server.Base
+  alias Hermes.Server.Frame
   alias Hermes.Server.Session
 
   require Message
@@ -85,8 +86,9 @@ defmodule Hermes.Server.BaseTest do
   describe "send_notification/3" do
     setup :initialized_server
 
-    test "sends notification to transport", %{server: server} do
-      assert :ok = Hermes.Server.send_log_message(server, :info, "hello")
+    test "sends notification to transport", ctx do
+      frame = Frame.put_private(%Frame{}, ctx)
+      assert :ok = Hermes.Server.send_log_message(frame, :info, "hello")
     end
   end
 
@@ -442,12 +444,17 @@ defmodule Hermes.Server.BaseTest do
       context
       |> Map.put(:client_capabilities, %{"sampling" => %{}})
       |> initialized_server()
+      |> then(fn ctx ->
+        frame = Frame.put_private(%Frame{}, ctx)
+        Map.put(ctx, :frame, frame)
+      end)
     end
 
     test "server can send sampling request to client", %{
       server: server,
       transport: transport,
-      session_id: session_id
+      session_id: session_id,
+      frame: frame
     } do
       :ok = StubTransport.set_test_pid(transport, self())
 
@@ -456,7 +463,7 @@ defmodule Hermes.Server.BaseTest do
       ]
 
       :ok =
-        Hermes.Server.send_sampling_request(server, messages,
+        Hermes.Server.send_sampling_request(frame, messages,
           system_prompt: "You are a helpful assistant",
           max_tokens: 100,
           metadata: %{test: true}
@@ -496,7 +503,8 @@ defmodule Hermes.Server.BaseTest do
 
     test "server handles sampling request timeout", %{
       server: server,
-      transport: transport
+      transport: transport,
+      frame: frame
     } do
       :ok = StubTransport.set_test_pid(transport, self())
 
@@ -504,7 +512,7 @@ defmodule Hermes.Server.BaseTest do
         %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
       ]
 
-      :ok = Hermes.Server.send_sampling_request(server, messages)
+      :ok = Hermes.Server.send_sampling_request(frame, messages)
 
       Process.sleep(10)
 
@@ -517,7 +525,8 @@ defmodule Hermes.Server.BaseTest do
     test "server handles sampling error response", %{
       server: server,
       transport: transport,
-      session_id: session_id
+      session_id: session_id,
+      frame: frame
     } do
       :ok = StubTransport.set_test_pid(transport, self())
 
@@ -525,7 +534,7 @@ defmodule Hermes.Server.BaseTest do
         %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
       ]
 
-      :ok = Hermes.Server.send_sampling_request(server, messages)
+      :ok = Hermes.Server.send_sampling_request(frame, messages)
 
       Process.sleep(10)
 

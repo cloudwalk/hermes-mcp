@@ -144,7 +144,13 @@ defmodule Hermes.MCP.Setup do
 
     :ok = StubTransport.clear(transport)
 
-    Map.merge(ctx, %{transport: transport, server: server, session_id: session_id})
+    Map.merge(ctx, %{
+      transport: transport,
+      server: server,
+      session_id: session_id,
+      server_registry: Hermes.Server.Registry,
+      server_module: StubServer
+    })
   end
 
   def initialized_base_server(ctx) do

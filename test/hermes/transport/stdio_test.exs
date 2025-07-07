@@ -31,7 +31,7 @@ defmodule Hermes.Transport.STDIOTest do
     test "fails when command not found" do
       opts = [
         client: StubClient,
-        command: "",
+        command: "abc",
         name: :should_fail
       ]
 

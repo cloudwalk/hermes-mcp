@@ -767,8 +767,8 @@ defmodule Hermes.Server do
 
   defp queue_notification(frame, method, params) do
     registry = frame.private.server_registry
-    name = frame.private.server_name
-    pid = registry.whereis_server(name)
+    server = frame.private.server_module
+    pid = registry.whereis_server(server)
     send(pid, {:send_notification, method, params})
     :ok
   end
@@ -823,8 +823,8 @@ defmodule Hermes.Server do
 
     metadata = Keyword.get(opts, :metadata, %{})
     registry = frame.private.server_registry
-    name = frame.private.server_name
-    pid = registry.whereis_server(name)
+    server = frame.private.server_module
+    pid = registry.whereis_server(server)
     send(pid, {:send_sampling_request, params, metadata})
     :ok
   end

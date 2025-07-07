@@ -806,7 +806,7 @@ defmodule Hermes.Server.Base do
       client_capabilities: session.client_capabilities,
       protocol_version: session.protocol_version,
       server_registry: state.registry,
-      server_name: state.name
+      server_module: state.module
     })
   end
 
