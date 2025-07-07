@@ -1,0 +1,373 @@
+# Building MCP Clients with Hermes
+
+This guide shows how to implement Model Context Protocol (MCP) clients using Hermes. MCP clients connect to servers to access tools, resources, and prompts.
+
+## Quick Start
+
+### 1. Define Your Client
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0",
+    protocol_version: "2025-06-18"
+end
+```
+
+### 2. Add to Supervision Tree
+
+```elixir
+children = [
+  {MyApp.MCPClient,
+   transport: {:stdio, command: "uvx", args: ["mcp-server-name"]}}
+]
+
+Supervisor.start_link(children, strategy: :one_for_one)
+```
+
+### 3. Use the Client
+
+```elixir
+# List available tools
+{:ok, tools} = MyApp.MCPClient.list_tools()
+
+# Call a tool
+{:ok, result} = MyApp.MCPClient.call_tool("calculator", %{a: 5, b: 3})
+
+# Read a resource
+{:ok, content} = MyApp.MCPClient.read_resource("file:///config.json")
+```
+
+## Transport Configuration
+
+### STDIO (Subprocess)
+
+Connect to servers running as subprocesses:
+
+```elixir
+transport: {:stdio, 
+  command: "python",
+  args: ["-m", "my_mcp_server"],
+  env: [{"API_KEY", "secret"}]
+}
+```
+
+### Server-Sent Events (SSE)
+
+Connect to HTTP servers with SSE:
+
+```elixir
+transport: {:sse,
+  url: "https://api.example.com/mcp/sse",
+  headers: [{"authorization", "Bearer token"}]
+}
+```
+
+### WebSocket
+
+For bidirectional communication:
+
+```elixir
+transport: {:websocket,
+  url: "wss://api.example.com/mcp/ws",
+  headers: [{"authorization", "Bearer token"}]
+}
+```
+
+### Streamable HTTP
+
+For request/response streaming:
+
+```elixir
+transport: {:streamable_http,
+  url: "https://api.example.com/mcp",
+  headers: [{"authorization", "Bearer token"}]
+}
+```
+
+## Client API
+
+### Basic Operations
+
+```elixir
+# Initialize connection
+{:ok, _} = MyApp.MCPClient.initialize()
+
+# List capabilities
+{:ok, tools} = MyApp.MCPClient.list_tools()
+{:ok, resources} = MyApp.MCPClient.list_resources()
+{:ok, prompts} = MyApp.MCPClient.list_prompts()
+
+# Use tools
+{:ok, result} = MyApp.MCPClient.call_tool("search", %{
+  query: "elixir mcp"
+})
+
+# Read resources
+{:ok, data} = MyApp.MCPClient.read_resource("db://users/123")
+
+# Get prompts
+{:ok, messages} = MyApp.MCPClient.get_prompt("code_review", %{
+  language: "elixir",
+  code: "def add(a, b), do: a + b"
+})
+```
+
+### Advanced Options
+
+```elixir
+# With timeout
+{:ok, result} = MyApp.MCPClient.call_tool("slow_operation", %{}, 
+  timeout: 30_000
+)
+
+# With progress tracking
+{:ok, result} = MyApp.MCPClient.call_tool("process_file", %{path: "/data.csv"},
+  progress: fn progress, message ->
+    IO.puts("Progress: #{progress * 100}% - #{message}")
+  end
+)
+
+# Batch operations (protocol 2025-03-26+)
+{:ok, results} = MyApp.MCPClient.batch([
+  {:call_tool, "tool1", %{param: 1}},
+  {:call_tool, "tool2", %{param: 2}},
+  {:read_resource, "resource://data"}
+])
+```
+
+## Client Capabilities
+
+Enable features your client supports:
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0",
+    protocol_version: "2024-11-05",
+    capabilities: [
+      :roots,                          # File system roots
+      {:sampling, list_changed?: true} # LLM sampling
+    ]
+end
+```
+
+### Handling Roots Requests
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0",
+    capabilities: [:roots]
+
+  # Provide file system roots
+  def handle_roots_list_request(_params, session) do
+    roots = [
+      %{uri: "file:///home/user/project", name: "Project Root"}
+    ]
+    {:ok, roots, session}
+  end
+end
+```
+
+### Handling Sampling Requests
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0",
+    capabilities: [{:sampling, list_changed?: true}]
+
+  # Handle server sampling requests
+  def handle_sampling_request(request_id, params, session) do
+    # Forward to your LLM
+    response = MyLLM.complete(params.messages, 
+      max_tokens: params.maxTokens,
+      temperature: params.temperature
+    )
+    
+    # Send response back
+    send_sampling_response(request_id, response.content, session)
+    {:ok, session}
+  end
+end
+```
+
+## Session Management
+
+Access and modify session state:
+
+```elixir
+defmodule MyApp.MCPClient do
+  use Hermes.Client,
+    name: "MyApp",
+    version: "1.0.0"
+
+  # Store custom data in session
+  def authenticate(token) do
+    update_session(fn session ->
+      Session.assign(session, :auth_token, token)
+    end)
+  end
+
+  # Access session data
+  def get_with_auth(resource) do
+    session = get_session()
+    token = session.assigns[:auth_token]
+    
+    # Use token in request
+    read_resource(resource, headers: [{"authorization", "Bearer #{token}"}])
+  end
+end
+```
+
+## Error Handling
+
+Handle errors gracefully:
+
+```elixir
+case MyApp.MCPClient.call_tool("risky_operation", params) do
+  {:ok, result} ->
+    process_result(result)
+    
+  {:error, %Hermes.MCP.Error{code: -32602}} ->
+    # Invalid params
+    Logger.error("Invalid parameters provided")
+    
+  {:error, %Hermes.MCP.Error{code: -32603, message: message}} ->
+    # Internal error
+    Logger.error("Server error: #{message}")
+    
+  {:error, :timeout} ->
+    # Request timeout
+    Logger.error("Operation timed out")
+    
+  {:error, reason} ->
+    # Other errors
+    Logger.error("Unexpected error: #{inspect(reason)}")
+end
+```
+
+## Monitoring & Telemetry
+
+Subscribe to client events:
+
+```elixir
+:telemetry.attach_many("mcp-client-handler",
+  [
+    [:hermes, :client, :request, :start],
+    [:hermes, :client, :request, :stop],
+    [:hermes, :client, :request, :exception]
+  ],
+  &handle_event/4,
+  nil
+)
+
+def handle_event([:hermes, :client, :request, :start], measurements, metadata, _) do
+  Logger.info("MCP request started: #{metadata.method}")
+end
+
+def handle_event([:hermes, :client, :request, :stop], measurements, metadata, _) do
+  duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
+  Logger.info("MCP request completed: #{metadata.method} in #{duration_ms}ms")
+end
+```
+
+## Testing
+
+Test your client interactions:
+
+```elixir
+defmodule MyApp.MCPClientTest do
+  use Hermes.MCP.Case
+
+  test "client connects and lists tools" do
+    # Mock server
+    {:ok, server} = setup_server(MyMockServer)
+    
+    # Connect client
+    {:ok, client} = setup_client(MyApp.MCPClient,
+      transport: {:mock, server: server}
+    )
+    
+    {:ok, client} = initialize_client(client)
+    
+    # Test tool listing
+    request = tools_list_request()
+    assert_mcp_response(client, request) do
+      assert length(response.result.tools) > 0
+    end
+  end
+end
+```
+
+## Complete Example
+
+```elixir
+defmodule GitHubClient do
+  use Hermes.Client,
+    name: "github-client",
+    version: "1.0.0",
+    protocol_version: "2024-11-05"
+
+  # High-level API methods
+  def search_repos(query, opts \\ []) do
+    params = %{
+      query: query,
+      language: Keyword.get(opts, :language),
+      sort: Keyword.get(opts, :sort, "stars")
+    }
+    
+    call_tool("github/search_repos", params)
+  end
+  
+  def get_repo_info(owner, repo) do
+    read_resource("github://repos/#{owner}/#{repo}")
+  end
+  
+  def create_issue(owner, repo, title, body) do
+    call_tool("github/create_issue", %{
+      owner: owner,
+      repo: repo,
+      title: title,
+      body: body
+    })
+  end
+end
+
+# Usage
+children = [
+  {GitHubClient, 
+   transport: {:stdio, command: "uvx", args: ["mcp-server-github"]}}
+]
+
+Supervisor.start_link(children, strategy: :one_for_one)
+
+# Search for Elixir repos
+{:ok, repos} = GitHubClient.search_repos("web framework", language: "elixir")
+
+# Get repo details
+{:ok, info} = GitHubClient.get_repo_info("phoenixframework", "phoenix")
+
+# Create an issue
+{:ok, issue} = GitHubClient.create_issue("myorg", "myrepo",
+  "Bug: Something is broken",
+  "Details about the bug..."
+)
+```
+
+## Best Practices
+
+1. **Handle Timeouts**: Set appropriate timeouts for operations
+2. **Retry Logic**: Implement exponential backoff for transient failures
+3. **Connection Management**: Monitor transport health
+4. **Error Boundaries**: Handle all error cases gracefully
+5. **Logging**: Log important events without exposing secrets
+6. **Testing**: Test both success and failure scenarios
+7. **Documentation**: Document your client's API and usage
+
+This client architecture provides a robust foundation for integrating with MCP servers while maintaining clean separation of concerns and proper error handling.

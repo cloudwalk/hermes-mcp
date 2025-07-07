@@ -1,0 +1,140 @@
+# Hermes MCP - Model Context Protocol Implementation for Elixir
+
+Hermes MCP is a comprehensive Elixir framework for building Model Context Protocol (MCP) servers and clients. It provides a robust, OTP-compliant implementation that enables language models to interact with external tools, resources, and data sources through a standardized protocol.
+
+## Overview
+
+The Model Context Protocol (MCP) is an open standard that enables language models to securely access tools and data sources. Hermes brings this capability to the Elixir ecosystem with:
+
+- **Full MCP Specification Support**: Implements the complete MCP protocol including tools, resources, prompts, and sampling
+- **Multiple Transport Layers**: STDIO, Server-Sent Events (SSE), WebSocket, and HTTP streaming
+- **OTP Architecture**: Built on GenServer with proper supervision trees for fault tolerance
+- **Declarative APIs**: Simple DSL for defining servers and clients without boilerplate
+- **Type Safety**: Comprehensive validation using Peri schemas
+- **Production Ready**: Telemetry, structured logging, and graceful shutdown handling
+
+## Architecture
+
+### Core Components
+
+1. **MCP Protocol Layer** (`Hermes.MCP`)
+   - Message encoding/decoding for JSON-RPC 2.0
+   - Standardized error handling
+   - Request/response correlation
+   - Batch request support
+
+2. **Transport Abstraction** (`Hermes.Transport`)
+   - Pluggable transport layers
+   - Session management
+   - Message routing
+   - Connection lifecycle
+
+3. **Server Framework** (`Hermes.Server`)
+   - Declarative server definition
+   - Component registration (tools, prompts, resources)
+   - Request/notification handling
+   - Session isolation
+
+4. **Client Framework** (`Hermes.Client`)
+   - High-level client DSL
+   - Request pipeline with timeouts
+   - Progress tracking
+   - Batch operations
+
+### Key Design Principles
+
+- **Immutability**: State is never mutated, always returned from callbacks
+- **Supervision**: Every component is supervised for fault tolerance
+- **Validation**: All inputs validated with Peri schemas
+- **Observability**: Comprehensive telemetry and logging
+- **Extensibility**: Easy to add custom transports and components
+
+## Quick Start
+
+### Creating an MCP Server
+
+```elixir
+defmodule MyApp.MCPServer do
+  use Hermes.Server,
+    name: "my-app",
+    version: "1.0.0",
+    capabilities: [:tools, :resources, :prompts]
+    
+  # Register components
+  component MyApp.Calculator
+  component MyApp.FileReader
+  component MyApp.CodePrompt
+  
+  # Optional: Handle optinal initialization
+  def init(_client_infp, frame) do
+    {:ok, frame}
+  end
+end
+```
+
+### Creating an MCP Client
+
+```elixir
+defmodule MyApp.AnthropicClient do
+  use Hermes.Client,
+    name: "MyApp", 
+    version: "1.0.0",
+    protocol_version: "2025-06-18"
+end
+
+# Start in supervision tree
+children = [
+  {MyApp.AnthropicClient,
+   transport: {:stdio, command: "uvx", args: ["mcp-server-anthropic"]}}
+]
+
+# Use the client
+{:ok, tools} = MyApp.AnthropicClient.list_tools()
+{:ok, result} = MyApp.AnthropicClient.call_tool("search", %{query: "elixir"})
+```
+
+## Component Types
+
+### Tools
+Execute functions with structured inputs and outputs. Tools allow models to perform actions like calculations, API calls, or system operations.
+
+### Resources
+Provide data that models can read. Resources are identified by URIs and return content in various formats (text, JSON, images, etc).
+
+### Prompts
+Offer reusable templates that can be customized with arguments. Prompts help standardize common interaction patterns.
+
+## Transport Options
+
+- **STDIO**: For subprocess communication
+- **SSE**: Server-Sent Events over HTTP
+- **WebSocket**: Full-duplex WebSocket connections (client only)
+- **StreamableHTTP**: HTTP with request/response streaming (most common)
+
+## Advanced Features
+
+- **Batch Operations**: Send multiple requests in a single message
+- **Progress Tracking**: Monitor long-running operations
+- **Sampling Support**: Servers can request LLM completions from clients
+- **Dynamic Registration**: Register/unregister components at runtime
+- **Session Management**: Isolated sessions with configurable timeouts
+- **Graceful Shutdown**: Proper cleanup of resources and connections
+
+## Best Practices
+
+1. **Use Components**: Organize tools, prompts, and resources as separate component modules
+2. **Validate Inputs**: Define schemas for all component inputs
+3. **Handle Errors**: Use standardized MCP errors for consistency
+4. **Monitor Performance**: Leverage telemetry events for observability
+5. **Test Thoroughly**: Use the provided test framework for comprehensive testing
+
+## Integration
+
+Hermes MCP servers can be integrated with:
+- Claude Desktop (via stdio transport)
+- Custom LLM applications (via HTTP/WebSocket)
+- Development tools and IDEs
+- Data processing pipelines
+- External APIs and services
+
+The framework handles all protocol details, letting you focus on implementing your domain logic while ensuring compatibility with the MCP ecosystem.

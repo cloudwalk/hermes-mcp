@@ -813,11 +813,13 @@ defmodule Hermes.Server do
       messages = [
         %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
       ]
+
+      model_preferences = %{"costPriority" => 1.0, "speedPriority" => 0.1, "hints" => [%{"name" => "claude"}]}
       
       :ok = Hermes.Server.send_sampling_request(self(), messages,
+        model_preferences: model_preferences,
         system_prompt: "You are a helpful assistant",
-        max_tokens: 100,
-        metadata: %{request_type: :greeting}
+        max_tokens: 100
       )
   """
   @spec send_sampling_request(GenServer.server(), list(map()), keyword()) :: :ok

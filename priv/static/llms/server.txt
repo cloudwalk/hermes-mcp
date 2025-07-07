@@ -1,0 +1,290 @@
+# Building MCP Servers with Hermes
+
+This guide shows how to implement Model Context Protocol (MCP) servers using Hermes. MCP servers extend language model capabilities by providing tools, resources, and prompts.
+
+## Quick Start
+
+### 1. Define Your Server
+
+```elixir
+defmodule MyApp.MCPServer do
+  use Hermes.Server,
+    name: "my-app",
+    version: "1.0.0",
+    capabilities: [:tools, :resources, :prompts]
+end
+```
+
+### 2. Add to Supervision Tree
+
+```elixir
+children = [
+  Hermes.Server.Registry,
+  {MyApp.MCPServer, transport: :stdio}
+]
+
+Supervisor.start_link(children, strategy: :one_for_one)
+```
+
+## Server Components
+
+### Tools - Execute Functions
+
+Tools allow models to perform actions. Create a tool component:
+
+```elixir
+defmodule MyApp.Tools.Calculator do
+  use Hermes.Server.Component, type: :tool
+
+  alias Hermes.Server.Response
+
+  schema do
+    field :operation, {:required, {:enum, ["add", "multiply"]}}, type: "string"
+    field :a, {:required, {:either, {:integer, :float}}}
+    field :b, {:required, {:either, {:integer, :float}}}
+  end
+
+  @impl true
+  def execute(%{operation: "add", a: a, b: b}, frame) do
+    {:reply, Response.text(Response.tool(), a + b), frame}
+  end
+
+  def execute(%{operation: "multiply", a: a, b: b}, frame) do
+    {:reply, Response.text(Response.tool(), a * b), frame}
+  end
+end
+```
+
+Register in your server:
+
+```elixir
+defmodule MyApp.MCPServer do
+  use Hermes.Server,
+    name: "my-app",
+    version: "1.0.0",
+    capabilities: [:tools]
+    
+  component MyApp.Tools.Calculator
+end
+```
+
+### Resources - Provide Data
+
+Resources let models read data. Create a resource component:
+
+```elixir
+defmodule MyApp.Resources.Config do
+  use Hermes.Server.Component, type: :resource, uri: "config://app/settings", mimeType: "application/json"
+
+  alias Hermes.Server.Response
+
+  @impl true
+  def read("config://app/settings", frame) do
+    settings = %{theme: "dark", language: "en"}
+    {:reply, Response.json(Response.resource(), settings), frame}
+  end
+end
+```
+
+### Prompts - Reusable Templates
+
+Prompts provide templates with arguments:
+
+```elixir
+defmodule MyApp.Prompts.CodeReview do
+  use Hermes.Server.Component, type: :prompt
+
+  alias Hermes.Server.Response
+
+  schema do
+    field :language, {:required, :string}
+    field :code, {:required, :string}
+    field :focus, {:string, {:default, "general"}}
+  end
+
+  @impl true
+  def get_messages(args, frame) do
+    content = """
+    Review this #{args["language"]} code focusing on #{args["focus"]}:
+    
+    ```#{args["language"]}
+    #{args["code"]}
+    ```
+    """
+
+    {:reply, Response.user_message(Response.prompt(), content), frame}
+  end
+end
+```
+
+## Server Callbacks
+
+Implement callbacks to handle the MCP lifecycle:
+
+```elixir
+defmodule MyApp.MCPServer do
+  use Hermes.Server,
+    name: "my-app",
+    version: "1.0.0"
+
+  # Called after client initialization
+  def init(_client_info, frame) do
+    frame = Frame.assign(frame, :start_time, DateTime.utc_now())
+    {:ok, frame}
+  end
+
+  # Handle external OTP processes messages
+  def handle_info({:data_update, data}, frame) do
+    send_resources_list_changed(self())
+    {:noreply, frame}
+  end
+
+  # Handle sampling response (if client supports it)
+  def handle_sampling(response, request_id, frame) do
+    {:noreply, frame}
+  end
+end
+```
+
+## Transport Options
+
+### STDIO (Most Common)
+
+For subprocess communication (Claude Desktop, CLI tools):
+
+```elixir
+transport: :stdio
+```
+
+### StreamableHTTP
+
+For web services:
+
+```elixir
+transport: :streamable_http
+```
+
+## Advanced Features
+
+### Dynamic Component Registration
+
+Register components at runtime:
+
+```elixir
+def init(frame, _params) do
+  frame = Frame.register_tool(frame, "dynamic-tool", %{
+    description: "A dynamically registered tool",
+    input_schema: %{query: : string}
+  })
+
+  {:ok, frame}
+end
+
+@impl true
+def handle_tool_call("dynamic-tool", params, frame) do
+  content = "Processed: #{params["query"]}"
+  {:reply, Response.text(Response.tool(), content), frame}
+end
+```
+
+### Server-Initiated Sampling
+
+Request completions from the client:
+
+```elixir
+  messages = [
+    %{"role" => "user", "content" => %{"type" => "text", "text" => "Hello"}}
+  ]
+
+  model_preferences = %{"costPriority" => 1.0, "speedPriority" => 0.1, "hints" => [%{"name" => "claude"}]}
+  
+  :ok = Hermes.Server.send_sampling_request(self(), messages,
+    model_preferences: model_preferences,
+    system_prompt: "You are a helpful assistant",
+    max_tokens: 100
+  )
+```
+
+### Progress Tracking
+
+Report progress for long operations:
+
+```elixir
+def handle_tool_call("process", params, frame) do
+  token = frame.assigns.progress_token
+
+  # Send progress updates
+  send_progress(self(), token, 0.25, message: "Starting processing...")
+  :timer.sleep(1000)
+  
+  send_progress(self(), token, 0.5, message: "Halfway done...")
+  :timer.sleep(1000)
+  
+  send_progress(self(), token, 1.0, message: "Complete!")
+  {:reply, Response.text(Response.tool(), "Processing complete"), frame}
+end
+```
+
+## Best Practices
+
+1. **Validate All Inputs**: Use schemas to ensure type safety
+2. **Handle Errors Gracefully**: Return proper MCP errors
+3. **Keep State in Frame**: Use frame.assigns for session data
+4. **Log Important Events**: Use structured logging
+5. **Test Thoroughly**: Use the test framework for all components
+6. **Document Components**: Include descriptions in schemas
+7. **Version Your API**: Use semantic versioning
+
+## Example: Complete Server
+
+```elixir
+defmodule WeatherMCP.Server do
+  use Hermes.Server,
+    name: "weather-mcp",
+    version: "1.0.0",
+    capabilities: [:tools, :resources]
+
+  component WeatherMCP.Tools.GetWeather
+
+  def init(_client_info, frame) do
+    # Initialize with API client
+    frame = Frame.assign(frame, :weather_api, WeatherAPI.new())
+    {:ok, frame}
+  end
+end
+
+defmodule WeatherMCP.Tools.GetWeather do
+  use Hermes.Server.Component, type: :tool
+
+  alias Hermes.Server.Response
+  alias Hermes.Server.Error
+
+  schema do
+    field :location, {:required, :string}, description: "the unit"
+    field :units, {{:enum, ["celsius", "fahrenheit"]}, {:default, "celsius"}}, type: "string"
+  end
+
+  def execute(%{location: location} = params, frame) do
+    api = frame.assigns.weather_api
+    units = Map.get(params, "units", "celsius")
+    
+    case WeatherAPI.get_current(api, location, units) do
+      {:ok, weather} ->
+        # sucess resposne
+        {:reply, Response.text(Response.tool(), format_weather(weather)), frame}
+      {:error, :not_found} ->
+        # bussiness logic error
+        {:reply, Response.error(Response.tool(), "Location not found"), frame}
+      {:error, reason} ->
+        # server/protocol error
+        {:error, Error.internal_error(reason), frame}
+    end
+  end
+  
+  defp format_weather(weather) do
+    "#{weather.temp}° - #{weather.description}"
+  end
+end
+```
+
+This architecture provides a clean, extensible way to build MCP servers that integrate seamlessly with language models while maintaining security boundaries and protocol compliance.
