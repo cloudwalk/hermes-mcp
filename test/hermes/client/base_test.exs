@@ -372,8 +372,7 @@ defmodule Hermes.Client.BaseTest do
     test "tools/list fails since this capability isn't supported", %{client: client} do
       task = Task.async(fn -> Hermes.Client.Base.list_tools(client) end)
 
-      assert {:error,
-              %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
+      assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
                Task.await(task)
     end
   end
@@ -489,8 +488,7 @@ defmodule Hermes.Client.BaseTest do
 
       send_notification(client, progress_notification)
 
-      assert_receive {:progress_callback, ^progress_token, ^progress_value,
-                      ^total_value},
+      assert_receive {:progress_callback, ^progress_token, ^progress_value, ^total_value},
                      1000
     end
 

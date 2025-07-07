@@ -66,12 +66,7 @@ defmodule Hermes.Server.Session do
   3. Marks the server as initialized
   """
   @spec update_from_initialization(GenServer.name(), String.t(), map, map) :: :ok
-  def update_from_initialization(
-        session,
-        negotiated_version,
-        client_info,
-        capabilities
-      ) do
+  def update_from_initialization(session, negotiated_version, client_info, capabilities) do
     Agent.update(session, fn state ->
       %{
         state

@@ -257,9 +257,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:error, {:http_error, status, body}}
 
       {:error, reason} = error ->
-        Logging.transport_event("http_request_failed", %{reason: reason},
-          level: :error
-        )
+        Logging.transport_event("http_request_failed", %{reason: reason}, level: :error)
 
         error
     end
@@ -386,9 +384,7 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   defp log_error({:http_error, status, body}) do
-    Logging.transport_event("http_error", %{status: status, body: body},
-      level: :error
-    )
+    Logging.transport_event("http_error", %{status: status, body: body}, level: :error)
   end
 
   defp log_error(reason) do
@@ -399,8 +395,7 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   defp maybe_start_sse_connection(%{enable_sse: false} = state), do: state
 
-  defp maybe_start_sse_connection(%{enable_sse: true, session_id: nil} = state),
-    do: state
+  defp maybe_start_sse_connection(%{enable_sse: true, session_id: nil} = state), do: state
 
   defp maybe_start_sse_connection(%{enable_sse: true} = state) do
     task = start_sse_task(state)
@@ -439,9 +434,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         )
 
       error ->
-        Logging.transport_event("sse_connection_failed", %{error: error},
-          level: :warning
-        )
+        Logging.transport_event("sse_connection_failed", %{error: error}, level: :warning)
     end
   end
 
@@ -466,9 +459,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         :ok
 
       error ->
-        Logging.transport_event("session_delete_failed", %{error: error},
-          level: :debug
-        )
+        Logging.transport_event("session_delete_failed", %{error: error}, level: :debug)
 
         :ok
     end

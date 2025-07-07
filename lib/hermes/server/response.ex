@@ -433,8 +433,7 @@ defmodule Hermes.Server.Response do
   defp add_content(r, content), do: %{r | content: r.content ++ [content]}
   defp add_message(r, message), do: %{r | messages: r.messages ++ [message]}
 
-  defp put_metadata(r, key, value),
-    do: %{r | metadata: Map.put(r.metadata, key, value)}
+  defp put_metadata(r, key, value), do: %{r | metadata: Map.put(r.metadata, key, value)}
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

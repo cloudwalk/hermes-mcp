@@ -362,6 +362,5 @@ defmodule Hermes.Server.Component do
     do: {:ok, naive_datetime}
 
   defp __validate_naive_datetime__(_),
-    do:
-      {:error, "expected ISO 8601 naive datetime string or NaiveDateTime struct", []}
+    do: {:error, "expected ISO 8601 naive datetime string or NaiveDateTime struct", []}
 end

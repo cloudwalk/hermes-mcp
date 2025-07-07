@@ -96,8 +96,7 @@ defmodule Hermes.Server.Supervisor do
   defp normalize_transport(t) when t in [:stdio, StubTransport], do: t
   defp normalize_transport(t) when t in ~w(sse streamable_http)a, do: {t, []}
 
-  defp normalize_transport({t, opts}) when t in ~w(sse streamable_http)a,
-    do: {t, opts}
+  defp normalize_transport({t, opts}) when t in ~w(sse streamable_http)a, do: {t, opts}
 
   if Mix.env() == :test do
     defp parse_transport_child(StubTransport = kind, server, registry) do

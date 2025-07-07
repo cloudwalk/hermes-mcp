@@ -53,9 +53,7 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
     headers = parse_headers(Keyword.get_values(parsed, :header))
 
     if base_url == "" do
-      IO.puts(
-        "#{UI.colors().error}Error: --base-url cannot be empty#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().error}Error: --base-url cannot be empty#{UI.colors().reset}")
 
       IO.puts("Please provide a valid URL, e.g., --base-url=http://localhost:8000")
       System.halt(1)

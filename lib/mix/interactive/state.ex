@@ -201,9 +201,7 @@ defmodule Mix.Interactive.State do
       "\n#{UI.colors().success}SSE Transport State (#{inspect(pid)}):#{UI.colors().reset}"
     )
 
-    IO.puts(
-      "  #{UI.colors().info}Server URL:#{UI.colors().reset} #{state[:server_url]}"
-    )
+    IO.puts("  #{UI.colors().info}Server URL:#{UI.colors().reset} #{state[:server_url]}")
 
     IO.puts("  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{state[:sse_url]}")
 
@@ -283,9 +281,7 @@ defmodule Mix.Interactive.State do
 
   defp print_stdio_args(state) do
     if state.args do
-      IO.puts(
-        "  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}"
-      )
+      IO.puts("  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}")
     end
   end
 
@@ -337,22 +333,16 @@ defmodule Mix.Interactive.State do
 
   defp print_streamable_http_session_status(state) do
     if state.session_id do
-      IO.puts(
-        "  #{UI.colors().info}Session ID:#{UI.colors().reset} #{state.session_id}"
-      )
+      IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{state.session_id}")
 
       IO.puts(
         "  #{UI.colors().success}Status:#{UI.colors().reset} Connected with session"
       )
     else
-      IO.puts(
-        "  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)"
-      )
+      IO.puts("  #{UI.colors().info}Status:#{UI.colors().reset} Connected (no session)")
     end
 
-    IO.puts(
-      "  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}"
-    )
+    IO.puts("  #{UI.colors().info}Client:#{UI.colors().reset} #{inspect(state.client)}")
   end
 
   defp print_unknown_transport_state(pid, state, verbose) do

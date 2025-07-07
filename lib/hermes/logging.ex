@@ -195,8 +195,7 @@ defmodule Hermes.Logging do
   def should_log_details?(_), do: true
 
   @doc false
-  def truncate_data(data) when is_binary(data),
-    do: "#{String.slice(data, 0, 100)}..."
+  def truncate_data(data) when is_binary(data), do: "#{String.slice(data, 0, 100)}..."
 
   def truncate_data(data) when is_map(data) do
     important_keys =

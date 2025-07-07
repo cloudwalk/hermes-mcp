@@ -251,10 +251,7 @@ defmodule Hermes.Server.Transport.STDIO do
     process_message(message, state)
   end
 
-  defp process_messages([_ | _] = messages, %{
-         server: server_name,
-         registry: registry
-       }) do
+  defp process_messages([_ | _] = messages, %{server: server_name, registry: registry}) do
     server = registry.whereis_server(server_name)
 
     context = %{

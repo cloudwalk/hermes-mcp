@@ -92,8 +92,7 @@ defmodule Hermes.Client.Supervisor do
     Supervisor.init(children, strategy: :one_for_all)
   end
 
-  defp derive_transport_name(transport, _client) when not is_nil(transport),
-    do: transport
+  defp derive_transport_name(transport, _client) when not is_nil(transport), do: transport
 
   defp derive_transport_name(nil, client) when is_atom(client) do
     Module.concat(client, "Transport")

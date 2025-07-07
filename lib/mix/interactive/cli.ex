@@ -180,9 +180,7 @@ defmodule Mix.Interactive.CLI do
   def check_client_connection(client, attempt \\ 5)
 
   def check_client_connection(_client, attempt) when attempt <= 0 do
-    IO.puts(
-      "#{UI.colors().error}✗ Server connection not established#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().error}✗ Server connection not established#{UI.colors().reset}")
 
     IO.puts(
       "#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}"
@@ -212,9 +210,7 @@ defmodule Mix.Interactive.CLI do
   def check_sse_connection(sse, attempt \\ 3)
 
   def check_sse_connection(_sse, attempt) when attempt <= 0 do
-    IO.puts(
-      "#{UI.colors().error}✗ SSE connection not established#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().error}✗ SSE connection not established#{UI.colors().reset}")
 
     IO.puts(
       "#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}"

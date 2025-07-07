@@ -72,10 +72,7 @@ defmodule StubServer do
     end
   end
 
-  def handle_request(
-        %{"method" => "resources/" <> action, "params" => params},
-        frame
-      ) do
+  def handle_request(%{"method" => "resources/" <> action, "params" => params}, frame) do
     case action do
       "list" -> {:reply, %{"resources" => @resources}, frame}
       "read" -> handle_read_resource(params, frame)
@@ -92,16 +89,13 @@ defmodule StubServer do
   end
 
   @impl true
-  def handle_sampling_response(response, request_id, frame) do
+  def handle_sampling(response, request_id, frame) do
     frame = assign(frame, :last_sampling_response, response)
     frame = assign(frame, :last_sampling_request_id, request_id)
     {:noreply, frame}
   end
 
-  defp handle_tool_call(
-         %{"arguments" => %{"name" => name}, "name" => "greet"},
-         frame
-       ) do
+  defp handle_tool_call(%{"arguments" => %{"name" => name}, "name" => "greet"}, frame) do
     Response.tool()
     |> Response.text("Hello #{name}!")
     |> Response.to_protocol()

@@ -467,8 +467,7 @@ defmodule Hermes.Client.Base do
   The callback function will be called whenever a log message notification is received.
   """
   @spec register_log_callback(t, log_callback(), opts :: Keyword.t()) :: :ok
-  def register_log_callback(client, callback, opts \\ [])
-      when is_function(callback, 3) do
+  def register_log_callback(client, callback, opts \\ []) when is_function(callback, 3) do
     timeout = opts[:timeout] || to_timeout(second: 5)
     GenServer.call(client, {:register_log_callback, callback}, timeout)
   end
@@ -1069,9 +1068,7 @@ defmodule Hermes.Client.Base do
       {:noreply, state}
     else
       err ->
-        Logging.client_event("roots_list_error", %{id: id, error: err},
-          level: :error
-        )
+        Logging.client_event("roots_list_error", %{id: id, error: err}, level: :error)
 
         Telemetry.execute(
           Telemetry.event_client_error(),
@@ -1089,9 +1086,7 @@ defmodule Hermes.Client.Base do
       {:noreply, state}
     else
       err ->
-        Logging.client_event("ping_response_error", %{id: id, error: err},
-          level: :error
-        )
+        Logging.client_event("ping_response_error", %{id: id, error: err}, level: :error)
 
         Telemetry.execute(
           Telemetry.event_client_error(),
@@ -1417,10 +1412,7 @@ defmodule Hermes.Client.Base do
     )
   end
 
-  defp maybe_reply_to_request(
-         %{batch_id: nil, method: "ping", from: from},
-         _response
-       ) do
+  defp maybe_reply_to_request(%{batch_id: nil, method: "ping", from: from}, _response) do
     GenServer.reply(from, :pong)
   end
 
@@ -1434,24 +1426,15 @@ defmodule Hermes.Client.Base do
 
   # Notification handling
 
-  defp handle_notification(
-         %{"method" => "notifications/progress"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/progress"} = notification, state) do
     handle_progress_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/message"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/message"} = notification, state) do
     handle_log_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/cancelled"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, state) do
     handle_cancelled_notification(notification, state)
   end
 
@@ -1731,13 +1714,7 @@ defmodule Hermes.Client.Base do
     )
   end
 
-  defp send_sampling_error(
-         id,
-         message,
-         code,
-         reason,
-         %{transport: transport} = state
-       ) do
+  defp send_sampling_error(id, message, code, reason, %{transport: transport} = state) do
     error = %Error{code: -1, message: message, data: %{"reason" => reason}}
     {:ok, response} = Error.to_json_rpc(error, id)
     :ok = transport.layer.send_message(transport.name, response)

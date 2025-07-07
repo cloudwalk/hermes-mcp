@@ -87,8 +87,7 @@ defmodule Hermes.Server.Component.Schema do
   defp convert_type(:time), do: %{"type" => "string", "format" => "time"}
   defp convert_type(:datetime), do: %{"type" => "string", "format" => "date-time"}
 
-  defp convert_type(:naive_datetime),
-    do: %{"type" => "string", "format" => "date-time"}
+  defp convert_type(:naive_datetime), do: %{"type" => "string", "format" => "date-time"}
 
   defp convert_type({:string, {:regex, %Regex{source: pattern}}}) do
     %{"type" => "string", "pattern" => pattern}
@@ -220,8 +219,7 @@ defmodule Hermes.Server.Component.Schema do
   defp describe_base_type(:float), do: "number parameter"
   defp describe_base_type(:boolean), do: "boolean parameter"
 
-  defp describe_base_type({:enum, values}),
-    do: "one of: #{inspect(values, pretty: true)}"
+  defp describe_base_type({:enum, values}), do: "one of: #{inspect(values, pretty: true)}"
 
   defp describe_base_type({:list, {type, _}}),
     do: "array of #{describe_base_type(type)} elements parameter"
@@ -262,8 +260,7 @@ defmodule Hermes.Server.Component.Schema do
     normalize(fields)
   end
 
-  defp normalize_field({:object, fields, opts})
-       when is_map(fields) and is_list(opts) do
+  defp normalize_field({:object, fields, opts}) when is_map(fields) and is_list(opts) do
     {:mcp_field, normalize(fields), opts}
   end
 

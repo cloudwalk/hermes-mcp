@@ -158,9 +158,7 @@ defmodule Hermes.MCP.Setup do
     # session supervisor
     %{registry: registry} = ctx = with_default_registry(ctx)
 
-    start_supervised!(
-      {Session.Supervisor, server: server_module, registry: ctx.registry}
-    )
+    start_supervised!({Session.Supervisor, server: server_module, registry: ctx.registry})
 
     assert registry.supervisor(server_module, :session_supervisor)
 

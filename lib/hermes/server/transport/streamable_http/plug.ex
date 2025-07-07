@@ -119,10 +119,7 @@ if Code.ensure_loaded?(Plug) do
 
     # POST request handler - processes MCP messages
 
-    defp handle_post(
-           conn,
-           %{transport: transport, session_header: session_header} = opts
-         ) do
+    defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
       with :ok <- validate_accept_header(conn),
            {:ok, body, conn} <- maybe_read_request_body(conn, opts),
            {:ok, messages} <- maybe_parse_messages(body) do
@@ -167,14 +164,7 @@ if Code.ensure_loaded?(Plug) do
     defp prepare_message_or_batch([single]), do: single
     defp prepare_message_or_batch(batch), do: batch
 
-    defp process_message(
-           message,
-           conn,
-           transport,
-           session_id,
-           context,
-           session_header
-         )
+    defp process_message(message, conn, transport, session_id, context, session_header)
          when is_map(message) do
       if Message.is_request(message) do
         handle_request_with_possible_sse(
@@ -281,14 +271,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp handle_sse_request(
-           conn,
-           transport,
-           session_id,
-           body,
-           context,
-           session_header
-         ) do
+    defp handle_sse_request(conn, transport, session_id, body, context, session_header) do
       case StreamableHTTP.handle_message_for_sse(
              transport,
              session_id,
@@ -317,14 +300,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp handle_json_request(
-           conn,
-           transport,
-           session_id,
-           body,
-           context,
-           session_header
-         ) do
+    defp handle_json_request(conn, transport, session_id, body, context, session_header) do
       case StreamableHTTP.handle_message(transport, session_id, body, context) do
         {:ok, response} ->
           conn
@@ -532,8 +508,7 @@ if Code.ensure_loaded?(Plug) do
       {:ok, json_array, conn}
     end
 
-    defp maybe_read_request_body(%{body_params: body} = conn, _),
-      do: {:ok, body, conn}
+    defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
 
     defp send_error(conn, status, message) do
       data = %{data: %{message: message, http_status: status}}

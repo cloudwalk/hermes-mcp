@@ -47,8 +47,7 @@ defmodule Hermes.Server.Handlers.Resources do
   """
   @spec handle_read(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_read(%{"params" => %{"uri" => uri}}, frame, server)
-      when is_binary(uri) do
+  def handle_read(%{"params" => %{"uri" => uri}}, frame, server) when is_binary(uri) do
     resources = server.__components__(:resource) ++ Frame.get_resources(frame)
 
     if resource = find_resource_module(resources, uri) do
@@ -62,8 +61,7 @@ defmodule Hermes.Server.Handlers.Resources do
 
   # Private functions
 
-  defp find_resource_module(resources, uri),
-    do: Enum.find(resources, &(&1.uri == uri))
+  defp find_resource_module(resources, uri), do: Enum.find(resources, &(&1.uri == uri))
 
   defp read_single_resource(
          server,

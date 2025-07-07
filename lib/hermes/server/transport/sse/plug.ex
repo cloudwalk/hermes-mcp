@@ -308,8 +308,7 @@ if Code.ensure_loaded?(Plug) do
       {:ok, json_array, conn}
     end
 
-    defp maybe_read_request_body(%{body_params: body} = conn, _),
-      do: {:ok, body, conn}
+    defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}
 
     defp send_error(conn, status, message) do
       data = %{data: %{message: message, http_status: status}}

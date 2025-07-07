@@ -37,8 +37,7 @@ defmodule Mix.Interactive.Commands do
   def process_command("list_tools", client, loop_fn), do: list_tools(client, loop_fn)
   def process_command("call_tool", client, loop_fn), do: call_tool(client, loop_fn)
 
-  def process_command("list_prompts", client, loop_fn),
-    do: list_prompts(client, loop_fn)
+  def process_command("list_prompts", client, loop_fn), do: list_prompts(client, loop_fn)
 
   def process_command("get_prompt", client, loop_fn), do: get_prompt(client, loop_fn)
 
@@ -59,8 +58,7 @@ defmodule Mix.Interactive.Commands do
   def process_command("exit", client, _loop_fn), do: exit_client(client)
   def process_command("", _client, loop_fn), do: loop_fn.()
 
-  def process_command(unknown, _client, loop_fn),
-    do: unknown_command(unknown, loop_fn)
+  def process_command(unknown, _client, loop_fn), do: unknown_command(unknown, loop_fn)
 
   defp print_help(loop_fn) do
     IO.puts("\n#{UI.colors().info}Available commands:#{UI.colors().reset}")
@@ -178,9 +176,7 @@ defmodule Mix.Interactive.Commands do
   end
 
   defp perform_get_prompt(client, prompt_name, prompt_args, timeout_opts) do
-    IO.puts(
-      "\n#{UI.colors().info}Getting prompt #{prompt_name}...#{UI.colors().reset}"
-    )
+    IO.puts("\n#{UI.colors().info}Getting prompt #{prompt_name}...#{UI.colors().reset}")
 
     case Hermes.Client.Base.get_prompt(
            client,
@@ -227,9 +223,7 @@ defmodule Mix.Interactive.Commands do
 
     case Hermes.Client.Base.read_resource(client, resource_uri, timeout_opts) do
       {:ok, %Response{result: result}} ->
-        IO.puts(
-          "#{UI.colors().success}Read resource successfully#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().success}Read resource successfully#{UI.colors().reset}")
 
         IO.puts("\n#{UI.colors().info}Content:#{UI.colors().reset}")
         IO.puts(UI.format_output(result))
@@ -248,9 +242,7 @@ defmodule Mix.Interactive.Commands do
   end
 
   defp exit_client(client) do
-    IO.puts(
-      "\n#{UI.colors().info}Closing connection and exiting...#{UI.colors().reset}"
-    )
+    IO.puts("\n#{UI.colors().info}Closing connection and exiting...#{UI.colors().reset}")
 
     Hermes.Client.Base.close(client)
     :ok
@@ -448,9 +440,7 @@ defmodule Mix.Interactive.Commands do
 
     case Hermes.Client.Base.ping(client, timeout_opts) do
       :pong ->
-        IO.puts(
-          "#{UI.colors().success}✓ Pong! Server is responding#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().success}✓ Pong! Server is responding#{UI.colors().reset}")
 
       {:error, reason} ->
         UI.print_error(reason)
@@ -463,18 +453,14 @@ defmodule Mix.Interactive.Commands do
   defp unknown_command(command, loop_fn) do
     IO.puts("#{UI.colors().error}Unknown command: #{command}#{UI.colors().reset}")
 
-    IO.puts(
-      "Type #{UI.colors().command}help#{UI.colors().reset} for available commands"
-    )
+    IO.puts("Type #{UI.colors().command}help#{UI.colors().reset} for available commands")
 
     loop_fn.()
   end
 
   defp print_stdio_args(state) do
     if state.args do
-      IO.puts(
-        "  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}"
-      )
+      IO.puts("  #{UI.colors().info}Args:#{UI.colors().reset} #{inspect(state.args)}")
     end
   end
 

@@ -130,9 +130,7 @@ defmodule Mix.Interactive.SupervisedShell do
 
       case start_processes(new_state) do
         {:ok, restarted_state} ->
-          IO.puts(
-            "#{UI.colors().success}✓ Successfully restarted#{UI.colors().reset}"
-          )
+          IO.puts("#{UI.colors().success}✓ Successfully restarted#{UI.colors().reset}")
 
           IO.write("\n#{UI.colors().prompt}mcp> #{UI.colors().reset}")
           supervised_loop(restarted_state)

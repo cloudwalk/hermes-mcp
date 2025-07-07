@@ -108,12 +108,7 @@ defmodule Hermes.Client.State do
           GenServer.from(),
           String.t() | nil
         ) :: {String.t(), t()}
-  def add_request_from_operation(
-        state,
-        %Operation{} = operation,
-        from,
-        batch_id \\ nil
-      ) do
+  def add_request_from_operation(state, %Operation{} = operation, from, batch_id \\ nil) do
     state = register_progress_callback_from_opts(state, operation.progress_opts)
 
     request_id = ID.generate_request_id()
@@ -142,8 +137,7 @@ defmodule Hermes.Client.State do
   def add_progress_token_to_params(params, nil), do: params
   def add_progress_token_to_params(params, []), do: params
 
-  def add_progress_token_to_params(params, progress_opts)
-      when is_list(progress_opts) do
+  def add_progress_token_to_params(params, progress_opts) when is_list(progress_opts) do
     token = Keyword.get(progress_opts, :token)
 
     if is_binary(token) or is_integer(token) do
@@ -256,8 +250,7 @@ defmodule Hermes.Client.State do
       true
   """
   @spec register_progress_callback(t(), String.t(), Base.progress_callback()) :: t()
-  def register_progress_callback(state, token, callback)
-      when is_function(callback, 3) do
+  def register_progress_callback(state, token, callback) when is_function(callback, 3) do
     progress_callbacks = Map.put(state.progress_callbacks, token, callback)
     %{state | progress_callbacks: progress_callbacks}
   end
@@ -476,8 +469,7 @@ defmodule Hermes.Client.State do
   """
   @spec validate_capability(t(), String.t()) :: :ok | {:error, Error.t()}
   def validate_capability(%{server_capabilities: nil}, _method) do
-    {:error,
-     Error.protocol(:internal_error, %{message: "Server capabilities not set"})}
+    {:error, Error.protocol(:internal_error, %{message: "Server capabilities not set"})}
   end
 
   def validate_capability(%{server_capabilities: _}, "ping"), do: :ok

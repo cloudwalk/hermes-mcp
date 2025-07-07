@@ -122,9 +122,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Start a stub transport for the server
       stub_transport =
-        start_supervised!(
-          {StubTransport, name: registry.transport(StubServer, :stub)}
-        )
+        start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
 
       # Start the Base server with stub transport
       {:ok, _server} =
@@ -392,9 +390,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Start a stub transport for the server
       stub_transport =
-        start_supervised!(
-          {StubTransport, name: registry.transport(StubServer, :stub)}
-        )
+        start_supervised!({StubTransport, name: registry.transport(StubServer, :stub)})
 
       # Start the Base server with stub transport
       {:ok, _server} =

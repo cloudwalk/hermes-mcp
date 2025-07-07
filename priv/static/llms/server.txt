@@ -135,7 +135,7 @@ defmodule MyApp.MCPServer do
 
   # Handle external OTP processes messages
   def handle_info({:data_update, data}, frame) do
-    send_resources_list_changed(self())
+    send_resources_list_changed(frame)
     {:noreply, frame}
   end
 

@@ -166,8 +166,7 @@ defmodule Hermes.Server.Base do
           request_id = response["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
 
-          {:reply, Message.encode_error(%{"error" => error}, response["id"]),
-           new_state}
+          {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
 
         {:reply, {:error, error}, new_state} ->
           request_id = decoded["id"]
@@ -531,11 +530,7 @@ defmodule Hermes.Server.Base do
     {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
-  defp handle_request(
-         %{"id" => request_id, "method" => method} = request,
-         session,
-         state
-       ) do
+  defp handle_request(%{"id" => request_id, "method" => method} = request, session, state) do
     Logging.server_event("handling_request", %{id: request_id, method: method})
 
     :ok = Session.track_request(session.name, request_id, method)
@@ -720,8 +715,7 @@ defmodule Hermes.Server.Base do
 
         frame = Frame.clear_request(frame)
 
-        {:reply, {:ok, Error.build_json_rpc(error, request_id)},
-         %{state | frame: frame}}
+        {:reply, {:ok, Error.build_json_rpc(error, request_id)}, %{state | frame: frame}}
     end
   end
 
@@ -752,7 +746,8 @@ defmodule Hermes.Server.Base do
     session = Session.get(session_name)
     state = reset_session_expiry(session_id, state)
 
-    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context)}}}
+    {:ok,
+     {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
   defp maybe_attach_session(
@@ -776,7 +771,7 @@ defmodule Hermes.Server.Base do
         session = Session.get(session_name)
 
         {:ok,
-         {session, %{state | frame: populate_frame(state.frame, session, context)}}}
+         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
@@ -791,14 +786,14 @@ defmodule Hermes.Server.Base do
         session = Session.get(session_name)
 
         {:ok,
-         {session, %{state | frame: populate_frame(state.frame, session, context)}}}
+         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       error ->
         error
     end
   end
 
-  defp populate_frame(frame, %Session{} = session, context) do
+  defp populate_frame(frame, %Session{} = session, context, state) do
     {assigns, context} = Map.pop(context, :assigns, %{})
     assigns = Map.merge(frame.assigns, assigns)
 
@@ -809,14 +804,13 @@ defmodule Hermes.Server.Base do
       session_id: session.id,
       client_info: session.client_info,
       client_capabilities: session.client_capabilities,
-      protocol_version: session.protocol_version
+      protocol_version: session.protocol_version,
+      server_registry: state.registry,
+      server_name: state.name
     })
   end
 
-  defp negotiate_protocol_version(
-         [latest | _] = supported_versions,
-         requested_version
-       ) do
+  defp negotiate_protocol_version([latest | _] = supported_versions, requested_version) do
     if requested_version in supported_versions do
       requested_version
     else
@@ -960,17 +954,14 @@ defmodule Hermes.Server.Base do
 
   defp server_request?(_, _), do: false
 
-  defp handle_server_request_response(
-         %{"id" => request_id, "result" => result},
-         state
-       ) do
+  defp handle_server_request_response(%{"id" => request_id, "result" => result}, state) do
     {request_info, updated_requests} = Map.pop(state.server_requests, request_id)
     Process.cancel_timer(request_info.timer_ref)
 
     state = %{state | server_requests: updated_requests}
 
     if request_info.method == "sampling/createMessage" do
-      handle_sampling_response(result, request_id, request_info.metadata, state)
+      handle_sampling(result, request_id, request_info.metadata, state)
     else
       {:noreply, state}
     end
@@ -996,16 +987,11 @@ defmodule Hermes.Server.Base do
     {:noreply, state}
   end
 
-  defp handle_sampling_response(
-         result,
-         request_id,
-         metadata,
-         %{module: module} = state
-       ) do
-    if Hermes.exported?(module, :handle_sampling_response, 3) do
+  defp handle_sampling(result, request_id, metadata, %{module: module} = state) do
+    if Hermes.exported?(module, :handle_sampling, 3) do
       frame = Frame.assign(state.frame, :sampling_metadata, metadata)
 
-      case module.handle_sampling_response(result, request_id, frame) do
+      case module.handle_sampling(result, request_id, frame) do
         {:noreply, new_frame} ->
           {:noreply, %{state | frame: new_frame}}
 

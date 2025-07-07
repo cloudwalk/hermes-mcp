@@ -311,8 +311,7 @@ defmodule Hermes.Client.StateTest do
       state = new_test_state()
       state = %{state | server_capabilities: %{"resources" => %{}}}
 
-      assert {:error,
-              %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
+      assert {:error, %Error{reason: :method_not_found, data: %{method: "tools/list"}}} =
                State.validate_capability(state, "tools/list")
     end
 

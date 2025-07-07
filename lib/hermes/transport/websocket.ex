@@ -156,9 +156,7 @@ if Code.ensure_loaded?(:gun) do
           handle_connection_established(gun_pid, uri, state)
 
         {:error, reason} ->
-          Logging.transport_event("gun_open_failed", %{reason: reason},
-            level: :error
-          )
+          Logging.transport_event("gun_open_failed", %{reason: reason}, level: :error)
 
           Telemetry.execute(
             Telemetry.event_transport_error(),
@@ -183,9 +181,7 @@ if Code.ensure_loaded?(:gun) do
           initiate_websocket_upgrade(gun_pid, uri, state)
 
         {:error, reason} ->
-          Logging.transport_event("gun_await_up_failed", %{reason: reason},
-            level: :error
-          )
+          Logging.transport_event("gun_await_up_failed", %{reason: reason}, level: :error)
 
           {:stop, {:gun_await_up_failed, reason}, state}
       end
@@ -263,9 +259,7 @@ if Code.ensure_loaded?(:gun) do
           {:gun_ws, pid, stream_ref, :close},
           %{gun_pid: pid, stream_ref: stream_ref} = state
         ) do
-      Logging.transport_event("ws_closed", "Connection closed by server",
-        level: :warning
-      )
+      Logging.transport_event("ws_closed", "Connection closed by server", level: :warning)
 
       Telemetry.execute(
         Telemetry.event_transport_disconnect(),
@@ -283,9 +277,7 @@ if Code.ensure_loaded?(:gun) do
           {:gun_ws, pid, stream_ref, {:close, code, reason}},
           %{gun_pid: pid, stream_ref: stream_ref} = state
         ) do
-      Logging.transport_event("ws_closed", %{code: code, reason: reason},
-        level: :warning
-      )
+      Logging.transport_event("ws_closed", %{code: code, reason: reason}, level: :warning)
 
       Telemetry.execute(
         Telemetry.event_transport_disconnect(),
@@ -356,8 +348,7 @@ if Code.ensure_loaded?(:gun) do
     end
 
     @impl GenServer
-    def handle_cast(:close_connection, %{gun_pid: pid} = state)
-        when not is_nil(pid) do
+    def handle_cast(:close_connection, %{gun_pid: pid} = state) when not is_nil(pid) do
       Telemetry.execute(
         Telemetry.event_transport_disconnect(),
         %{system_time: System.system_time()},

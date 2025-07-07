@@ -171,8 +171,7 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, content} = MyClient.read_resource("file:///path/to/file")
       """
-      def read_resource(uri, opts \\ []),
-        do: Base.read_resource(__MODULE__, uri, opts)
+      def read_resource(uri, opts \\ []), do: Base.read_resource(__MODULE__, uri, opts)
 
       @doc """
       Lists all available prompts from the server.

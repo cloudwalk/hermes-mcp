@@ -25,5 +25,5 @@ test = [
   ],
   locals_without_parens: locals ++ test,
   export: locals,
-  line_length: 85
+  line_length: 90
 ]

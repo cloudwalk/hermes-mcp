@@ -275,9 +275,7 @@ defmodule Hermes.Transport.STDIO do
 
     opts =
       [:binary]
-      |> then(
-        &if is_nil(state.args), do: &1, else: Enum.concat(&1, args: state.args)
-      )
+      |> then(&if is_nil(state.args), do: &1, else: Enum.concat(&1, args: state.args))
       |> then(&if is_nil(state.env), do: &1, else: Enum.concat(&1, env: env))
       |> then(&if is_nil(state.cwd), do: &1, else: Enum.concat(&1, cd: state.cwd))
 

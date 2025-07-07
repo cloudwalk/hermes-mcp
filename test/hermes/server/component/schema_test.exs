@@ -422,8 +422,7 @@ defmodule Hermes.Server.Component.SchemaTest do
       schema = %{
         website: {:mcp_field, :string, format: "uri"},
         score:
-          {:mcp_field, {:integer, {:range, {0, 100}}},
-           description: "Score percentage"}
+          {:mcp_field, {:integer, {:range, {0, 100}}}, description: "Score percentage"}
       }
 
       result = Schema.to_json_schema(schema)
@@ -468,8 +467,7 @@ defmodule Hermes.Server.Component.SchemaTest do
   describe "to_prompt_arguments/1 with mcp_field" do
     test "uses custom description from mcp_field" do
       schema = %{
-        language:
-          {:mcp_field, {:required, :string}, description: "Programming language"},
+        language: {:mcp_field, {:required, :string}, description: "Programming language"},
         focus: {:mcp_field, :string, description: "Areas to focus on"}
       }
 
@@ -597,8 +595,7 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               text:
-                 {:mcp_field, {:string, {:max, 150}}, [description: "Sample text"]},
+               text: {:mcp_field, {:string, {:max, 150}}, [description: "Sample text"]},
                count:
                  {:mcp_field, {:integer, {:range, {1, 100}}},
                   [description: "Count value"]}
@@ -614,8 +611,7 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       assert normalized == %{
                name:
-                 {:mcp_field, {:required, :string},
-                  [max: 50, description: "User name"]}
+                 {:mcp_field, {:required, :string}, [max: 50, description: "User name"]}
              }
     end
 
@@ -689,16 +685,14 @@ defmodule Hermes.Server.Component.SchemaTest do
 
     test "handles field macro output format" do
       schema = [
-        {:text,
-         {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}}
+        {:text, {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}}
       ]
 
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
                text:
-                 {:mcp_field, {:required, :string},
-                  [max: 150, description: "Text field"]}
+                 {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}
              }
     end
 

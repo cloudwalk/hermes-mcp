@@ -207,9 +207,8 @@ defmodule Hermes.MCP.Message do
     "params" => {:dependent, &parse_notification_params_by_method/1}
   })
 
-  defp parse_notification_params_by_method(%{
-         "method" => "notifications/initialized"
-       }), do: {:ok, @init_noti_params_schema}
+  defp parse_notification_params_by_method(%{"method" => "notifications/initialized"}),
+    do: {:ok, @init_noti_params_schema}
 
   defp parse_notification_params_by_method(%{"method" => "notifications/cancelled"}),
     do: {:ok, @cancel_noti_params_schema}
@@ -514,10 +513,7 @@ defmodule Hermes.MCP.Message do
   """
   @spec encode_progress_notification(map(), term() | nil) ::
           {:ok, String.t()} | {:error, term()}
-  def encode_progress_notification(
-        params,
-        params_schema \\ @progress_notif_params_schema
-      )
+  def encode_progress_notification(params, params_schema \\ @progress_notif_params_schema)
       when is_map(params) do
     # Validate params against the provided schema
     case Peri.validate(params_schema, params) do

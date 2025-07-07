@@ -256,8 +256,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
         {:reply, {:ok, nil}, state}
 
       true ->
-        {:reply, forward_request_to_server(server, message, session_id, context),
-         state}
+        {:reply, forward_request_to_server(server, message, session_id, context), state}
     end
   end
 
@@ -272,11 +271,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call(
-        {:handle_message_for_sse, session_id, message, context},
-        _from,
-        state
-      )
+  def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
 
@@ -292,11 +287,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     end
   end
 
-  def handle_call(
-        {:handle_message_for_sse, session_id, messages, context},
-        _from,
-        state
-      )
+  def handle_call({:handle_message_for_sse, session_id, messages, context}, _from, state)
       when is_list(messages) do
     server = state.registry.whereis_server(state.server)
 

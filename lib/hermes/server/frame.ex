@@ -142,8 +142,7 @@ defmodule Hermes.Server.Frame do
   """
   @spec assign(t, Enumerable.t()) :: t
   @spec assign(t, key :: atom, value :: any) :: t
-  def assign(%__MODULE__{} = frame, assigns)
-      when is_map(assigns) or is_list(assigns) do
+  def assign(%__MODULE__{} = frame, assigns) when is_map(assigns) or is_list(assigns) do
     Enum.reduce(assigns, frame, fn {key, value}, frame ->
       assign(frame, key, value)
     end)
@@ -354,10 +353,7 @@ defmodule Hermes.Server.Frame do
       # => nil
   """
   @spec get_req_header(t, String.t()) :: String.t() | nil
-  def get_req_header(
-        %__MODULE__{transport: %{type: :http, req_headers: headers}},
-        name
-      )
+  def get_req_header(%__MODULE__{transport: %{type: :http, req_headers: headers}}, name)
       when is_binary(name) do
     case List.keyfind(headers, String.downcase(name), 0) do
       {_, value} -> value
@@ -384,10 +380,7 @@ defmodule Hermes.Server.Frame do
       # => nil
   """
   @spec get_query_param(t, String.t()) :: String.t() | nil
-  def get_query_param(
-        %__MODULE__{transport: %{type: :http, query_params: params}},
-        key
-      )
+  def get_query_param(%__MODULE__{transport: %{type: :http, query_params: params}}, key)
       when is_map(params) and is_binary(key) do
     Map.get(params, key)
   end
