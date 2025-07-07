@@ -313,13 +313,22 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  def handle_info({:send_sampling_request, params, metadata}, state) do
+  def handle_info({:send_sampling_request, params, timeout}, state) do
     request_id = ID.generate_request_id()
-    handle_sampling_request_send(request_id, params, metadata, state)
+    handle_sampling_request_send(request_id, params, timeout, state)
   end
 
   def handle_info({:sampling_request_timeout, request_id}, state) do
     handle_sampling_timeout(request_id, state)
+  end
+
+  def handle_info({:send_roots_request, timeout}, state) do
+    request_id = ID.generate_request_id()
+    handle_roots_request_send(request_id, timeout, state)
+  end
+
+  def handle_info({:roots_request_timeout, request_id}, state) do
+    handle_roots_timeout(request_id, state)
   end
 
   def handle_info(event, %{module: module} = state) do
@@ -861,14 +870,13 @@ defmodule Hermes.Server.Base do
 
   # Sampling request helpers
 
-  defp handle_sampling_request_send(request_id, params, metadata, state) do
+  defp handle_sampling_request_send(request_id, params, timeout, state) do
     timer_ref =
-      Process.send_after(self(), {:sampling_request_timeout, request_id}, 30_000)
+      Process.send_after(self(), {:sampling_request_timeout, request_id}, timeout)
 
     request_info = %{
       method: "sampling/createMessage",
-      session_id: nil,
-      metadata: metadata,
+      session_id: state.frame.private.session_id,
       timer_ref: timer_ref
     }
 
@@ -960,10 +968,15 @@ defmodule Hermes.Server.Base do
 
     state = %{state | server_requests: updated_requests}
 
-    if request_info.method == "sampling/createMessage" do
-      handle_sampling(result, request_id, request_info.metadata, state)
-    else
-      {:noreply, state}
+    case request_info.method do
+      "sampling/createMessage" ->
+        handle_sampling(result, request_id, state)
+
+      "roots/list" ->
+        handle_roots(result["roots"] || [], request_id, state)
+
+      _ ->
+        {:noreply, state}
     end
   end
 
@@ -987,27 +1000,94 @@ defmodule Hermes.Server.Base do
     {:noreply, state}
   end
 
-  defp handle_sampling(result, request_id, metadata, %{module: module} = state) do
-    if Hermes.exported?(module, :handle_sampling, 3) do
-      frame = Frame.assign(state.frame, :sampling_metadata, metadata)
+  defp handle_sampling(result, request_id, %{module: module, frame: frame} = state) do
+    case module.handle_sampling(result, request_id, frame) do
+      {:noreply, new_frame} ->
+        {:noreply, %{state | frame: new_frame}}
 
-      case module.handle_sampling(result, request_id, frame) do
-        {:noreply, new_frame} ->
-          {:noreply, %{state | frame: new_frame}}
+      {:stop, reason, new_frame} ->
+        {:stop, reason, %{state | frame: new_frame}}
+    end
+  end
 
-        {:stop, reason, new_frame} ->
-          {:stop, reason, %{state | frame: new_frame}}
-      end
-    else
-      Logging.server_event(
-        "sampling_response_no_handler",
-        %{
-          request_id: request_id
-        },
-        level: :warning
-      )
+  # Roots request helpers
 
+  defp handle_roots_request_send(request_id, timeout, state) do
+    timer_ref =
+      Process.send_after(self(), {:roots_request_timeout, request_id}, timeout)
+
+    request_info = %{
+      method: "roots/list",
+      session_id: state.frame.private.session_id,
+      timer_ref: timer_ref
+    }
+
+    state = put_in(state.server_requests[request_id], request_info)
+
+    with :ok <- validate_client_capability(state, "roots"),
+         {:ok, request_data} <- encode_request("roots/list", %{}, request_id),
+         :ok <- send_to_transport(state.transport, request_data) do
+      Logging.server_event("sent_roots_request", %{request_id: request_id})
       {:noreply, state}
+    else
+      {:error, error} ->
+        Process.cancel_timer(timer_ref)
+
+        state = %{
+          state
+          | server_requests: Map.delete(state.server_requests, request_id)
+        }
+
+        Logging.server_event(
+          "failed_send_roots_request",
+          %{
+            request_id: request_id,
+            error: error
+          },
+          level: :error
+        )
+
+        {:noreply, state}
+    end
+  end
+
+  defp handle_roots_timeout(request_id, state) do
+    case Map.pop(state.server_requests, request_id) do
+      {nil, _} ->
+        {:noreply, state}
+
+      {_request_info, updated_requests} ->
+        with {:ok, notification} <-
+               encode_notification("notifications/cancelled", %{
+                 "requestId" => request_id,
+                 "reason" => "timeout"
+               }),
+             :ok <- send_to_transport(state.transport, notification) do
+          Logging.server_event(
+            "roots_request_timeout_cancelled",
+            %{request_id: request_id}
+          )
+        end
+
+        Logging.server_event(
+          "roots_request_timeout",
+          %{
+            request_id: request_id
+          },
+          level: :warning
+        )
+
+        {:noreply, %{state | server_requests: updated_requests}}
+    end
+  end
+
+  defp handle_roots(roots, request_id, %{module: module} = state) do
+    case module.handle_roots(roots, request_id, state.frame) do
+      {:noreply, new_frame} ->
+        {:noreply, %{state | frame: new_frame}}
+
+      {:stop, reason, new_frame} ->
+        {:stop, reason, %{state | frame: new_frame}}
     end
   end
 end

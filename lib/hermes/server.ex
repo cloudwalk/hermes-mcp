@@ -95,8 +95,9 @@ defmodule Hermes.Server do
   alias Hermes.Server.ConfigurationError
   alias Hermes.Server.Frame
   alias Hermes.Server.Handlers
+  alias Hermes.Server.Response
 
-  @server_capabilities ~w(prompts tools resources logging)a
+  @server_capabilities ~w(prompts tools resources logging completion)a
   @protocol_versions ~w(2025-03-26 2024-05-11 2024-10-07)
 
   @type request :: map()
@@ -359,6 +360,33 @@ defmodule Hermes.Server do
               {:noreply, Frame.t()}
               | {:stop, reason :: term(), Frame.t()}
 
+  @doc """
+  Handles completion requests from the client.
+
+  This callback is invoked when a client requests completions for a reference.
+  The reference indicates what type of completion is being requested.
+
+  Note: This callback will only be invoked if user declared the `completion` capability
+  on server definition
+  """
+  @callback handle_completion(ref :: String.t(), argument :: map(), Frame.t()) ::
+              {:reply, Response.t() | map(), Frame.t()}
+              | {:error, mcp_error(), Frame.t()}
+
+  @doc """
+  Handles the response from a roots/list request sent to the client.
+
+  This callback is invoked when the client responds to a roots list request
+  initiated by the server. The response contains the available root URIs.
+  """
+  @callback handle_roots(
+              roots :: list(map()),
+              request_id :: String.t(),
+              Frame.t()
+            ) ::
+              {:noreply, Frame.t()}
+              | {:stop, reason :: term(), Frame.t()}
+
   @optional_callbacks handle_notification: 2,
                       handle_info: 2,
                       handle_call: 3,
@@ -369,7 +397,9 @@ defmodule Hermes.Server do
                       handle_prompt_get: 3,
                       handle_request: 2,
                       init: 2,
-                      handle_sampling: 3
+                      handle_sampling: 3,
+                      handle_completion: 3,
+                      handle_roots: 3
 
   @doc """
   Checks if the MCP session has been initialized.
@@ -808,7 +838,8 @@ defmodule Hermes.Server do
                list(
                  {:model_preferences, map | nil}
                  | {:system_prompt, String.t() | nil}
-                 | {:max_token, integer | nil}
+                 | {:max_token, non_neg_integer | nil}
+                 | {:timeout, non_neg_integer | nil}
                )
   def send_sampling_request(%Frame{} = frame, messages, opts \\ [])
       when is_list(messages) do
@@ -823,11 +854,28 @@ defmodule Hermes.Server do
         {:max_tokens, max}, acc -> Map.put(acc, "maxTokens", max)
       end)
 
-    metadata = Keyword.get(opts, :metadata, %{})
+    timeout = Keyword.get(opts, :timeout, 30_000)
     registry = frame.private.server_registry
     server = frame.private.server_module
     pid = registry.whereis_server(server)
-    send(pid, {:send_sampling_request, params, metadata})
+    send(pid, {:send_sampling_request, params, timeout})
+    :ok
+  end
+
+  @doc """
+  Sends a roots/list request to the client.
+
+  This function queries the client for available root URIs. The client must have
+  declared the roots capability during initialization.
+  """
+  @spec send_roots_request(Frame.t(), list({:timeout, non_neg_integer | nil})) :: :ok
+  def send_roots_request(%Frame{} = frame, opts \\ []) do
+    timeout = Keyword.get(opts, :timeout, 30_000)
+
+    registry = frame.private.server_registry
+    server = frame.private.server_module
+    pid = registry.whereis_server(server)
+    send(pid, {:send_roots_request, timeout})
     :ok
   end
 end

@@ -25,10 +25,13 @@ defmodule Hermes.Server.Response do
   """
 
   @type t :: %__MODULE__{
-          type: :tool | :prompt | :resource,
+          type: :tool | :prompt | :resource | :completion,
           content: list(map),
           messages: list(map),
           contents: list(map) | nil,
+          values: list(map),
+          total: integer | nil,
+          hasMore: boolean,
           isError: boolean,
           metadata: map
         }
@@ -38,6 +41,9 @@ defmodule Hermes.Server.Response do
     content: [],
     messages: [],
     contents: nil,
+    values: [],
+    total: nil,
+    hasMore: false,
     isError: false,
     metadata: %{}
   ]
@@ -84,6 +90,16 @@ defmodule Hermes.Server.Response do
       %Response{type: :resource, contents: nil}
   """
   def resource, do: %__MODULE__{type: :resource}
+
+  @doc """
+  Start building a completion response.
+
+  ## Examples
+
+      iex> Response.completion()
+      %Response{type: :completion, values: [], hasMore: false}
+  """
+  def completion, do: %__MODULE__{type: :completion}
 
   @doc """
   Add text content to a tool or resource response.
@@ -389,6 +405,100 @@ defmodule Hermes.Server.Response do
   end
 
   @doc """
+  Add a completion value to a completion response.
+
+  ## Parameters
+
+    * `response` - A completion response struct
+    * `value` - The completion value
+    * `opts` - Optional keyword list with:
+      * `:description` - Description of the completion value
+      * `:label` - Optional label for the value
+
+  ## Examples
+
+      iex> Response.completion() |> Response.completion_value("tool:calculator", description: "Math calculator tool")
+      %Response{
+        type: :completion,
+        values: [%{"value" => "tool:calculator", "description" => "Math calculator tool"}]
+      }
+  """
+  def completion_value(%{type: :completion} = r, value, opts \\ [])
+      when is_binary(value) do
+    completion_item =
+      %{"value" => value}
+      |> maybe_put("description", opts[:description])
+      |> maybe_put("label", opts[:label])
+
+    %{r | values: r.values ++ [completion_item]}
+  end
+
+  @doc """
+  Add multiple completion values at once.
+
+  ## Parameters
+
+    * `response` - A completion response struct
+    * `values` - List of values (strings or maps with value/description/label)
+
+  ## Examples
+
+      iex> Response.completion() |> Response.completion_values(["foo", "bar"])
+      %Response{
+        type: :completion,
+        values: [%{"value" => "foo"}, %{"value" => "bar"}]
+      }
+      
+      iex> Response.completion() |> Response.completion_values([
+      ...>   %{value: "foo", description: "Foo option"},
+      ...>   %{value: "bar", description: "Bar option"}
+      ...> ])
+  """
+  def completion_values(%{type: :completion} = r, values) when is_list(values) do
+    normalized_values =
+      Enum.map(values, fn
+        value when is_binary(value) ->
+          %{"value" => value}
+
+        %{value: v} = map ->
+          %{"value" => v}
+          |> maybe_put("description", Map.get(map, :description))
+          |> maybe_put("label", Map.get(map, :label))
+
+        %{"value" => _} = map ->
+          map
+      end)
+
+    %{r | values: r.values ++ normalized_values}
+  end
+
+  @doc """
+  Set pagination information for completion response.
+
+  ## Parameters
+
+    * `response` - A completion response struct
+    * `total` - Total number of available completions
+    * `has_more` - Whether more completions are available
+
+  ## Examples
+
+      iex> Response.completion() 
+      ...> |> Response.completion_values(["foo", "bar"])
+      ...> |> Response.with_pagination(10, true)
+      %Response{
+        type: :completion,
+        values: [%{"value" => "foo"}, %{"value" => "bar"}],
+        total: 10,
+        hasMore: true
+      }
+  """
+  def with_pagination(%{type: :completion} = r, total, has_more)
+      when is_integer(total) and is_boolean(has_more) do
+    %{r | total: total, hasMore: has_more}
+  end
+
+  @doc """
   Build the final response structure.
 
   Transforms the response struct into the appropriate format for the MCP protocol.
@@ -418,6 +528,14 @@ defmodule Hermes.Server.Response do
     if Map.get(r, :description),
       do: Map.put(base, "description", r.description),
       else: base
+  end
+
+  def to_protocol(%{type: :completion} = r) do
+    base = %{"values" => r.values}
+
+    base
+    |> maybe_put("total", r.total)
+    |> then(fn map -> if r.hasMore, do: Map.put(map, "hasMore", true), else: map end)
   end
 
   def to_protocol(%{type: :resource} = r, uri, mime_type) do

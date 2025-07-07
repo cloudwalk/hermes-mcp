@@ -3,6 +3,7 @@ defmodule Hermes.Server.Handlers do
 
   alias Hermes.MCP.Error
   alias Hermes.Server.Frame
+  alias Hermes.Server.Handlers.Completion
   alias Hermes.Server.Handlers.Prompts
   alias Hermes.Server.Handlers.Resources
   alias Hermes.Server.Handlers.Tools
@@ -31,6 +32,10 @@ defmodule Hermes.Server.Handlers do
       "list" -> Resources.handle_list(request, frame, module)
       "read" -> Resources.handle_read(request, frame, module)
     end
+  end
+
+  def handle(%{"method" => "completion/complete"} = request, module, frame) do
+    Completion.handle_complete(request, frame, module)
   end
 
   def handle(%{"method" => method}, _module, frame) do
