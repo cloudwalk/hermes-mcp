@@ -258,7 +258,8 @@ defmodule Hermes.MCP.Setup do
         {Hermes.Client.Base,
          transport: [layer: Hermes.MockTransport, name: MockTransport],
          client_info: client_info,
-         capabilities: client_capabilities},
+         capabilities: client_capabilities,
+         protocol_version: "2025-03-26"},
         restart: :temporary
       )
 

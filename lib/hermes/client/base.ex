@@ -8,7 +8,9 @@ defmodule Hermes.Client.Base do
 
   alias Hermes.Client.Operation
   alias Hermes.Client.Request
+  alias Hermes.Client.RequestHandler
   alias Hermes.Client.State
+  alias Hermes.Client.Session
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
   alias Hermes.MCP.Message
@@ -21,41 +23,6 @@ defmodule Hermes.Client.Base do
   @default_protocol_version Protocol.latest_version()
 
   @type t :: GenServer.server()
-
-  @typedoc """
-  Progress callback function type.
-
-  Called when progress notifications are received for a specific progress token.
-
-  ## Parameters
-    - `progress_token` - String or integer identifier for the progress operation
-    - `progress` - Current progress value
-    - `total` - Total expected value (nil if unknown)
-
-  ## Returns
-    - The return value is ignored
-  """
-  @type progress_callback ::
-          (progress_token :: String.t() | integer(),
-           progress :: number(),
-           total :: number() | nil ->
-             any())
-
-  @typedoc """
-  Log callback function type.
-
-  Called when log message notifications are received from the server.
-
-  ## Parameters
-    - `level` - Log level as a string (e.g., "debug", "info", "warning", "error")
-    - `data` - Log message data, typically a map with message details
-    - `logger` - Optional logger name identifying the source
-
-  ## Returns
-    - The return value is ignored
-  """
-  @type log_callback ::
-          (level :: String.t(), data :: term(), logger :: String.t() | nil -> any())
 
   @typedoc """
   Root directory specification.
@@ -457,84 +424,6 @@ defmodule Hermes.Client.Base do
   end
 
   @doc """
-  Registers a callback function to be called when log messages are received.
-
-  ## Parameters
-
-    * `client` - The client process
-    * `callback` - A function that takes three arguments: level, data, and logger name
-
-  The callback function will be called whenever a log message notification is received.
-  """
-  @spec register_log_callback(t, log_callback(), opts :: Keyword.t()) :: :ok
-  def register_log_callback(client, callback, opts \\ []) when is_function(callback, 3) do
-    timeout = opts[:timeout] || to_timeout(second: 5)
-    GenServer.call(client, {:register_log_callback, callback}, timeout)
-  end
-
-  @doc """
-  Unregisters a previously registered log callback.
-
-  ## Parameters
-
-    * `client` - The client process
-    * `callback` - The callback function to unregister
-  """
-  @spec unregister_log_callback(t, opts :: Keyword.t()) :: :ok
-  def unregister_log_callback(client, opts \\ []) do
-    timeout = opts[:timeout] || to_timeout(second: 5)
-    GenServer.call(client, :unregister_log_callback, timeout)
-  end
-
-  @doc """
-  Registers a callback function to be called when progress notifications are received
-  for the specified progress token.
-
-  ## Parameters
-
-    * `client` - The client process
-    * `progress_token` - The progress token to watch for (string or integer)
-    * `callback` - A function that takes three arguments: progress_token, progress, and total
-
-  The callback function will be called whenever a progress notification with the
-  matching token is received.
-  """
-  @spec register_progress_callback(
-          t,
-          String.t() | integer(),
-          progress_callback(),
-          opts :: Keyword.t()
-        ) ::
-          :ok
-  def register_progress_callback(client, progress_token, callback, opts \\ [])
-      when is_function(callback, 3) and
-             (is_binary(progress_token) or is_integer(progress_token)) do
-    timeout = opts[:timeout] || to_timeout(second: 5)
-
-    GenServer.call(
-      client,
-      {:register_progress_callback, progress_token, callback},
-      timeout
-    )
-  end
-
-  @doc """
-  Unregisters a previously registered progress callback for the specified token.
-
-  ## Parameters
-
-    * `client` - The client process
-    * `progress_token` - The progress token to stop watching (string or integer)
-  """
-  @spec unregister_progress_callback(t, String.t() | integer(), opts :: Keyword.t()) ::
-          :ok
-  def unregister_progress_callback(client, progress_token, opts \\ [])
-      when is_binary(progress_token) or is_integer(progress_token) do
-    timeout = opts[:timeout] || to_timeout(second: 5)
-    GenServer.call(client, {:unregister_progress_callback, progress_token}, timeout)
-  end
-
-  @doc """
   Sends a progress notification to the server for a long-running operation.
 
   ## Parameters
@@ -729,55 +618,6 @@ defmodule Hermes.Client.Base do
   end
 
   @doc """
-  Registers a callback function to handle sampling requests from the server.
-
-  The callback function will be called when the server sends a `sampling/createMessage` request.
-  The callback should implement user approval and return the LLM response.
-
-  ## Callback Function
-
-  The callback receives the sampling parameters and must return:
-  - `{:ok, response_map}` - Where response_map contains:
-    - `"role"` - Usually "assistant"
-    - `"content"` - Message content (text, image, or audio)
-    - `"model"` - The model that was used
-    - `"stopReason"` - Why generation stopped (e.g., "endTurn")
-  - `{:error, reason}` - If the user rejects or an error occurs
-
-  ## Example
-
-      MyClient.register_sampling_callback(fn params ->
-        messages = params["messages"]
-        
-        # Show UI for user approval
-        case MyUI.approve_sampling(messages) do
-          {:approved, edited_messages} ->
-            # Call LLM with approved/edited messages
-            response = MyLLM.generate(edited_messages, params["modelPreferences"])
-            {:ok, response}
-            
-          :rejected ->
-            {:error, "User rejected sampling request"}
-        end
-      end)
-  """
-  @spec register_sampling_callback(
-          t,
-          (map() -> {:ok, map()} | {:error, String.t()})
-        ) :: :ok
-  def register_sampling_callback(client, callback) when is_function(callback, 1) do
-    GenServer.call(client, {:register_sampling_callback, callback})
-  end
-
-  @doc """
-  Unregisters the sampling callback.
-  """
-  @spec unregister_sampling_callback(t) :: :ok
-  def unregister_sampling_callback(client) do
-    GenServer.call(client, :unregister_sampling_callback)
-  end
-
-  @doc """
   Closes the client connection and terminates the process.
   """
   @spec close(t) :: :ok
@@ -799,7 +639,8 @@ defmodule Hermes.Client.Base do
         client_info: opts.client_info,
         capabilities: opts.capabilities,
         protocol_version: protocol_version,
-        transport: transport
+        transport: transport,
+        session: %Session{}
       })
 
     client_name = get_in(opts, [:client_info, "name"])
@@ -832,25 +673,12 @@ defmodule Hermes.Client.Base do
 
   @impl true
   def handle_call({:operation, %Operation{} = operation}, from, state) do
-    method = operation.method
+    case RequestHandler.execute_request(state, operation, state.transport, from) do
+      {:ok, updated_state} ->
+        {:noreply, updated_state}
 
-    params_with_token =
-      State.add_progress_token_to_params(operation.params, operation.progress_opts)
-
-    with :ok <- State.validate_capability(state, method),
-         {request_id, updated_state} =
-           State.add_request_from_operation(state, operation, from),
-         {:ok, request_data} <- encode_request(method, params_with_token, request_id),
-         :ok <- send_to_transport(state.transport, request_data) do
-      Telemetry.execute(
-        Telemetry.event_client_request(),
-        %{system_time: System.system_time()},
-        %{method: method, request_id: request_id}
-      )
-
-      {:noreply, updated_state}
-    else
-      err -> {:reply, err, state}
+      {:error, _} = error ->
+        {:reply, error, state}
     end
   end
 
@@ -865,30 +693,6 @@ defmodule Hermes.Client.Base do
 
   def handle_call(:get_server_info, _from, state) do
     {:reply, State.get_server_info(state), state}
-  end
-
-  def handle_call({:register_log_callback, callback}, _from, state) do
-    {:reply, :ok, State.set_log_callback(state, callback)}
-  end
-
-  def handle_call(:unregister_log_callback, _from, state) do
-    {:reply, :ok, State.clear_log_callback(state)}
-  end
-
-  def handle_call({:register_sampling_callback, callback}, _from, state) do
-    {:reply, :ok, State.set_sampling_callback(state, callback)}
-  end
-
-  def handle_call(:unregister_sampling_callback, _from, state) do
-    {:reply, :ok, State.clear_sampling_callback(state)}
-  end
-
-  def handle_call({:register_progress_callback, token, callback}, _from, state) do
-    {:reply, :ok, State.register_progress_callback(state, token, callback)}
-  end
-
-  def handle_call({:unregister_progress_callback, token}, _from, state) do
-    {:reply, :ok, State.unregister_progress_callback(state, token)}
   end
 
   def handle_call({:send_progress, progress_token, progress, total}, _from, state) do
@@ -967,9 +771,15 @@ defmodule Hermes.Client.Base do
     if Protocol.supports_feature?(state.protocol_version, :json_rpc_batching) do
       batch_id = ID.generate_batch_id()
 
-      case prepare_batch(operations, from, batch_id, state) do
-        {:ok, batch_data, updated_state} ->
-          handle_batch_send(batch_data, batch_id, operations, updated_state)
+      case RequestHandler.execute_batch(
+             state,
+             operations,
+             state.transport,
+             from,
+             batch_id
+           ) do
+        {:ok, updated_state} ->
+          {:noreply, updated_state}
 
         {:error, _} = error ->
           {:reply, error, state}
@@ -984,6 +794,28 @@ defmodule Hermes.Client.Base do
         })
 
       {:reply, {:error, error}, state}
+    end
+  end
+
+  def handle_call(request, from, %{module: module} = state) do
+    case module.handle_call(request, from, state.session) do
+      {:reply, reply, session} ->
+        {:reply, reply, %{state | session: session}}
+
+      {:reply, reply, session, cont} ->
+        {:reply, reply, %{state | session: session}, cont}
+
+      {:noreply, session} ->
+        {:noreply, %{state | session: session}}
+
+      {:noreply, session, cont} ->
+        {:noreply, %{state | session: session}, cont}
+
+      {:stop, reason, reply, session} ->
+        {:stop, reason, reply, %{state | session: session}}
+
+      {:stop, reason, session} ->
+        {:stop, reason, %{state | session: session}}
     end
   end
 
@@ -1029,7 +861,6 @@ defmodule Hermes.Client.Base do
       {:stop, :unexpected, state}
   end
 
-  @impl true
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
       {:ok, messages} when is_list(messages) ->
@@ -1045,6 +876,14 @@ defmodule Hermes.Client.Base do
       Logging.client_event("response_handling_failed", %{error: err}, level: :error)
 
       {:noreply, state}
+  end
+
+  def handle_cast(request, %{module: module} = state) do
+    case module.handle_cast(request, state.session) do
+      {:noreply, session} -> {:noreply, %{state | session: session}}
+      {:noreply, session, cont} -> {:noreply, %{state | session: session}, cont}
+      {:stop, reason, session} -> {:stop, reason, %{state | session: session}}
+    end
   end
 
   # Server request handling
@@ -1115,28 +954,9 @@ defmodule Hermes.Client.Base do
 
   @impl true
   def handle_info({:request_timeout, request_id}, state) do
-    case State.handle_request_timeout(state, request_id) do
-      {nil, state} ->
-        {:noreply, state}
-
-      {request, updated_state} ->
-        elapsed_ms = Request.elapsed_time(request)
-
-        error =
-          Error.transport(:request_timeout, %{
-            message: "Request timed out after #{elapsed_ms}ms"
-          })
-
-        if is_nil(request.batch_id) do
-          GenServer.reply(request.from, {:error, error})
-        else
-          check_batch_completion(request.batch_id, request.from, updated_state)
-        end
-
-        _ = send_cancellation(updated_state, request_id, "timeout")
-
-        {:noreply, updated_state}
-    end
+    updated_state = RequestHandler.handle_timeout(state, request_id)
+    _ = send_cancellation(updated_state, request_id, "timeout")
+    {:noreply, updated_state}
   end
 
   @impl true
@@ -1180,7 +1000,13 @@ defmodule Hermes.Client.Base do
       })
     end
 
-    state.transport.layer.shutdown(state.transport.name)
+    :ok = state.transport.layer.shutdown(state.transport.name)
+
+    if Hermes.exported?(state.module, :terminate, 2) do
+      state.module.terminate(reason, state.session)
+    end
+
+    :ok
   end
 
   # Message handling
@@ -1209,13 +1035,19 @@ defmodule Hermes.Client.Base do
 
   defp handle_single_message(message, state) do
     cond do
-      Message.is_error(message) ->
-        Logging.message("incoming", "error", message["id"], message)
-        handle_error_response(message, message["id"], state)
-
       Message.is_response(message) ->
         Logging.message("incoming", "response", message["id"], message)
         handle_success_response(message, message["id"], state)
+
+      Message.is_error(message) or Message.is_response(message) ->
+        Logging.message(
+          "incoming",
+          if(Message.is_error(message), do: "error", else: "response"),
+          message["id"],
+          message
+        )
+
+        RequestHandler.handle_response(state, message)
 
       Message.is_notification(message) ->
         Logging.message("incoming", "notification", nil, message)
@@ -1232,121 +1064,10 @@ defmodule Hermes.Client.Base do
   end
 
   defp handle_batch_response(messages, batch_id, state) do
-    batch_from =
-      case get_batch_from(batch_id, state) do
-        {:ok, from} -> from
-        _ -> nil
-      end
-
-    {results, updated_state} = collect_batch_results(messages, state)
-
-    if State.batch_complete?(updated_state, batch_id) and not is_nil(batch_from) do
-      formatted_results = format_batch_results(results)
-      GenServer.reply(batch_from, {:ok, formatted_results})
-    end
-
-    updated_state
+    RequestHandler.handle_batch_response(state, messages, batch_id)
   end
 
-  defp collect_batch_results(messages, state) do
-    Enum.reduce(messages, {%{}, state}, fn message, {results, current_state} ->
-      case message do
-        %{"id" => id} = msg when Message.is_error(msg) ->
-          {_request, new_state} = State.remove_request(current_state, id)
-          error = Error.from_json_rpc(msg["error"])
-          {Map.put(results, id, {:error, error}), new_state}
-
-        %{"id" => id} = msg when Message.is_response(msg) ->
-          {request, new_state} = State.remove_request(current_state, id)
-          response = Response.from_json_rpc(msg)
-          response_with_method = %{response | method: request && request.method}
-          {Map.put(results, id, {:ok, response_with_method}), new_state}
-
-        _ ->
-          {results, current_state}
-      end
-    end)
-  end
-
-  defp get_batch_from(batch_id, state) do
-    case State.get_batch_requests(state, batch_id) do
-      [request | _] -> {:ok, request.from}
-      [] -> :error
-    end
-  end
-
-  defp check_batch_completion(batch_id, from, state) do
-    if State.batch_complete?(state, batch_id) do
-      GenServer.reply(from, {:ok, %{}})
-    end
-  end
-
-  defp format_batch_results(results) do
-    results
-    |> Map.values()
-    |> Enum.map(fn
-      {:ok, %Response{method: "ping"} = resp} -> {:ok, %{resp | result: :pong}}
-      {:ok, %Response{} = response} -> {:ok, response}
-      {:error, _} = error -> error
-    end)
-  end
-
-  # Response handling
-
-  defp handle_error_response(%{"error" => json_error, "id" => id}, id, state) do
-    case State.remove_request(state, id) do
-      {nil, state} ->
-        log_unknown_error_response(id, json_error)
-        state
-
-      {request, updated_state} ->
-        process_error_response(request, json_error, id, updated_state)
-    end
-  end
-
-  defp log_unknown_error_response(id, json_error) do
-    Logging.client_event("unknown_error_response", %{
-      id: id,
-      code: json_error["code"],
-      message: json_error["message"]
-    })
-  end
-
-  defp process_error_response(request, json_error, id, state) do
-    error = Error.from_json_rpc(json_error)
-    elapsed_ms = Request.elapsed_time(request)
-
-    log_error_response(request, id, elapsed_ms, json_error)
-    maybe_reply_error(request, error)
-
-    state
-  end
-
-  defp log_error_response(request, id, elapsed_ms, json_error) do
-    Logging.client_event("error_response", %{
-      id: id,
-      method: request.method
-    })
-
-    Telemetry.execute(
-      Telemetry.event_client_error(),
-      %{duration: elapsed_ms, system_time: System.system_time()},
-      %{
-        id: id,
-        method: request.method,
-        error_code: json_error["code"],
-        error_message: json_error["message"]
-      }
-    )
-  end
-
-  defp maybe_reply_error(%{batch_id: nil, from: from}, error) do
-    GenServer.reply(from, {:error, error})
-  end
-
-  defp maybe_reply_error(%{batch_id: _batch_id}, _error) do
-    :ok
-  end
+  # Response handling - special case for initialize
 
   defp handle_success_response(
          %{"id" => id, "result" => %{"serverInfo" => _} = result},
@@ -1372,56 +1093,16 @@ defmodule Hermes.Client.Base do
 
         :ok = send_notification(state, "notifications/initialized")
 
-        state
+        session = Session.put_private(%{state.session | initialized: true}, %{
+          
+        })
+
+        {:ok, session} =
+          if Hermes.exported?(state.module, :init, 2),
+            do: state.module.init(result["serverInfo"], state.session)
+
+        %{state | session: session}
     end
-  end
-
-  defp handle_success_response(%{"id" => id, "result" => result}, id, state) do
-    case State.remove_request(state, id) do
-      {nil, state} ->
-        Logging.client_event("unknown_response", %{id: id})
-        state
-
-      {request, updated_state} ->
-        process_successful_response(request, result, id, updated_state)
-    end
-  end
-
-  defp process_successful_response(request, result, id, state) do
-    response = Response.from_json_rpc(%{"result" => result, "id" => id})
-    response_with_method = %{response | method: request.method}
-    elapsed_ms = Request.elapsed_time(request)
-
-    log_success_response(request, id, elapsed_ms)
-    maybe_reply_to_request(request, response_with_method)
-
-    state
-  end
-
-  defp log_success_response(request, id, elapsed_ms) do
-    Logging.client_event("success_response", %{id: id, method: request.method})
-
-    Telemetry.execute(
-      Telemetry.event_client_response(),
-      %{duration: elapsed_ms, system_time: System.system_time()},
-      %{
-        id: id,
-        method: request.method,
-        status: :success
-      }
-    )
-  end
-
-  defp maybe_reply_to_request(%{batch_id: nil, method: "ping", from: from}, _response) do
-    GenServer.reply(from, :pong)
-  end
-
-  defp maybe_reply_to_request(%{batch_id: nil, from: from}, response) do
-    GenServer.reply(from, {:ok, response})
-  end
-
-  defp maybe_reply_to_request(%{batch_id: _batch_id}, _response) do
-    :ok
   end
 
   # Notification handling
@@ -1497,8 +1178,8 @@ defmodule Hermes.Client.Base do
     progress = params["progress"]
     total = Map.get(params, "total")
 
-    if callback = State.get_progress_callback(state, progress_token) do
-      Task.start(fn -> callback.(progress_token, progress, total) end)
+    if Hermes.exported?(state.module, :handle_progress, 4) do
+      state.module.handle_progress(progress_token, progress, total, state.session)
     end
 
     state
@@ -1509,8 +1190,8 @@ defmodule Hermes.Client.Base do
     data = params["data"]
     logger = Map.get(params, "logger")
 
-    if callback = State.get_log_callback(state) do
-      Task.start(fn -> callback.(level, data, logger) end)
+    if Hermes.exported?(state.module, :handle_log, 4) do
+      state.module.handle_log(level, data, logger, state.session)
     end
 
     log_to_logger(level, data, logger)
@@ -1631,47 +1312,23 @@ defmodule Hermes.Client.Base do
     end
   end
 
-  defp handle_sampling_with_callback(id, params, state) do
-    case State.get_sampling_callback(state) do
-      nil ->
-        send_sampling_error(
-          id,
-          "No sampling callback registered",
-          "sampling_not_configured",
-          %{},
-          state
-        )
+  defp handle_sampling_with_callback(id, params, %{module: module} = state) do
+    system_prompt = params["systemPrompt"]
+    max_tokens = params["maxTokens"]
 
-      callback when is_function(callback, 1) ->
-        execute_sampling_callback(id, params, callback, state)
+    opts = if system_prompt, do: [system_prompt: system_prompt], else: []
+    opts = if max_tokens, do: opts ++ [max_tokens: max_tokens], else: opts
+
+    messages = params["messages"]
+    model_preferences = params["modelPreferences"]
+
+    case module.handle_sampling(messages, model_preferences, opts) do
+      {:reply, result, _session} ->
+        handle_sampling_result(id, result, state)
+
+      {:error, reason, _session} ->
+        send_sampling_error(id, reason, "error", %{}, state)
     end
-  end
-
-  defp execute_sampling_callback(id, params, callback, state) do
-    Task.start(fn ->
-      try do
-        case callback.(params) do
-          {:ok, result} ->
-            handle_sampling_result(id, result, state)
-
-          {:error, message} ->
-            send_sampling_error(id, message, "sampling_error", %{}, state)
-        end
-      rescue
-        e ->
-          error_message = "Sampling callback error: #{Exception.message(e)}"
-
-          send_sampling_error(
-            id,
-            error_message,
-            "sampling_callback_error",
-            %{},
-            state
-          )
-      end
-    end)
-
-    {:noreply, state}
   end
 
   defp handle_sampling_result(id, result, state) do
@@ -1736,77 +1393,5 @@ defmodule Hermes.Client.Base do
     )
 
     {:noreply, state}
-  end
-
-  # Batch operation helpers
-
-  defp prepare_batch(operations, from, batch_id, state) do
-    {messages, updated_state} =
-      build_batch_messages(operations, from, batch_id, state)
-
-    case Message.encode_batch(messages) do
-      {:ok, batch_data} -> {:ok, batch_data, updated_state}
-      error -> error
-    end
-  end
-
-  defp build_batch_messages(operations, from, batch_id, state) do
-    {messages, final_state} =
-      Enum.reduce(operations, {[], state}, fn operation, {msgs, current_state} ->
-        {message, _, new_state} =
-          build_batch_message(operation, from, batch_id, current_state)
-
-        {[message | msgs], new_state}
-      end)
-
-    {Enum.reverse(messages), final_state}
-  end
-
-  defp build_batch_message(operation, from, batch_id, state) do
-    params_with_token =
-      State.add_progress_token_to_params(operation.params, operation.progress_opts)
-
-    {request_id, new_state} =
-      State.add_request_from_operation(state, operation, from, batch_id)
-
-    message = %{
-      "jsonrpc" => "2.0",
-      "method" => operation.method,
-      "params" => params_with_token,
-      "id" => request_id
-    }
-
-    {message, request_id, new_state}
-  end
-
-  defp handle_batch_send(batch_data, batch_id, operations, state) do
-    case send_to_transport(state.transport, batch_data) do
-      :ok ->
-        log_batch_request(batch_id, operations)
-        {:noreply, state}
-
-      error ->
-        cleanup_batch_requests(batch_id, state, error)
-    end
-  end
-
-  defp log_batch_request(batch_id, operations) do
-    Telemetry.execute(
-      Telemetry.event_client_request(),
-      %{system_time: System.system_time()},
-      %{method: "batch", batch_id: batch_id, size: length(operations)}
-    )
-  end
-
-  defp cleanup_batch_requests(batch_id, state, error) do
-    batch_requests = State.get_batch_requests(state, batch_id)
-
-    final_state =
-      Enum.reduce(batch_requests, state, fn request, acc_state ->
-        {_, new_state} = State.remove_request(acc_state, request.id)
-        new_state
-      end)
-
-    {:reply, error, final_state}
   end
 end

@@ -76,12 +76,128 @@ defmodule Hermes.Client do
   """
 
   alias Hermes.Client.Base
+  alias Hermes.Client.Session
 
   @client_capabilities ~w(roots sampling)a
 
   @type capability :: :roots | :sampling
   @type capability_opts :: [list_changed?: boolean()]
   @type capabilities :: [capability() | {capability(), capability_opts()} | map()]
+
+  @doc """
+  Called after the client successfully initializes with the server.
+
+  This callback is invoked after the initialization handshake completes,
+  providing the server's information and allowing the client to set up
+  any initial state in the session.
+  """
+  @callback init(server_info :: map, Session.t()) :: {:ok, Session.t()}
+
+  @doc """
+  Handles progress notifications from the server.
+
+  Called when the server sends progress updates for operations that
+  included a progress token in the request metadata. This allows clients
+  to track long-running operations and update UI accordingly.
+  """
+  @callback handle_progress(
+              token :: String.t() | integer(),
+              progress :: number(),
+              total :: number() | nil,
+              Session.t()
+            ) :: {:noreply, Session.t()} | {:stop, reason :: term(), Session.t()}
+
+  @doc """
+  Handles log messages from the server.
+
+  Called when a server with logging capability sends log notifications.
+  This allows clients to process server-side logs for debugging or monitoring.
+  """
+  @callback handle_log(
+              level :: String.t(),
+              data :: map(),
+              logger :: String.t() | nil,
+              Session.t()
+            ) :: {:noreply, Session.t()} | {:stop, reason :: term(), Session.t()}
+
+  @doc """
+  Handles sampling requests from the server.
+
+  This callback is REQUIRED if the client declares the `:sampling` capability.
+  The server requests the client to generate content using its language model.
+  """
+  @callback handle_sampling(
+              messages :: [map()],
+              model_preferences :: map() | nil,
+              opts ::
+                list(
+                  {:system_prompt, String.t() | nil}
+                  | {:max_tokens, integer | nil}
+                ),
+              Session.t()
+            ) ::
+              {:reply, result :: map(), Session.t()}
+              | {:error, reason :: String.t(), Session.t()}
+
+  @doc """
+  Handles non-MCP messages sent to the client process.
+
+  Use this callback to integrate with external systems, handle timers,
+  or process any other messages your client needs to handle.
+  """
+  @callback handle_info(event :: term, Session.t()) ::
+              {:noreply, Session.t()}
+              | {:noreply, Session.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, Session.t()}
+
+  @doc """
+  Handles synchronous calls to the client process.
+
+  This optional callback allows you to handle custom synchronous calls made
+  to your MCP client process using `GenServer.call/2`. Useful for implementing
+  custom APIs or integrating with other parts of your application.
+  """
+  @callback handle_call(request :: term, from :: GenServer.from(), Session.t()) ::
+              {:reply, reply :: term, Session.t()}
+              | {:reply, reply :: term, Session.t(),
+                 timeout() | :hibernate | {:continue, arg :: term}}
+              | {:noreply, Session.t()}
+              | {:noreply, Session.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, reply :: term, Session.t()}
+              | {:stop, reason :: term, Session.t()}
+
+  @doc """
+  Handles asynchronous casts to the client process.
+
+  This optional callback allows you to handle custom asynchronous messages
+  sent to your MCP client process using `GenServer.cast/2`.
+  """
+  @callback handle_cast(request :: term, Session.t()) ::
+              {:noreply, Session.t()}
+              | {:noreply, Session.t(), timeout() | :hibernate | {:continue, arg :: term}}
+              | {:stop, reason :: term, Session.t()}
+
+  @doc """
+  Called when the client process is about to terminate.
+
+  This callback is invoked in the following situations:
+  - Normal termination
+  - Abnormal termination due to an error
+  - When the client is explicitly stopped
+
+  Use this to clean up resources, close connections, or perform
+  any necessary cleanup operations.
+  """
+  @callback terminate(reason :: term, Session.t()) :: term
+
+  @optional_callbacks init: 2,
+                      handle_call: 3,
+                      handle_cast: 2,
+                      handle_info: 2,
+                      terminate: 2,
+                      handle_progress: 4,
+                      handle_log: 4,
+                      handle_sampling: 4
 
   @doc """
   Guard to check if an atom is a valid client capability.
@@ -257,40 +373,6 @@ defmodule Hermes.Client do
           :ok = MyClient.set_log_level("debug")
       """
       def set_log_level(level), do: Base.set_log_level(__MODULE__, level)
-
-      @doc """
-      Registers a callback for log messages.
-
-      ## Examples
-          :ok = MyClient.register_log_callback(fn log -> IO.puts(log) end)
-      """
-      def register_log_callback(cb, opts \\ []),
-        do: Base.register_log_callback(__MODULE__, cb, opts)
-
-      @doc """
-      Unregisters the log callback.
-      """
-      def unregister_log_callback(opts \\ []),
-        do: Base.unregister_log_callback(__MODULE__, opts)
-
-      @doc """
-      Registers a callback for progress updates.
-
-      ## Examples
-          :ok = MyClient.register_progress_callback("task-1", fn progress -> 
-            IO.puts("Progress: #\{progress}")
-          end)
-      """
-      def register_progress_callback(token, callback, opts \\ []) do
-        Base.register_progress_callback(__MODULE__, token, callback, opts)
-      end
-
-      @doc """
-      Unregisters a progress callback.
-      """
-      def unregister_progress_callback(token, opts \\ []) do
-        Base.unregister_progress_callback(__MODULE__, token, opts)
-      end
 
       @doc """
       Sends a progress update for a token.

@@ -22,8 +22,6 @@ defmodule Hermes.Client.StateTest do
       assert state.protocol_version == "2024-11-05"
       assert state.transport == %{layer: :fake_transport, name: :fake_name}
       assert state.pending_requests == %{}
-      assert state.progress_callbacks == %{}
-      assert state.log_callback == nil
     end
   end
 
@@ -130,77 +128,7 @@ defmodule Hermes.Client.StateTest do
     end
   end
 
-  describe "progress callback management" do
-    test "register_progress_callback/3 registers a callback" do
-      state = new_test_state()
-      token = "test_token"
-      callback = fn _, _, _ -> :ok end
-
-      updated_state = State.register_progress_callback(state, token, callback)
-
-      assert Map.has_key?(updated_state.progress_callbacks, token)
-      assert updated_state.progress_callbacks[token] == callback
-    end
-
-    test "get_progress_callback/2 returns the callback" do
-      state = new_test_state()
-      token = "test_token"
-      callback = fn _, _, _ -> :ok end
-      state = State.register_progress_callback(state, token, callback)
-
-      result = State.get_progress_callback(state, token)
-
-      assert result == callback
-    end
-
-    test "get_progress_callback/2 returns nil if no callback is registered" do
-      state = new_test_state()
-
-      assert State.get_progress_callback(state, "nonexistent_token") == nil
-    end
-
-    test "unregister_progress_callback/2 removes the callback" do
-      state = new_test_state()
-      token = "test_token"
-      callback = fn _, _, _ -> :ok end
-      state = State.register_progress_callback(state, token, callback)
-
-      updated_state = State.unregister_progress_callback(state, token)
-
-      assert not Map.has_key?(updated_state.progress_callbacks, token)
-    end
-  end
-
-  describe "log callback management" do
-    test "set_log_callback/2 sets the callback" do
-      state = new_test_state()
-      callback = fn _, _, _ -> :ok end
-
-      updated_state = State.set_log_callback(state, callback)
-
-      assert updated_state.log_callback == callback
-    end
-
-    test "clear_log_callback/1 clears the callback" do
-      state = new_test_state()
-      callback = fn _, _, _ -> :ok end
-      state = State.set_log_callback(state, callback)
-
-      updated_state = State.clear_log_callback(state)
-
-      assert updated_state.log_callback == nil
-    end
-
-    test "get_log_callback/1 returns the callback" do
-      state = new_test_state()
-      callback = fn _, _, _ -> :ok end
-      state = State.set_log_callback(state, callback)
-
-      result = State.get_log_callback(state)
-
-      assert result == callback
-    end
-  end
+  # Callback tests removed - callbacks are now handled via module behaviour
 
   describe "update_server_info/3" do
     test "updates server capabilities and info" do
