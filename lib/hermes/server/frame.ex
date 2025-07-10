@@ -460,12 +460,20 @@ defmodule Hermes.Server.Frame do
     })
   end
 
-  @doc false
+  @doc "Clears all current registered components (tools, resources, prompts)"
+  @spec clear_components(t) :: t
+  def clear_components(%__MODULE__{} = frame) do
+    put_in(frame, [Access.key!(:private), :__mcp_components__], [])
+  end
+
+  @doc "Retrieves all current registered components (tools, resources, prompts)"
+  @spec get_components(t) :: list(server_component_t)
   def get_components(%__MODULE__{} = frame) do
     Map.get(frame.private, :__mcp_components__, [])
   end
 
   @doc false
+  @spec get_tools(t) :: list(Tool.t())
   def get_tools(%__MODULE__{} = frame) do
     frame
     |> get_components()
@@ -473,6 +481,7 @@ defmodule Hermes.Server.Frame do
   end
 
   @doc false
+  @spec get_prompts(t) :: list(Prompt.t())
   def get_prompts(%__MODULE__{} = frame) do
     frame
     |> get_components()
@@ -480,6 +489,7 @@ defmodule Hermes.Server.Frame do
   end
 
   @doc false
+  @spec get_resources(t) :: list(Resource.t())
   def get_resources(%__MODULE__{} = frame) do
     frame
     |> get_components()
@@ -487,6 +497,7 @@ defmodule Hermes.Server.Frame do
   end
 
   @doc false
+  @spec get_component(t, name :: String.t()) :: server_component_t | nil
   def get_component(%__MODULE__{} = frame, name) do
     frame
     |> get_components()
@@ -496,7 +507,7 @@ defmodule Hermes.Server.Frame do
   # Private helpers
 
   defp update_components(frame, component) do
-    components = get_components(frame)
-    put_private(frame, :__mcp_components__, [component | components])
+    components = [component | get_components(frame)]
+    put_private(frame, :__mcp_components__, Enum.uniq_by(components, & &1.name))
   end
 end
