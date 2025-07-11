@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.12.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.12.0...v0.12.1) (2025-07-11)
+
+
+### Code Refactoring
+
+* remove batch messaging feature ([#183](https://github.com/cloudwalk/hermes-mcp/issues/183)) ([99458c0](https://github.com/cloudwalk/hermes-mcp/commit/99458c0559d69addf9e22b3f7e38891e83d475de))
+
 ## [0.12.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.3...v0.12.0) (2025-07-11)
 
 
