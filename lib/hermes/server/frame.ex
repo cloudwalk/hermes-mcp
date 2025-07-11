@@ -508,6 +508,10 @@ defmodule Hermes.Server.Frame do
 
   defp update_components(frame, component) do
     components = [component | get_components(frame)]
-    put_private(frame, :__mcp_components__, Enum.uniq_by(components, & &1.name))
+    put_private(frame, :__mcp_components__, Enum.uniq_by(components, &unique_component/1))
+  end
+
+  defp unique_component(%struct{name: name}) do
+    {struct, name}
   end
 end
