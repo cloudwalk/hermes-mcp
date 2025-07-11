@@ -81,13 +81,14 @@ defmodule Hermes.Server.Transport.SSE do
           | {:post_path, String.t()}
           | GenServer.option()
 
-  defschema :parse_options, [
+  defschema(:parse_options, [
     {:server, {:required, Hermes.get_schema(:process_name)}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:base_url, {:string, {:default, ""}}},
     {:post_path, {:string, {:default, "/messages"}}},
-    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
-  ]
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}},
+    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
+  ])
 
   @doc """
   Starts the SSE transport.
@@ -215,6 +216,7 @@ defmodule Hermes.Server.Transport.SSE do
       base_url: Map.get(opts, :base_url, ""),
       post_path: Map.get(opts, :post_path, "/messages"),
       registry: opts.registry,
+      request_timeout: opts.request_timeout,
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{}
     }
@@ -249,12 +251,13 @@ defmodule Hermes.Server.Transport.SSE do
   def handle_call({:handle_message, session_id, message, context}, _from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
+    timeout = state.request_timeout
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id, context})
       {:reply, {:ok, nil}, state}
     else
-      case forward_request_to_server(server, message, session_id, context) do
+      case forward_request_to_server(server, message, session_id, context, timeout) do
         {:ok, response} ->
           maybe_send_through_sse(response, session_id, state)
 
@@ -267,9 +270,10 @@ defmodule Hermes.Server.Transport.SSE do
   def handle_call({:handle_message, session_id, messages, context}, _from, state)
       when is_list(messages) do
     server = state.registry.whereis_server(state.server)
+    timeout = state.request_timeout
 
     with {:batch, responses} <-
-           forward_batch_to_server(server, messages, session_id, context),
+           forward_batch_to_server(server, messages, session_id, context, timeout),
          {:ok, encoded} <- Message.encode_batch(responses) do
       maybe_send_through_sse(encoded, session_id, state)
     else
@@ -335,8 +339,10 @@ defmodule Hermes.Server.Transport.SSE do
     end
   end
 
-  defp forward_request_to_server(server, message, session_id, context) do
-    case GenServer.call(server, {:request, message, session_id, context}) do
+  defp forward_request_to_server(server, message, session_id, context, timeout) do
+    msg = {:request, message, session_id, context}
+
+    case GenServer.call(server, msg, timeout) do
       {:ok, response} ->
         {:ok, response}
 
@@ -355,8 +361,10 @@ defmodule Hermes.Server.Transport.SSE do
       {:error, :server_unavailable}
   end
 
-  defp forward_batch_to_server(server, messages, session_id, context) do
-    case GenServer.call(server, {:batch_request, messages, session_id, context}) do
+  defp forward_batch_to_server(server, messages, session_id, context, timeout) do
+    msg = {:batch_request, messages, session_id, context}
+
+    case GenServer.call(server, msg, timeout) do
       {:batch, responses} ->
         {:batch, responses}
 

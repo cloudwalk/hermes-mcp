@@ -38,7 +38,8 @@ defmodule Hermes.Server.Transport.STDIO do
      {:required,
       {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
     {:name, {:custom, &Hermes.genserver_name/1}},
-    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}},
+    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
   ])
 
   @doc """
@@ -106,7 +107,12 @@ defmodule Hermes.Server.Transport.STDIO do
     :ok = :io.setopts(encoding: :utf8)
     Process.flag(:trap_exit, true)
 
-    state = %{server: opts.server, reading_task: nil, registry: opts.registry}
+    state = %{
+      server: opts.server,
+      reading_task: nil,
+      registry: opts.registry,
+      request_timeout: opts.request_timeout
+    }
 
     Logger.metadata(mcp_transport: :stdio, mcp_server: state.server)
     Logging.transport_event("starting", %{transport: :stdio, server: state.server})
@@ -251,8 +257,9 @@ defmodule Hermes.Server.Transport.STDIO do
     process_message(message, state)
   end
 
-  defp process_messages([_ | _] = messages, %{server: server_name, registry: registry}) do
-    server = registry.whereis_server(server_name)
+  defp process_messages([_ | _] = messages, %{server: server_name} = state) do
+    server = state.registry.whereis_server(server_name)
+    timeout = state.request_timeout
 
     context = %{
       type: :stdio,
@@ -260,7 +267,9 @@ defmodule Hermes.Server.Transport.STDIO do
       pid: System.pid()
     }
 
-    case GenServer.call(server, {:batch_request, messages, "stdio", context}) do
+    msg = {:batch_request, messages, "stdio", context}
+
+    case GenServer.call(server, msg, timeout) do
       {:batch, responses} ->
         case Message.encode_batch(responses) do
           {:ok, batch_response} ->
@@ -285,8 +294,9 @@ defmodule Hermes.Server.Transport.STDIO do
       )
   end
 
-  defp process_message(message, %{server: server_name, registry: registry}) do
+  defp process_message(message, %{server: server_name, registry: registry} = state) do
     server = registry.whereis_server(server_name)
+    timeout = state.request_timeout
 
     context = %{
       type: :stdio,
@@ -297,7 +307,7 @@ defmodule Hermes.Server.Transport.STDIO do
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, "stdio", context})
     else
-      case GenServer.call(server, {:request, message, "stdio", context}) do
+      case GenServer.call(server, {:request, message, "stdio", context}, timeout) do
         {:ok, response} when is_binary(response) ->
           send_message(self(), response)
 

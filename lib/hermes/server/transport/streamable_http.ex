@@ -71,11 +71,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
           | {:name, GenServer.name()}
           | GenServer.option()
 
-  defschema :parse_options, [
+  defschema(:parse_options, [
     {:server, {:required, Hermes.get_schema(:process_name)}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:registry, {:atom, {:default, Hermes.Server.Registry}}}
-  ]
+    {:registry, {:atom, {:default, Hermes.Server.Registry}}},
+    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
+  ])
 
   @doc """
   Starts the StreamableHTTP transport.
@@ -207,6 +208,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     state = %{
       server: server,
       registry: opts.registry,
+      request_timeout: opts.request_timeout,
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{}
     }
@@ -245,6 +247,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_call({:handle_message, session_id, message, context}, _from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
+    timeout = state.request_timeout
 
     cond do
       Message.is_notification(message) ->
@@ -256,7 +259,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
         {:reply, {:ok, nil}, state}
 
       true ->
-        {:reply, forward_request_to_server(server, message, session_id, context), state}
+        {:reply, forward_request_to_server(server, message, session_id, context, timeout),
+         state}
     end
   end
 
@@ -332,6 +336,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   defp handle_single_message(server, message, session_id, context, state) do
+    timeout = state.request_timeout
+
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id, context})
       {:reply, {:ok, nil}, state}
@@ -339,16 +345,23 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       sse_handler? = Map.has_key?(state.sse_handlers, session_id)
 
       {:reply,
-       forward_request_to_server(server, message, session_id, context, sse_handler?),
-       state}
+       forward_request_to_server(
+         server,
+         message,
+         session_id,
+         context,
+         timeout,
+         sse_handler?
+       ), state}
     end
   end
 
   defp handle_batch(server, messages, session_id, context, state) do
     sse_handler? = Map.has_key?(state.sse_handlers, session_id)
+    timeout = state.request_timeout
+    msg = {:batch_request, messages, session_id, context}
 
-    with {:batch, responses} <-
-           GenServer.call(server, {:batch_request, messages, session_id, context}),
+    with {:batch, responses} <- GenServer.call(server, msg, timeout),
          {:ok, batch_response} <- Message.encode_batch(responses) do
       if sse_handler?,
         do: {:reply, {:sse, batch_response}, state},
@@ -367,9 +380,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
          message,
          session_id,
          context,
+         timeout,
          has_sse_handler \\ false
        ) do
-    case GenServer.call(server, {:request, message, session_id, context}) do
+    msg = {:request, message, session_id, context}
+
+    case GenServer.call(server, msg, timeout) do
       {:ok, response} when has_sse_handler ->
         {:sse, response}
 

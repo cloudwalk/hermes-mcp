@@ -17,7 +17,9 @@ defmodule Hermes.Server.Supervisor do
   @type start_option ::
           {:transport, transport}
           | {:name, Supervisor.name()}
-          | {:session_idle_timeout, pos_integer()}
+          | {:session_idle_timeout, pos_integer() | nil}
+          | {:request_timeout, pos_integer() | nil}
+          | {:server_name, GenServer.name() | nil}
 
   @doc """
   Starts the server supervisor.
@@ -30,6 +32,8 @@ defmodule Hermes.Server.Supervisor do
       * `:name` - Supervisor name (optional, defaults to registered name)
       * `:registry` - The custom registry to use to manage processes names (defaults to `Hermes.Server.Registry`)
       * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
+      * `:request_timeout` - Time limit in miliseconds for server requests timeout (defaults to 30s)
+      * `:server_name` - Custom server name, non derived from the `server_module`
 
   ## Examples
 
@@ -64,7 +68,7 @@ defmodule Hermes.Server.Supervisor do
     if should_start?(transport) do
       {layer, transport_opts} = parse_transport_child(transport, server, registry)
 
-      server_name = registry.server(server)
+      server_name = registry.server(opts[:server_name] || server)
       server_transport = [layer: layer, name: transport_opts[:name]]
 
       server_opts = [
@@ -81,10 +85,12 @@ defmodule Hermes.Server.Supervisor do
           server_opts
         end
 
+      request_timeout = Keyword.get(opts, :request_timeout, to_timeout(second: 30))
+
       children = [
         {Session.Supervisor, server: server, registry: registry},
         {Base, server_opts},
-        {layer, transport_opts}
+        {layer, Keyword.put(transport_opts, :request_timeout, request_timeout)}
       ]
 
       Supervisor.init(children, strategy: :one_for_all)
