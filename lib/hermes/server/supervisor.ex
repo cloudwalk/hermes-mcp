@@ -88,6 +88,7 @@ defmodule Hermes.Server.Supervisor do
       request_timeout = Keyword.get(opts, :request_timeout, to_timeout(second: 30))
 
       children = [
+        {Task.Supervisor, name: registry.server_handler(server)},
         {Session.Supervisor, server: server, registry: registry},
         {Base, server_opts},
         {layer, Keyword.put(transport_opts, :request_timeout, request_timeout)}

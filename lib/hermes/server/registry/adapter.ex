@@ -67,6 +67,18 @@ defmodule Hermes.Server.Registry.Adapter do
   @callback server(module :: module()) :: GenServer.name()
 
   @doc """
+  Returns a name for a server handler process (`Task.Supervisor`).
+
+  The returned value must be a valid GenServer name that can be passed
+  to `GenServer.start_link/3` and similar functions.
+
+  ## Parameters
+
+    * `module` - The module implementing the server
+  """
+  @callback server_handler(module :: module()) :: GenServer.name()
+
+  @doc """
   Returns a name for a server session process.
 
   ## Parameters

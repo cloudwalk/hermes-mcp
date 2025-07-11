@@ -58,51 +58,12 @@ defmodule Hermes.Server.Base do
   defschema(:parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
+    {:server_handler, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:session_idle_timeout,
-     {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
+    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
   ])
 
-  @doc """
-  Starts a new MCP server process.
-
-  ## Parameters
-    * `opts` - Keyword list of options:
-      * `:module` - (required) The module implementing the `Hermes.Server`
-      * `:name` - (required) Name for the GenServer process
-      * `:registry` - The custom registry module to use to call related processes
-      * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
-      * `:transport` - (required) Transport configuration
-        * `:layer` - The transport module (e.g., `Hermes.Server.Transport.STDIO`)
-        * `:name` - The registered name of the transport process
-
-  ## Examples
-
-      # Start with explicit transport configuration
-      Hermes.Server.Base.start_link(
-        module: MyServer,
-        name: {:via, Registry, {MyRegistry, :my_server}},
-        transport: [
-          layer: Hermes.Server.Transport.STDIO,
-          name: {:via, Registry, {MyRegistry, :my_transport}}
-        ]
-      )
-
-      # With custom session timeout (15 minutes)
-      Hermes.Server.Base.start_link(
-        module: MyServer,
-        name: :my_server,
-        session_idle_timeout: :timer.minutes(15),
-        transport: [
-          layer: Hermes.Server.Transport.StreamableHTTP,
-          name: :my_http_transport
-        ]
-      )
-
-      # Typical usage through Hermes.Server.Supervisor
-      Hermes.Server.Supervisor.start_link(MyServer, [], transport: :stdio)
-  """
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
   def start_link(opts) do
     opts = parse_options!(opts)
@@ -130,7 +91,8 @@ defmodule Hermes.Server.Base do
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
       frame: Frame.new(),
-      server_requests: %{}
+      server_requests: %{},
+      server_handler: opts.server_handler
     }
 
     Logging.server_event("starting", %{
@@ -158,8 +120,7 @@ defmodule Hermes.Server.Base do
           request_id = response["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
 
-          {:reply, Message.encode_response(%{"result" => result}, response["id"]),
-           new_state}
+          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
 
         {:reply, {:ok, %{"error" => error} = response}, new_state} ->
           request_id = response["id"]
@@ -612,8 +573,7 @@ defmodule Hermes.Server.Base do
 
         frame = Frame.clear_request(frame)
 
-        {:reply, {:ok, Message.build_response(response, request_id)},
-         %{state | frame: frame}}
+        {:reply, {:ok, Message.build_response(response, request_id)}, %{state | frame: frame}}
 
       {:noreply, %Frame{} = frame} ->
         Telemetry.execute(
@@ -671,8 +631,7 @@ defmodule Hermes.Server.Base do
     session = Session.get(session_name)
     state = reset_session_expiry(session_id, state)
 
-    {:ok,
-     {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
   defp maybe_attach_session(
@@ -695,8 +654,7 @@ defmodule Hermes.Server.Base do
 
         session = Session.get(session_name)
 
-        {:ok,
-         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
@@ -710,8 +668,7 @@ defmodule Hermes.Server.Base do
 
         session = Session.get(session_name)
 
-        {:ok,
-         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       error ->
         error
