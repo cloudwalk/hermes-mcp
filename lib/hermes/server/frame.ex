@@ -515,3 +515,34 @@ defmodule Hermes.Server.Frame do
     {struct, name}
   end
 end
+
+defimpl Inspect, for: Hermes.Server.Frame do
+  import Inspect.Algebra
+
+  def inspect(frame, opts) do
+    components = frame.private[:__mcp_components__] || []
+    tools_count = Enum.count(components, &match?(%Hermes.Server.Component.Tool{}, &1))
+
+    resources_count =
+      Enum.count(components, &match?(%Hermes.Server.Component.Resource{}, &1))
+
+    prompts_count = Enum.count(components, &match?(%Hermes.Server.Component.Prompt{}, &1))
+
+    info = [
+      assigns: frame.assigns,
+      initialized: frame.initialized,
+      tools: tools_count,
+      resources: resources_count,
+      prompts: prompts_count
+    ]
+
+    info = if frame.request, do: [{:request, frame.request.method} | info], else: info
+
+    info =
+      if session_id = frame.private[:session_id],
+        do: [{:session_id, session_id} | info],
+        else: info
+
+    concat(["#Frame<", to_doc(info, opts), ">"])
+  end
+end
