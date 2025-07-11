@@ -2,6 +2,34 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.12.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.3...v0.12.0) (2025-07-11)
+
+
+### Features
+
+* client sampling capability ([#170](https://github.com/cloudwalk/hermes-mcp/issues/170)) ([da617a6](https://github.com/cloudwalk/hermes-mcp/commit/da617a694dbeff1d363e7b671a31f484e202e685))
+* roots/list and completion features ([#178](https://github.com/cloudwalk/hermes-mcp/issues/178)) ([d22a6bd](https://github.com/cloudwalk/hermes-mcp/commit/d22a6bdfb92189e54455c49120abc2c7fa4f8814))
+* server components cursor pagination ([#177](https://github.com/cloudwalk/hermes-mcp/issues/177)) ([a95eba7](https://github.com/cloudwalk/hermes-mcp/commit/a95eba7cc2ffcefca99b3961b80094bb12a3912f))
+* server-side sampling capability ([#173](https://github.com/cloudwalk/hermes-mcp/issues/173)) ([c09e7f3](https://github.com/cloudwalk/hermes-mcp/commit/c09e7f3a5e95e59f5644ef12e1602b3b8621df7f))
+
+
+### Bug Fixes
+
+* allow configuring server request timeout ([#182](https://github.com/cloudwalk/hermes-mcp/issues/182)) ([e79fe2f](https://github.com/cloudwalk/hermes-mcp/commit/e79fe2f003a41517a5ff5e8f6e3fb378bdc43f11))
+* do not allow duplicate server components and more convenient API ([#180](https://github.com/cloudwalk/hermes-mcp/issues/180)) ([bc71df8](https://github.com/cloudwalk/hermes-mcp/commit/bc71df8f7c6fb877f19dada9b17c3eb342d32ccd))
+
+
+### Miscellaneous Chores
+
+* add llms summary about the library ([#175](https://github.com/cloudwalk/hermes-mcp/issues/175)) ([ed0e608](https://github.com/cloudwalk/hermes-mcp/commit/ed0e60872e5b77ddb6ffff13da6c1e20b1c2d7a2))
+* allow different kind of components have the same name ([#181](https://github.com/cloudwalk/hermes-mcp/issues/181)) ([d5ba6f5](https://github.com/cloudwalk/hermes-mcp/commit/d5ba6f56fb54ed07e46d37c2217dcf76c793762f))
+
+
+### Code Refactoring
+
+* handle_sampling callback, use frame as entrypoint for notifications ([#176](https://github.com/cloudwalk/hermes-mcp/issues/176)) ([1e88711](https://github.com/cloudwalk/hermes-mcp/commit/1e887117ba81751042534d60df79d83a8123a3d9))
+* interactive tasks now support JSON file input ([#172](https://github.com/cloudwalk/hermes-mcp/issues/172)) ([9465266](https://github.com/cloudwalk/hermes-mcp/commit/946526617171094ccf929a5d9f3bbd8e3a591f18))
+
 ## [0.11.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.11.2...v0.11.3) (2025-07-02)
 
 
