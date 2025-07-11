@@ -278,6 +278,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
+    timeout = state.request_timeout
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, session_id, context})
@@ -286,8 +287,14 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       sse_handler? = Map.has_key?(state.sse_handlers, session_id)
 
       {:reply,
-       forward_request_to_server(server, message, session_id, context, sse_handler?),
-       state}
+       forward_request_to_server(
+         server,
+         message,
+         session_id,
+         context,
+         timeout,
+         sse_handler?
+       ), state}
     end
   end
 
