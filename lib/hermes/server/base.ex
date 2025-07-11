@@ -61,7 +61,8 @@ defmodule Hermes.Server.Base do
     {:server_handler, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
+    {:session_idle_timeout,
+     {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
   ])
 
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
@@ -120,7 +121,8 @@ defmodule Hermes.Server.Base do
           request_id = response["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
 
-          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
+          {:reply, Message.encode_response(%{"result" => result}, response["id"]),
+           new_state}
 
         {:reply, {:ok, %{"error" => error} = response}, new_state} ->
           request_id = response["id"]
@@ -242,12 +244,7 @@ defmodule Hermes.Server.Base do
       {:noreply, state}
     else
       {:error, err} ->
-        Logging.server_event(
-          "failed_send_notification",
-          %{
-            method: method,
-            error: err
-          },
+        Logging.server_event("failed_send_notification", %{method: method, error: err},
           level: :error
         )
 
@@ -500,49 +497,6 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/roots/list_changed"} = notification,
-         session,
-         state
-       ) do
-    Logging.server_event("client_roots_list_changed", %{session_id: session.id})
-
-    Telemetry.execute(
-      Telemetry.event_server_notification(),
-      %{system_time: System.system_time()},
-      %{method: "roots/list_changed", session_id: session.id}
-    )
-
-    server_notification(notification, state)
-  end
-
-  defp handle_notification(
-         %{"method" => "notifications/progress"} = notification,
-         session,
-         state
-       ) do
-    params = notification["params"] || %{}
-
-    Logging.server_event("client_progress", %{
-      session_id: session.id,
-      progress_token: params["progressToken"],
-      progress: params["progress"],
-      total: params["total"]
-    })
-
-    Telemetry.execute(
-      Telemetry.event_server_notification(),
-      %{system_time: System.system_time()},
-      %{
-        method: "progress",
-        session_id: session.id,
-        progress_token: params["progressToken"]
-      }
-    )
-
-    server_notification(notification, state)
-  end
-
   defp handle_notification(notification, _session, state) do
     method = notification["method"]
 
@@ -573,7 +527,8 @@ defmodule Hermes.Server.Base do
 
         frame = Frame.clear_request(frame)
 
-        {:reply, {:ok, Message.build_response(response, request_id)}, %{state | frame: frame}}
+        {:reply, {:ok, Message.build_response(response, request_id)},
+         %{state | frame: frame}}
 
       {:noreply, %Frame{} = frame} ->
         Telemetry.execute(
@@ -631,7 +586,8 @@ defmodule Hermes.Server.Base do
     session = Session.get(session_name)
     state = reset_session_expiry(session_id, state)
 
-    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+    {:ok,
+     {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
   defp maybe_attach_session(
@@ -654,7 +610,8 @@ defmodule Hermes.Server.Base do
 
         session = Session.get(session_name)
 
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+        {:ok,
+         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       {:error, {:already_started, pid}} ->
         ref = Process.monitor(pid)
@@ -668,7 +625,8 @@ defmodule Hermes.Server.Base do
 
         session = Session.get(session_name)
 
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+        {:ok,
+         {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
 
       error ->
         error
@@ -772,10 +730,7 @@ defmodule Hermes.Server.Base do
 
         Logging.server_event(
           "failed_send_sampling_request",
-          %{
-            request_id: request_id,
-            error: error
-          },
+          %{request_id: request_id, error: error},
           level: :error
         )
 
@@ -806,11 +761,7 @@ defmodule Hermes.Server.Base do
         {:noreply, state}
 
       {_request_info, updated_requests} ->
-        Logging.server_event(
-          "sampling_request_timeout",
-          %{
-            request_id: request_id
-          },
+        Logging.server_event("sampling_request_timeout", %{request_id: request_id},
           level: :warning
         )
 
@@ -869,7 +820,6 @@ defmodule Hermes.Server.Base do
       level: :error
     )
 
-    # Just acknowledge we handled it
     {:noreply, state}
   end
 
@@ -890,6 +840,7 @@ defmodule Hermes.Server.Base do
       Process.send_after(self(), {:roots_request_timeout, request_id}, timeout)
 
     request_info = %{
+      id: request_id,
       method: "roots/list",
       session_id: state.frame.private.session_id,
       timer_ref: timer_ref
@@ -913,10 +864,7 @@ defmodule Hermes.Server.Base do
 
         Logging.server_event(
           "failed_send_roots_request",
-          %{
-            request_id: request_id,
-            error: error
-          },
+          %{request_id: request_id, error: error},
           level: :error
         )
 
@@ -924,34 +872,32 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  defp handle_roots_timeout(request_id, state) do
-    case Map.pop(state.server_requests, request_id) do
-      {nil, _} ->
-        {:noreply, state}
+  defp handle_roots_timeout(request_id, state) when is_binary(request_id) do
+    state.server_requests
+    |> Map.pop(request_id)
+    |> handle_roots_timeout(state)
+  end
 
-      {_request_info, updated_requests} ->
-        with {:ok, notification} <-
-               encode_notification("notifications/cancelled", %{
-                 "requestId" => request_id,
-                 "reason" => "timeout"
-               }),
-             :ok <- send_to_transport(state.transport, notification) do
-          Logging.server_event(
-            "roots_request_timeout_cancelled",
-            %{request_id: request_id}
-          )
-        end
+  defp handle_roots_timeout({nil, _}, state), do: {:noreply, state}
 
-        Logging.server_event(
-          "roots_request_timeout",
-          %{
-            request_id: request_id
-          },
-          level: :warning
-        )
-
-        {:noreply, %{state | server_requests: updated_requests}}
+  defp handle_roots_timeout({%{id: request_id}, requests}, state) do
+    with {:ok, notification} <-
+           encode_notification("notifications/cancelled", %{
+             "requestId" => request_id,
+             "reason" => "timeout"
+           }),
+         :ok <- send_to_transport(state.transport, notification) do
+      Logging.server_event(
+        "roots_request_timeout_cancelled",
+        %{request_id: request_id}
+      )
     end
+
+    Logging.server_event("roots_request_timeout", %{request_id: request_id},
+      level: :warning
+    )
+
+    {:noreply, %{state | server_requests: requests}}
   end
 
   defp handle_roots(roots, request_id, %{module: module} = state) do
