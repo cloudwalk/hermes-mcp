@@ -267,21 +267,6 @@ defmodule Hermes.Server.Transport.SSE do
     end
   end
 
-  def handle_call({:handle_message, session_id, messages, context}, _from, state)
-      when is_list(messages) do
-    server = state.registry.whereis_server(state.server)
-    timeout = state.request_timeout
-
-    with {:batch, responses} <-
-           forward_batch_to_server(server, messages, session_id, context, timeout),
-         {:ok, encoded} <- Message.encode_batch(responses) do
-      maybe_send_through_sse(encoded, session_id, state)
-    else
-      {:error, reason} ->
-        {:reply, {:error, reason}, state}
-    end
-  end
-
   @impl GenServer
   def handle_call({:get_sse_handler, session_id}, _from, state) do
     case Map.get(state.sse_handlers, session_id) do
@@ -358,31 +343,6 @@ defmodule Hermes.Server.Transport.SSE do
   catch
     :exit, reason ->
       Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
-      {:error, :server_unavailable}
-  end
-
-  defp forward_batch_to_server(server, messages, session_id, context, timeout) do
-    msg = {:batch_request, messages, session_id, context}
-
-    case GenServer.call(server, msg, timeout) do
-      {:batch, responses} ->
-        {:batch, responses}
-
-      {:error, reason} ->
-        Logging.transport_event(
-          "batch_server_error",
-          %{reason: reason, session_id: session_id},
-          level: :error
-        )
-
-        {:error, reason}
-    end
-  catch
-    :exit, reason ->
-      Logging.transport_event("batch_server_call_failed", %{reason: reason},
-        level: :error
-      )
-
       {:error, :server_unavailable}
   end
 

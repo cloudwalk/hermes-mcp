@@ -10,7 +10,6 @@ defmodule Hermes.Client.Base do
   alias Hermes.Client.Request
   alias Hermes.Client.State
   alias Hermes.MCP.Error
-  alias Hermes.MCP.ID
   alias Hermes.MCP.Message
   alias Hermes.MCP.Response
   alias Hermes.Protocol
@@ -692,43 +691,6 @@ defmodule Hermes.Client.Base do
   end
 
   @doc """
-  Sends a batch of operations to the server.
-
-  ## Parameters
-
-    * `client` - The client process
-    * `operations` - List of Operation structs to send as a batch
-
-  ## Returns
-
-    * `{:ok, results}` - A list of results in the same order as the operations.
-      Each result is either `{:ok, response}` or `{:error, error}`.
-    * `{:error, reason}` - If the entire batch fails (e.g., transport error)
-
-  ## Example
-
-      operations = [
-        Operation.new(%{method: "ping", params: %{}}),
-        Operation.new(%{method: "tools/list", params: %{}})
-      ]
-      
-      {:ok, results} = Hermes.Client.send_batch(client, operations)
-      # results is a list: [{:ok, :pong}, {:ok, tools_response}]
-  """
-  @spec send_batch(t, [Operation.t()]) ::
-          {:ok, [{:ok, any()} | {:error, Error.t()}]} | {:error, Error.t()}
-  def send_batch(client, [_ | _] = operations) do
-    max_timeout = Enum.max_by(operations, & &1.timeout).timeout
-    buffer_timeout = max_timeout + to_timeout(second: 1)
-
-    GenServer.call(client, {:batch_operations, operations}, buffer_timeout)
-  end
-
-  def send_batch(_client, []) do
-    {:error, Error.protocol(:invalid_request, %{message: "Batch cannot be empty"})}
-  end
-
-  @doc """
   Registers a callback function to handle sampling requests from the server.
 
   The callback function will be called when the server sends a `sampling/createMessage` request.
@@ -963,30 +925,6 @@ defmodule Hermes.Client.Base do
     end
   end
 
-  def handle_call({:batch_operations, operations}, from, state) do
-    if Protocol.supports_feature?(state.protocol_version, :json_rpc_batching) do
-      batch_id = ID.generate_batch_id()
-
-      case prepare_batch(operations, from, batch_id, state) do
-        {:ok, batch_data, updated_state} ->
-          handle_batch_send(batch_data, batch_id, operations, updated_state)
-
-        {:error, _} = error ->
-          {:reply, error, state}
-      end
-    else
-      error =
-        Error.protocol(:invalid_request, %{
-          message: "Batch operations require protocol version 2025-03-26 or later",
-          feature: "batch operations",
-          protocol_version: state.protocol_version,
-          required_version: "2025-03-26"
-        })
-
-      {:reply, {:error, error}, state}
-    end
-  end
-
   @impl true
   def handle_continue(:roots_list_changed, state) do
     Task.start(fn -> send_roots_list_changed_notification(state) end)
@@ -1032,8 +970,8 @@ defmodule Hermes.Client.Base do
   @impl true
   def handle_cast({:response, response_data}, state) do
     case Message.decode(response_data) do
-      {:ok, messages} when is_list(messages) ->
-        {:noreply, handle_messages(messages, state)}
+      {:ok, [message]} ->
+        {:noreply, handle_message(message, state)}
 
       {:error, error} ->
         Logging.client_event("decode_failed", %{error: error}, level: :warning)
@@ -1127,11 +1065,7 @@ defmodule Hermes.Client.Base do
             message: "Request timed out after #{elapsed_ms}ms"
           })
 
-        if is_nil(request.batch_id) do
-          GenServer.reply(request.from, {:error, error})
-        else
-          check_batch_completion(request.batch_id, request.from, updated_state)
-        end
+        GenServer.reply(request.from, {:error, error})
 
         _ = send_cancellation(updated_state, request_id, "timeout")
 
@@ -1185,29 +1119,7 @@ defmodule Hermes.Client.Base do
 
   # Message handling
 
-  defp handle_messages(messages, state) do
-    batch_ids =
-      messages
-      |> Enum.map(&get_message_batch_id(&1, state))
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-
-    case batch_ids do
-      [batch_id] -> handle_batch_response(messages, batch_id, state)
-      _ -> Enum.reduce(messages, state, &handle_single_message/2)
-    end
-  end
-
-  defp get_message_batch_id(%{"id" => id}, state) when not is_nil(id) do
-    case State.get_request(state, id) do
-      %{batch_id: batch_id} when not is_nil(batch_id) -> batch_id
-      _ -> nil
-    end
-  end
-
-  defp get_message_batch_id(_, _), do: nil
-
-  defp handle_single_message(message, state) do
+  defp handle_message(message, state) do
     cond do
       Message.is_error(message) ->
         Logging.message("incoming", "error", message["id"], message)
@@ -1229,66 +1141,6 @@ defmodule Hermes.Client.Base do
       true ->
         state
     end
-  end
-
-  defp handle_batch_response(messages, batch_id, state) do
-    batch_from =
-      case get_batch_from(batch_id, state) do
-        {:ok, from} -> from
-        _ -> nil
-      end
-
-    {results, updated_state} = collect_batch_results(messages, state)
-
-    if State.batch_complete?(updated_state, batch_id) and not is_nil(batch_from) do
-      formatted_results = format_batch_results(results)
-      GenServer.reply(batch_from, {:ok, formatted_results})
-    end
-
-    updated_state
-  end
-
-  defp collect_batch_results(messages, state) do
-    Enum.reduce(messages, {%{}, state}, fn message, {results, current_state} ->
-      case message do
-        %{"id" => id} = msg when Message.is_error(msg) ->
-          {_request, new_state} = State.remove_request(current_state, id)
-          error = Error.from_json_rpc(msg["error"])
-          {Map.put(results, id, {:error, error}), new_state}
-
-        %{"id" => id} = msg when Message.is_response(msg) ->
-          {request, new_state} = State.remove_request(current_state, id)
-          response = Response.from_json_rpc(msg)
-          response_with_method = %{response | method: request && request.method}
-          {Map.put(results, id, {:ok, response_with_method}), new_state}
-
-        _ ->
-          {results, current_state}
-      end
-    end)
-  end
-
-  defp get_batch_from(batch_id, state) do
-    case State.get_batch_requests(state, batch_id) do
-      [request | _] -> {:ok, request.from}
-      [] -> :error
-    end
-  end
-
-  defp check_batch_completion(batch_id, from, state) do
-    if State.batch_complete?(state, batch_id) do
-      GenServer.reply(from, {:ok, %{}})
-    end
-  end
-
-  defp format_batch_results(results) do
-    results
-    |> Map.values()
-    |> Enum.map(fn
-      {:ok, %Response{method: "ping"} = resp} -> {:ok, %{resp | result: :pong}}
-      {:ok, %Response{} = response} -> {:ok, response}
-      {:error, _} = error -> error
-    end)
   end
 
   # Response handling
@@ -1317,7 +1169,7 @@ defmodule Hermes.Client.Base do
     elapsed_ms = Request.elapsed_time(request)
 
     log_error_response(request, id, elapsed_ms, json_error)
-    maybe_reply_error(request, error)
+    GenServer.reply(request.from, {:error, error})
 
     state
   end
@@ -1338,14 +1190,6 @@ defmodule Hermes.Client.Base do
         error_message: json_error["message"]
       }
     )
-  end
-
-  defp maybe_reply_error(%{batch_id: nil, from: from}, error) do
-    GenServer.reply(from, {:error, error})
-  end
-
-  defp maybe_reply_error(%{batch_id: _batch_id}, _error) do
-    :ok
   end
 
   defp handle_success_response(
@@ -1389,11 +1233,17 @@ defmodule Hermes.Client.Base do
 
   defp process_successful_response(request, result, id, state) do
     response = Response.from_json_rpc(%{"result" => result, "id" => id})
-    response_with_method = %{response | method: request.method}
+    response = %{response | method: request.method}
     elapsed_ms = Request.elapsed_time(request)
 
     log_success_response(request, id, elapsed_ms)
-    maybe_reply_to_request(request, response_with_method)
+
+    method = request.method
+    from = request.from
+
+    if method == "ping",
+      do: GenServer.reply(from, :pong),
+      else: GenServer.reply(from, {:ok, response})
 
     state
   end
@@ -1410,18 +1260,6 @@ defmodule Hermes.Client.Base do
         status: :success
       }
     )
-  end
-
-  defp maybe_reply_to_request(%{batch_id: nil, method: "ping", from: from}, _response) do
-    GenServer.reply(from, :pong)
-  end
-
-  defp maybe_reply_to_request(%{batch_id: nil, from: from}, response) do
-    GenServer.reply(from, {:ok, response})
-  end
-
-  defp maybe_reply_to_request(%{batch_id: _batch_id}, _response) do
-    :ok
   end
 
   # Notification handling
@@ -1736,77 +1574,5 @@ defmodule Hermes.Client.Base do
     )
 
     {:noreply, state}
-  end
-
-  # Batch operation helpers
-
-  defp prepare_batch(operations, from, batch_id, state) do
-    {messages, updated_state} =
-      build_batch_messages(operations, from, batch_id, state)
-
-    case Message.encode_batch(messages) do
-      {:ok, batch_data} -> {:ok, batch_data, updated_state}
-      error -> error
-    end
-  end
-
-  defp build_batch_messages(operations, from, batch_id, state) do
-    {messages, final_state} =
-      Enum.reduce(operations, {[], state}, fn operation, {msgs, current_state} ->
-        {message, _, new_state} =
-          build_batch_message(operation, from, batch_id, current_state)
-
-        {[message | msgs], new_state}
-      end)
-
-    {Enum.reverse(messages), final_state}
-  end
-
-  defp build_batch_message(operation, from, batch_id, state) do
-    params_with_token =
-      State.add_progress_token_to_params(operation.params, operation.progress_opts)
-
-    {request_id, new_state} =
-      State.add_request_from_operation(state, operation, from, batch_id)
-
-    message = %{
-      "jsonrpc" => "2.0",
-      "method" => operation.method,
-      "params" => params_with_token,
-      "id" => request_id
-    }
-
-    {message, request_id, new_state}
-  end
-
-  defp handle_batch_send(batch_data, batch_id, operations, state) do
-    case send_to_transport(state.transport, batch_data) do
-      :ok ->
-        log_batch_request(batch_id, operations)
-        {:noreply, state}
-
-      error ->
-        cleanup_batch_requests(batch_id, state, error)
-    end
-  end
-
-  defp log_batch_request(batch_id, operations) do
-    Telemetry.execute(
-      Telemetry.event_client_request(),
-      %{system_time: System.system_time()},
-      %{method: "batch", batch_id: batch_id, size: length(operations)}
-    )
-  end
-
-  defp cleanup_batch_requests(batch_id, state, error) do
-    batch_requests = State.get_batch_requests(state, batch_id)
-
-    final_state =
-      Enum.reduce(batch_requests, state, fn request, acc_state ->
-        {_, new_state} = State.remove_request(acc_state, request.id)
-        new_state
-      end)
-
-    {:reply, error, final_state}
   end
 end

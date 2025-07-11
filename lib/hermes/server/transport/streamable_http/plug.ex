@@ -122,19 +122,16 @@ if Code.ensure_loaded?(Plug) do
     defp handle_post(conn, %{transport: transport, session_header: session_header} = opts) do
       with :ok <- validate_accept_header(conn),
            {:ok, body, conn} <- maybe_read_request_body(conn, opts),
-           {:ok, messages} <- maybe_parse_messages(body) do
-        session_id = determine_session_id(conn, session_header, messages)
+           {:ok, [message]} <- maybe_parse_messages(body) do
+        session_id = determine_session_id(conn, session_header, message)
         context = build_request_context(conn)
 
         Logging.transport_event("parsed_messages", %{
-          messages: messages,
-          is_batch: length(messages) > 1,
+          message: message,
           session_id: session_id
         })
 
-        messages
-        |> prepare_message_or_batch()
-        |> process_message(conn, transport, session_id, context, session_header)
+        process_message(message, conn, transport, session_id, context, session_header)
       else
         {:error, :invalid_accept_header} ->
           send_error(
@@ -161,9 +158,6 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp prepare_message_or_batch([single]), do: single
-    defp prepare_message_or_batch(batch), do: batch
-
     defp process_message(message, conn, transport, session_id, context, session_header)
          when is_map(message) do
       if Message.is_request(message) do
@@ -179,25 +173,6 @@ if Code.ensure_loaded?(Plug) do
         # Notification
         transport
         |> StreamableHTTP.handle_message(session_id, message, context)
-        |> format_notification_response(conn)
-      end
-    end
-
-    defp process_message(batch, conn, transport, session_id, context, session_header)
-         when is_list(batch) do
-      if Enum.any?(batch, &Message.is_request/1) do
-        handle_request_with_possible_sse(
-          conn,
-          transport,
-          session_id,
-          batch,
-          context,
-          session_header
-        )
-      else
-        # All notifications
-        transport
-        |> StreamableHTTP.handle_message(session_id, batch, context)
         |> format_notification_response(conn)
       end
     end
@@ -442,13 +417,12 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    # initialize request can't be batched
     defp determine_session_id(_conn, _header, [message])
          when Message.is_initialize(message) do
       ID.generate_session_id()
     end
 
-    defp determine_session_id(conn, session_header, _messages) do
+    defp determine_session_id(conn, session_header, _message) do
       get_or_create_session_id(conn, session_header)
     end
 
@@ -475,15 +449,6 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp maybe_parse_messages(body) when is_list(body) do
-      Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, messages} ->
-        case maybe_parse_messages(msg) do
-          {:ok, parsed} -> {:cont, {:ok, messages ++ parsed}}
-          err -> {:halt, err}
-        end
-      end)
-    end
-
     defp maybe_add_session_header(conn, session_header, session_id) do
       if get_req_header(conn, session_header) == [] do
         put_resp_header(conn, session_header, session_id)
@@ -500,12 +465,6 @@ if Code.ensure_loaded?(Plug) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}
       end
-    end
-
-    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _)
-         when is_list(json_array) do
-      # Phoenix parses JSON arrays into _json parameter
-      {:ok, json_array, conn}
     end
 
     defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}

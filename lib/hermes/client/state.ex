@@ -37,36 +37,6 @@ defmodule Hermes.Client.State do
     roots: %{}
   ]
 
-  @doc """
-  Creates a new client state with the given options.
-
-  ## Parameters
-
-    * `opts` - Map containing the initialization options
-
-  ## Options
-
-    * `:client_info` - Information about the client (required)
-    * `:capabilities` - Client capabilities to advertise
-    * `:protocol_version` - Protocol version to use
-    * `:request_timeout` - Default timeout for requests in milliseconds
-    * `:transport` - Transport configuration
-
-  ## Examples
-
-      iex> Hermes.Client.State.new(%{
-      ...>   client_info: %{"name" => "MyClient", "version" => "1.0.0"},
-      ...>   capabilities: %{"resources" => %{}},
-      ...>   protocol_version: "2024-11-05",
-      ...>   transport: %{layer: Hermes.Transport.SSE, name: MyTransport}
-      ...> })
-      %Hermes.Client.State{
-        client_info: %{"name" => "MyClient", "version" => "1.0.0"},
-        capabilities: %{"resources" => %{}},
-        protocol_version: "2024-11-05",
-        transport: %{layer: Hermes.Transport.SSE, name: MyTransport}
-      }
-  """
   @spec new(map()) :: t()
   def new(opts) do
     %__MODULE__{
@@ -77,38 +47,9 @@ defmodule Hermes.Client.State do
     }
   end
 
-  @doc """
-  Adds a new request to the state from an Operation and returns the request ID and updated state.
-
-  This function:
-  1. Processes the operation details
-  2. Creates a new request with a unique ID
-  3. Sets up the timeout timer
-  4. Registers any progress callbacks
-  5. Updates the state with the new request
-
-  ## Parameters
-
-    * `state` - The current client state
-    * `operation` - The operation to perform
-    * `from` - The GenServer.from for the caller
-
-  ## Examples
-
-      iex> operation = Operation.new(%{method: "ping", params: %{}})
-      iex> {req_id, updated_state} = Hermes.Client.State.add_request_from_operation(state, operation, {pid, ref})
-      iex> is_binary(req_id)
-      true
-      iex> map_size(updated_state.pending_requests) > map_size(state.pending_requests)
-      true
-  """
-  @spec add_request_from_operation(
-          t(),
-          Operation.t(),
-          GenServer.from(),
-          String.t() | nil
-        ) :: {String.t(), t()}
-  def add_request_from_operation(state, %Operation{} = operation, from, batch_id \\ nil) do
+  @spec add_request_from_operation(t(), Operation.t(), GenServer.from()) ::
+          {String.t(), t()}
+  def add_request_from_operation(state, %Operation{} = operation, from) do
     state = register_progress_callback_from_opts(state, operation.progress_opts)
 
     request_id = ID.generate_request_id()
@@ -121,8 +62,7 @@ defmodule Hermes.Client.State do
         id: request_id,
         method: operation.method,
         from: from,
-        timer_ref: timer_ref,
-        batch_id: batch_id
+        timer_ref: timer_ref
       })
 
     pending_requests = Map.put(state.pending_requests, request_id, request)
@@ -607,45 +547,6 @@ defmodule Hermes.Client.State do
     else
       state
     end
-  end
-
-  @doc """
-  Gets all requests for a specific batch ID.
-
-  ## Parameters
-
-    * `state` - The current client state
-    * `batch_id` - The batch ID to filter by
-
-  ## Examples
-
-      iex> requests = Hermes.Client.State.get_batch_requests(state, "batch_123")
-      iex> Enum.all?(requests, &(&1.batch_id == "batch_123"))
-      true
-  """
-  @spec get_batch_requests(t(), String.t()) :: [Request.t()]
-  def get_batch_requests(state, batch_id) do
-    state.pending_requests
-    |> Map.values()
-    |> Enum.filter(&(&1.batch_id == batch_id))
-  end
-
-  @doc """
-  Checks if all requests in a batch have been completed.
-
-  ## Parameters
-
-    * `state` - The current client state
-    * `batch_id` - The batch ID to check
-
-  ## Examples
-
-      iex> Hermes.Client.State.batch_complete?(state, "batch_123")
-      true
-  """
-  @spec batch_complete?(t(), String.t()) :: boolean()
-  def batch_complete?(state, batch_id) do
-    get_batch_requests(state, batch_id) == []
   end
 
   @doc """

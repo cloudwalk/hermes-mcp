@@ -13,7 +13,6 @@ defmodule Hermes.Server.Transport.STDIO do
 
   import Peri
 
-  alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
@@ -246,52 +245,11 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case Message.decode(data) do
       {:ok, messages} ->
-        process_messages(messages, state)
+        process_message(messages, state)
 
       {:error, reason} ->
         Logging.transport_event("parse_error", %{reason: reason}, level: :error)
     end
-  end
-
-  defp process_messages([message], state) do
-    process_message(message, state)
-  end
-
-  defp process_messages([_ | _] = messages, %{server: server_name} = state) do
-    server = state.registry.whereis_server(server_name)
-    timeout = state.request_timeout
-
-    context = %{
-      type: :stdio,
-      env: System.get_env(),
-      pid: System.pid()
-    }
-
-    msg = {:batch_request, messages, "stdio", context}
-
-    case GenServer.call(server, msg, timeout) do
-      {:batch, responses} ->
-        case Message.encode_batch(responses) do
-          {:ok, batch_response} ->
-            send_message(self(), batch_response)
-
-          {:error, reason} ->
-            Logging.transport_event("batch_encode_error", %{reason: reason},
-              level: :error
-            )
-        end
-
-      {:error, error} ->
-        case Error.to_json_rpc(error) do
-          {:ok, error_response} -> send_message(self(), error_response)
-          _ -> Logging.transport_event("batch_error", %{error: error}, level: :error)
-        end
-    end
-  catch
-    :exit, reason ->
-      Logging.transport_event("server_batch_call_failed", %{reason: reason},
-        level: :error
-      )
   end
 
   defp process_message(message, %{server: server_name, registry: registry} = state) do

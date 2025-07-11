@@ -186,12 +186,11 @@ if Code.ensure_loaded?(Plug) do
 
     defp handle_post_message(conn, %{transport: transport} = opts) do
       with {:ok, body, conn} <- maybe_read_request_body(conn, opts),
-           {:ok, messages} <- maybe_parse_messages(body) do
+           {:ok, [message]} <- maybe_parse_messages(body) do
         session_id = extract_session_id(conn)
         context = build_request_context(conn)
 
-        messages
-        |> prepare_message_or_batch()
+        message
         |> then(fn msg ->
           SSE.handle_message(transport, session_id, msg, context)
         end)
@@ -214,9 +213,6 @@ if Code.ensure_loaded?(Plug) do
           )
       end
     end
-
-    defp prepare_message_or_batch([single]), do: single
-    defp prepare_message_or_batch(batch), do: batch
 
     defp send_response({:ok, nil}, conn) do
       conn
@@ -284,15 +280,6 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp maybe_parse_messages(body) when is_list(body) do
-      Enum.reduce_while(body, {:ok, []}, fn msg, {:ok, messages} ->
-        case maybe_parse_messages(msg) do
-          {:ok, parsed} -> {:cont, {:ok, messages ++ parsed}}
-          err -> {:halt, err}
-        end
-      end)
-    end
-
     defp maybe_read_request_body(
            %{body_params: %Unfetched{aspect: :body_params}} = conn,
            %{timeout: timeout}
@@ -301,11 +288,6 @@ if Code.ensure_loaded?(Plug) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}
       end
-    end
-
-    defp maybe_read_request_body(%{body_params: %{"_json" => json_array}} = conn, _)
-         when is_list(json_array) do
-      {:ok, json_array, conn}
     end
 
     defp maybe_read_request_body(%{body_params: body} = conn, _), do: {:ok, body, conn}

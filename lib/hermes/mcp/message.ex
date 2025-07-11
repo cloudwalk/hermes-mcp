@@ -270,9 +270,6 @@ defmodule Hermes.MCP.Message do
      ]}
   )
 
-  # Batch schema for JSON-RPC batching (2025-03-26)
-  defschema(:batch_schema, {:list, get_schema(:mcp_message_schema)})
-
   # generic guards
 
   @doc """
@@ -391,8 +388,6 @@ defmodule Hermes.MCP.Message do
   @doc """
   Decodes raw data (possibly containing multiple messages) into JSON-RPC messages.
 
-  Handles both single messages and batch messages (arrays).
-
   Returns either:
   - `{:ok, messages}` where messages is a list of parsed JSON-RPC messages
   - `{:error, reason}` if parsing fails
@@ -411,7 +406,6 @@ defmodule Hermes.MCP.Message do
 
   defp decode_line(line) do
     case JSON.decode(line) do
-      {:ok, messages} when is_list(messages) -> messages
       {:ok, message} when is_map(message) -> [message]
       {:ok, _} -> [:invalid]
       {:error, _} -> [:invalid]
@@ -638,31 +632,6 @@ defmodule Hermes.MCP.Message do
     do: Map.put(params, "logger", logger)
 
   @doc """
-  Encodes a batch of JSON-RPC messages.
-
-  This function uses Peri schema validation and always returns a JSON array.
-
-  ## Parameters
-
-    * `messages` - A list of complete JSON-RPC message maps
-    * `batch_schema` - Optional Peri schema for batch validation (defaults to :batch_schema)
-
-  Returns `{:ok, encoded_batch}` if successful, or `{:error, reason}` if validation fails.
-  """
-  @spec encode_batch([map()], term() | nil) :: {:ok, String.t()} | {:error, term()}
-  def encode_batch(messages, batch_schema \\ get_schema(:batch_schema))
-      when is_list(messages) do
-    case Peri.validate(batch_schema, messages) do
-      {:ok, validated_messages} ->
-        batch_json = JSON.encode!(validated_messages)
-        {:ok, batch_json <> "\n"}
-
-      {:error, _} = error ->
-        error
-    end
-  end
-
-  @doc """
   Returns the progress notification parameters schema for 2025-03-26 (with message field).
   """
   def progress_params_schema_2025, do: @progress_notif_params_schema_2025
@@ -674,13 +643,6 @@ defmodule Hermes.MCP.Message do
 
   @doc """
   Builds a response message map without encoding to JSON.
-
-  This is useful for batch processing where we need the raw map.
-
-  ## Parameters
-
-    * `result` - The result data
-    * `id` - The response ID
     
   ## Examples
 
@@ -694,13 +656,6 @@ defmodule Hermes.MCP.Message do
 
   @doc """
   Builds an error message map without encoding to JSON.
-
-  This is useful for batch processing where we need the raw map.
-
-  ## Parameters
-
-    * `error` - The error map with code, message, and optional data
-    * `id` - The error response ID
     
   ## Examples
 
@@ -715,13 +670,6 @@ defmodule Hermes.MCP.Message do
   @doc """
   Builds a notification message map without encoding to JSON.
 
-  This is useful for batch processing where we need the raw map.
-
-  ## Parameters
-
-    * `method` - The notification method
-    * `params` - The notification parameters
-    
   ## Examples
 
       iex> Message.build_notification("notifications/message", %{"level" => "info", "data" => "test"})

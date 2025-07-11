@@ -51,7 +51,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   import Peri
 
-  alias Hermes.MCP.Error
   alias Hermes.MCP.Message
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
@@ -264,16 +263,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     end
   end
 
-  def handle_call({:handle_message, session_id, messages, context}, _from, state)
-      when is_list(messages) do
-    server = state.registry.whereis_server(state.server)
-
-    case messages do
-      [message] -> handle_single_message(server, message, session_id, context, state)
-      messages -> handle_batch(server, messages, session_id, context, state)
-    end
-  end
-
   @impl GenServer
   def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state)
       when is_map(message) do
@@ -295,16 +284,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
          timeout,
          sse_handler?
        ), state}
-    end
-  end
-
-  def handle_call({:handle_message_for_sse, session_id, messages, context}, _from, state)
-      when is_list(messages) do
-    server = state.registry.whereis_server(state.server)
-
-    case messages do
-      [message] -> handle_single_message(server, message, session_id, context, state)
-      messages -> handle_batch(server, messages, session_id, context, state)
     end
   end
 
@@ -340,46 +319,6 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     end
 
     {:reply, :ok, state}
-  end
-
-  defp handle_single_message(server, message, session_id, context, state) do
-    timeout = state.request_timeout
-
-    if Message.is_notification(message) do
-      GenServer.cast(server, {:notification, message, session_id, context})
-      {:reply, {:ok, nil}, state}
-    else
-      sse_handler? = Map.has_key?(state.sse_handlers, session_id)
-
-      {:reply,
-       forward_request_to_server(
-         server,
-         message,
-         session_id,
-         context,
-         timeout,
-         sse_handler?
-       ), state}
-    end
-  end
-
-  defp handle_batch(server, messages, session_id, context, state) do
-    sse_handler? = Map.has_key?(state.sse_handlers, session_id)
-    timeout = state.request_timeout
-    msg = {:batch_request, messages, session_id, context}
-
-    with {:batch, responses} <- GenServer.call(server, msg, timeout),
-         {:ok, batch_response} <- Message.encode_batch(responses) do
-      if sse_handler?,
-        do: {:reply, {:sse, batch_response}, state},
-        else: {:reply, {:ok, batch_response}, state}
-    else
-      {:error, %Error{} = error} ->
-        {:reply, Error.to_json_rpc(error), state}
-
-      {:error, reason} ->
-        {:reply, {:error, Error.protocol(:internal_error, %{reason: reason})}, state}
-    end
   end
 
   defp forward_request_to_server(
