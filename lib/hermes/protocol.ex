@@ -35,8 +35,6 @@ defmodule Hermes.Protocol do
                          :ping,
                          :roots,
                          :sampling,
-                         # New features in 2025-03-26
-                         :json_rpc_batching,
                          :authorization,
                          :audio_content,
                          :tool_annotations,
@@ -145,7 +143,7 @@ defmodule Hermes.Protocol do
   ## Examples
 
       iex> features = Hermes.Protocol.get_features("2025-03-26")
-      iex> MapSet.member?(features, :json_rpc_batching)
+      iex> MapSet.member?(features, :authorization)
       true
   """
   @spec get_features(version()) :: MapSet.t(feature())
@@ -162,9 +160,6 @@ defmodule Hermes.Protocol do
     * `feature` - The feature to check
 
   ## Examples
-
-      iex> Hermes.Protocol.supports_feature?("2025-03-26", :json_rpc_batching)
-      true
 
       iex> Hermes.Protocol.supports_feature?("2024-11-05", :authorization)
       false

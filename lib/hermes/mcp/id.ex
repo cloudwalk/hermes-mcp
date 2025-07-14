@@ -95,23 +95,6 @@ defmodule Hermes.MCP.ID do
   end
 
   @doc """
-  Generates a unique batch ID.
-
-  Creates a standard ID with a "batch_" prefix for clarity.
-  Batch IDs are used to track JSON-RPC batch operations.
-
-  ## Examples
-
-      iex> id = Hermes.MCP.ID.generate_batch_id()
-      iex> String.starts_with?(id, "batch_")
-      true
-  """
-  @spec generate_batch_id() :: String.t()
-  def generate_batch_id do
-    "batch_" <> generate()
-  end
-
-  @doc """
   Extracts timestamp from an ID for debugging purposes.
 
   This is primarily useful for troubleshooting timing issues or

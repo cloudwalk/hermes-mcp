@@ -9,7 +9,6 @@ defmodule Hermes.Server.Base do
   alias Hermes.MCP.Error
   alias Hermes.MCP.ID
   alias Hermes.MCP.Message
-  alias Hermes.Protocol
   alias Hermes.Server
   alias Hermes.Server.Frame
   alias Hermes.Server.Session
@@ -173,14 +172,6 @@ defmodule Hermes.Server.Base do
           if request_id, do: Session.complete_request(session.name, request_id)
           {:reply, {:error, error}, new_state}
       end
-    end
-  end
-
-  def handle_call({:batch_request, messages, session_id, context}, _from, state)
-      when is_list(messages) do
-    with {:ok, {%Session{} = session, state}} <-
-           maybe_attach_session(session_id, context, state) do
-      handle_batch_request(messages, session, state)
     end
   end
 
@@ -409,81 +400,6 @@ defmodule Hermes.Server.Base do
       })
 
     {:reply, {:error, error}, state}
-  end
-
-  defp handle_batch_request([], _session, state) do
-    error = Error.protocol(:invalid_request, %{message: "Batch cannot be empty"})
-    {:reply, {:error, error}, state}
-  end
-
-  defp handle_batch_request(messages, session, state) do
-    cond do
-      Enum.any?(messages, &Message.is_initialize/1) ->
-        error =
-          Error.protocol(:invalid_request, %{
-            message: "Initialize request cannot be part of a batch"
-          })
-
-        {:reply, {:error, error}, state}
-
-      is_nil(session.protocol_version) or not Session.is_initialized(session) ->
-        {responses, updated_state} = process_batch_messages(messages, session, state)
-        {:reply, {:batch, responses}, updated_state}
-
-      Protocol.supports_feature?(session.protocol_version, :json_rpc_batching) ->
-        {responses, updated_state} = process_batch_messages(messages, session, state)
-        {:reply, {:batch, responses}, updated_state}
-
-      true ->
-        {:reply,
-         {:error,
-          Error.protocol(:invalid_request, %{
-            message: "Batch operations require protocol version 2025-03-26 or later",
-            feature: "batch operations",
-            protocol_version: session.protocol_version,
-            required_version: "2025-03-26"
-          })}, state}
-    end
-  end
-
-  defp process_batch_messages(messages, session, state) do
-    {responses, final_state} =
-      Enum.reduce(messages, {[], state}, fn message, {acc_responses, acc_state} ->
-        case process_single_message(message, session, acc_state) do
-          {nil, new_state} -> {acc_responses, new_state}
-          {response, new_state} -> {[response | acc_responses], new_state}
-        end
-      end)
-
-    {Enum.reverse(responses), final_state}
-  end
-
-  defp process_single_message(message, session, state) do
-    cond do
-      Message.is_notification(message) ->
-        {:noreply, new_state} = handle_notification(message, session, state)
-        {nil, new_state}
-
-      Message.is_ping(message) ->
-        {:reply, {:ok, response}, new_state} = handle_server_ping(message, state)
-        {response, new_state}
-
-      not Session.is_initialized(session) ->
-        {:reply, {:ok, response}, new_state} = handle_server_not_initialized(state)
-        {response, new_state}
-
-      Message.is_request(message) ->
-        {:reply, {:ok, response}, new_state} =
-          handle_request(message, session, state)
-
-        {response, new_state}
-
-      true ->
-        error =
-          Error.protocol(:invalid_request, %{message: "Invalid message in batch"})
-
-        {Error.build_json_rpc(error, Map.get(message, "id")), state}
-    end
   end
 
   # Request handling

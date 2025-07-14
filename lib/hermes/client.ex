@@ -362,15 +362,6 @@ defmodule Hermes.Client do
           :ok = MyClient.close()
       """
       def close, do: Base.close(__MODULE__)
-
-      @doc """
-      Sends a batch of requests for the server. Check `Hermes.Client.Operation` to learn more.
-
-      ## Examples
-          operations = [%Operation{method: "ping", params: %{}}]
-          MyClient.send_batch(operations)
-      """
-      def send_batch(operations), do: Base.send_batch(__MODULE__, operations)
     end
   end
 
