@@ -110,6 +110,17 @@ defmodule Hermes.Client.Supervisor do
 
   defp parse_transport_config({:stdio, opts}), do: {STDIO, opts}
   defp parse_transport_config({:streamable_http, opts}), do: {StreamableHTTP, opts}
-  defp parse_transport_config({:sse, opts}), do: {SSE, opts}
+  
+  defp parse_transport_config({:sse, opts}) do
+    IO.warn(
+      "The :sse transport option is deprecated as of MCP specification 2025-03-26. " <>
+        "Please use {:streamable_http, opts} instead. " <>
+        "The SSE transport is maintained only for backward compatibility with MCP protocol version 2024-11-05.",
+      []
+    )
+    
+    {SSE, opts}
+  end
+  
   defp parse_transport_config({:websocket, opts}), do: {Websocket, opts}
 end

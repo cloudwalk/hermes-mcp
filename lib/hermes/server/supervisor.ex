@@ -134,6 +134,13 @@ defmodule Hermes.Server.Supervisor do
   end
 
   defp parse_transport_child({:sse, opts}, server, registry) do
+    IO.warn(
+      "The :sse transport option is deprecated as of MCP specification 2025-03-26. " <>
+        "Please use {:streamable_http, opts} instead. " <>
+        "The SSE transport is maintained only for backward compatibility with MCP protocol version 2024-11-05.",
+      []
+    )
+    
     name = registry.transport(server, :sse)
     opts = Keyword.merge(opts, name: name, server: server, registry: registry)
     {SSE, opts}

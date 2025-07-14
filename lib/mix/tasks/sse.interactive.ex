@@ -4,6 +4,15 @@ defmodule Mix.Tasks.Hermes.Sse.Interactive do
   @moduledoc """
   Mix task to test the SSE transport implementation, interactively sending commands.
 
+  > #### Deprecated {: .warning}
+  >
+  > This task uses the deprecated SSE transport. As of MCP specification 2025-03-26,
+  > the HTTP+SSE transport has been replaced by the Streamable HTTP transport.
+  >
+  > For testing new servers, please use `mix hermes.streamable_http.interactive` instead.
+  > This task is maintained for backward compatibility with servers using the
+  > 2024-11-05 protocol version.
+
   ## Options
 
   * `--base-url` - Base URL for the SSE server (default: http://localhost:8000)

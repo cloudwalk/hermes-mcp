@@ -3,6 +3,19 @@ if Code.ensure_loaded?(Plug) do
     @moduledoc """
     A Plug implementation for the SSE (Server-Sent Events) transport.
 
+    > #### Deprecated {: .warning}
+    >
+    > This Plug has been deprecated as of MCP specification 2025-03-26 in favor
+    > of the Streamable HTTP transport (`Hermes.Server.Transport.StreamableHTTP.Plug`).
+    >
+    > The HTTP+SSE transport from protocol version 2024-11-05 has been replaced by
+    > the more flexible Streamable HTTP transport which supports optional SSE streaming
+    > on a single endpoint.
+    >
+    > For new implementations, please use `Hermes.Server.Transport.StreamableHTTP.Plug` instead.
+    > This module is maintained for backward compatibility with clients using the
+    > 2024-11-05 protocol version.
+
     This plug handles the MCP HTTP+SSE protocol as specified in MCP 2024-11-05.
     It provides two separate endpoints:
 
@@ -68,6 +81,8 @@ if Code.ensure_loaded?(Plug) do
     - 405: Method not allowed
     - 500: Internal server error
     """
+
+    @deprecated "Use Hermes.Server.Transport.StreamableHTTP.Plug instead"
 
     @behaviour Plug
 
