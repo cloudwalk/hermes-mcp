@@ -66,10 +66,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "GET endpoint" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
 
       {:ok, transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       opts = StreamableHTTPPlug.init(server: StubServer)
@@ -136,10 +138,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Now start the StreamableHTTP transport
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
+      start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       opts = StreamableHTTPPlug.init(server: StubServer)
@@ -200,10 +205,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "DELETE endpoint" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
 
       {:ok, transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       opts = StreamableHTTPPlug.init(server: StubServer)
@@ -237,10 +244,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
   describe "unsupported methods" do
     setup %{registry: registry} do
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
 
       {:ok, _transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       opts = StreamableHTTPPlug.init(server: StubServer)
@@ -285,10 +294,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
 
       # Now start the StreamableHTTP transport
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
+      start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       opts = StreamableHTTPPlug.init(server: StubServer)

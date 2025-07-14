@@ -21,6 +21,11 @@ defmodule MockCustomRegistry do
   end
 
   @impl Adapter
+  def task_supervisor(server_module) do
+    {:via, __MODULE__, {:task_supervisor, server_module}}
+  end
+
+  @impl Adapter
   def server(server_module) do
     {:via, __MODULE__, {:server, server_module}}
   end

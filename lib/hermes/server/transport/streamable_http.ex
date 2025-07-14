@@ -74,7 +74,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:server, {:required, Hermes.get_schema(:process_name)}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
+    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}},
+    {:task_supervisor, {:required, {:custom, &Hermes.genserver_name/1}}}
   ])
 
   @doc """
@@ -208,8 +209,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       server: server,
       registry: opts.registry,
       request_timeout: opts.request_timeout,
+      task_supervisor: opts.task_supervisor,
       # Map of session_id => {pid, monitor_ref}
-      sse_handlers: %{}
+      sse_handlers: %{},
+      active_tasks: %{}
     }
 
     Logger.metadata(mcp_transport: :streamable_http, mcp_server: server)
@@ -243,7 +246,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message, context}, _from, state)
+  def handle_call({:handle_message, session_id, message, context}, from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
     timeout = state.request_timeout
@@ -258,13 +261,23 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
         {:reply, {:ok, nil}, state}
 
       true ->
-        {:reply, forward_request_to_server(server, message, session_id, context, timeout),
-         state}
+        task =
+          Task.Supervisor.async(state.task_supervisor, fn ->
+            forward_request_to_server(server, message, session_id, context, timeout)
+          end)
+
+        task_info = %{
+          type: :handle_message,
+          session_id: session_id,
+          from: from
+        }
+
+        {:noreply, put_in(state.active_tasks[task.ref], task_info)}
     end
   end
 
   @impl GenServer
-  def handle_call({:handle_message_for_sse, session_id, message, context}, _from, state)
+  def handle_call({:handle_message_for_sse, session_id, message, context}, from, state)
       when is_map(message) do
     server = state.registry.whereis_server(state.server)
     timeout = state.request_timeout
@@ -275,15 +288,26 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     else
       sse_handler? = Map.has_key?(state.sse_handlers, session_id)
 
-      {:reply,
-       forward_request_to_server(
-         server,
-         message,
-         session_id,
-         context,
-         timeout,
-         sse_handler?
-       ), state}
+      task =
+        Task.Supervisor.async(state.task_supervisor, fn ->
+          forward_request_to_server(
+            server,
+            message,
+            session_id,
+            context,
+            timeout,
+            sse_handler?
+          )
+        end)
+
+      task_info = %{
+        type: :handle_message_for_sse,
+        session_id: session_id,
+        from: from,
+        has_sse_handler: sse_handler?
+      }
+
+      {:noreply, put_in(state.active_tasks[task.ref], task_info)}
     end
   end
 
@@ -385,8 +409,41 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:stop, :normal, state}
   end
 
+  # Handle successful task completion
   @impl GenServer
-  def handle_info({:DOWN, ref, :process, pid, _reason}, state) do
+  def handle_info({ref, result}, %{active_tasks: active_tasks} = state)
+      when is_reference(ref) and is_map_key(active_tasks, ref) do
+    {task_info, active_tasks} = Map.pop(active_tasks, ref)
+    GenServer.reply(task_info.from, result)
+    Process.demonitor(ref, [:flush])
+
+    {:noreply, %{state | active_tasks: active_tasks}}
+  end
+
+  def handle_info({_ref, _}, state), do: {:noreply, state}
+
+  def handle_info(
+        {:DOWN, ref, :process, _pid, reason},
+        %{active_tasks: active_tasks} = state
+      )
+      when is_map_key(active_tasks, ref) do
+    {task_info, active_tasks} = Map.pop(active_tasks, ref)
+    error = {:error, {:task_crashed, reason}}
+    GenServer.reply(task_info.from, error)
+
+    Logging.transport_event(
+      "task_crashed",
+      %{
+        reason: inspect(reason, pretty: true),
+        session_id: task_info.session_id
+      },
+      level: :error
+    )
+
+    {:noreply, %{state | active_tasks: active_tasks}}
+  end
+
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     sse_handlers =
       state.sse_handlers
       |> Enum.reject(fn {_session_id, {handler_pid, monitor_ref}} ->
@@ -394,12 +451,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       end)
       |> Map.new()
 
-    Logging.transport_event("sse_handler_down", %{handler_pid: inspect(pid)})
+    if map_size(sse_handlers) < map_size(state.sse_handlers) do
+      Logging.transport_event("sse_handler_down", %{reason: inspect(reason)})
+    end
 
     {:noreply, %{state | sse_handlers: sse_handlers}}
   end
 
-  @impl GenServer
   def handle_info(_msg, state) do
     {:noreply, state}
   end

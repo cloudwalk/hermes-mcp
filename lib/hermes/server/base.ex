@@ -58,7 +58,6 @@ defmodule Hermes.Server.Base do
   defschema(:parse_options, [
     {:module, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
-    {:server_handler, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
     {:session_idle_timeout,
@@ -92,8 +91,7 @@ defmodule Hermes.Server.Base do
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
       frame: Frame.new(),
-      server_requests: %{},
-      server_handler: opts.server_handler
+      server_requests: %{}
     }
 
     Logging.server_event("starting", %{

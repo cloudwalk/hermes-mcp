@@ -11,8 +11,11 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
     test "starts with valid options" do
       server = Hermes.Server.Registry.server(StubServer)
       name = Hermes.Server.Registry.transport(StubServer, :streamable_http)
+      sup = Hermes.Server.Registry.task_supervisor(StubServer)
 
-      assert {:ok, pid} = StreamableHTTP.start_link(server: server, name: name)
+      assert {:ok, pid} =
+               StreamableHTTP.start_link(server: server, name: name, task_supervisor: sup)
+
       assert Process.alive?(pid)
 
       assert Hermes.Server.Registry.whereis_transport(StubServer, :streamable_http) ==
@@ -30,10 +33,13 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
     setup do
       registry = Hermes.Server.Registry
       name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
+      start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
         start_supervised(
-          {StreamableHTTP, server: StubServer, name: name, registry: registry}
+          {StreamableHTTP,
+           server: StubServer, name: name, registry: registry, task_supervisor: sup}
         )
 
       %{transport: transport, server: StubServer}

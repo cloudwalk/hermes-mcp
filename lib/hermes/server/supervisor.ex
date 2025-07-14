@@ -87,11 +87,19 @@ defmodule Hermes.Server.Supervisor do
 
       request_timeout = Keyword.get(opts, :request_timeout, to_timeout(second: 30))
 
+      task_supervisor = registry.task_supervisor(server)
+
+      transport_opts =
+        Keyword.merge(transport_opts,
+          request_timeout: request_timeout,
+          task_supervisor: task_supervisor
+        )
+
       children = [
-        {Task.Supervisor, name: registry.server_handler(server)},
+        {Task.Supervisor, name: task_supervisor},
         {Session.Supervisor, server: server, registry: registry},
         {Base, server_opts},
-        {layer, Keyword.put(transport_opts, :request_timeout, request_timeout)}
+        {layer, transport_opts}
       ]
 
       Supervisor.init(children, strategy: :one_for_all)
