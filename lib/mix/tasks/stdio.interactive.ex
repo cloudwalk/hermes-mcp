@@ -45,9 +45,7 @@ defmodule Mix.Tasks.Hermes.Stdio.Interactive do
     header = UI.header("HERMES MCP STDIO INTERACTIVE")
     IO.puts(header)
 
-    IO.puts(
-      "#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n"
-    )
+    IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
       IO.puts(

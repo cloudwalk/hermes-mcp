@@ -240,9 +240,7 @@ defmodule Hermes.Transport.SSE do
         {:reply, :ok, state}
 
       {:ok, %Finch.Response{status: status, body: body}} ->
-        Logging.transport_event("http_error", %{status: status, body: body},
-          level: :error
-        )
+        Logging.transport_event("http_error", %{status: status, body: body}, level: :error)
 
         {:reply, {:error, {:http_error, status, body}}, state}
 
@@ -252,16 +250,12 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_info(
-        {:endpoint, endpoint},
-        %{client: client, server_url: server_url} = state
-      ) do
+  def handle_info({:endpoint, endpoint}, %{client: client, server_url: server_url} = state) do
     case URI.new(endpoint) do
       {:ok, endpoint} ->
         GenServer.cast(client, :initialize)
 
-        {:noreply,
-         %{state | message_url: parse_message_url(URI.parse(server_url), endpoint)}}
+        {:noreply, %{state | message_url: parse_message_url(URI.parse(server_url), endpoint)}}
 
       {:error, _} = err ->
         {:stop, err, state}
@@ -282,10 +276,7 @@ defmodule Hermes.Transport.SSE do
     {:noreply, state}
   end
 
-  def handle_info(
-        {:DOWN, _ref, :process, pid, reason},
-        %{stream_task: %Task{pid: pid}} = state
-      ) do
+  def handle_info({:DOWN, _ref, :process, pid, reason}, %{stream_task: %Task{pid: pid}} = state) do
     Logging.transport_event("stream_terminated", %{reason: reason}, level: :error)
 
     Telemetry.execute(

@@ -17,8 +17,13 @@ jobs:
 
     strategy:
       matrix:
-        elixir: [1.19.0-rc.0]
-        otp: [27.3]
+        include:
+          - elixir: 1.18
+            otp: 28
+          - elixir: 1.18
+            otp: 27
+          - elixir: 1.18
+            otp: 26
 
     steps:
       - name: Checkout code
@@ -72,8 +77,13 @@ jobs:
 
     strategy:
       matrix:
-        elixir: [1.19.0-rc.0]
-        otp: [27.3]
+        include:
+          - elixir: 1.18
+            otp: 28
+          - elixir: 1.18
+            otp: 27
+          - elixir: 1.18
+            otp: 26
 
     steps:
       - name: Checkout code
@@ -140,8 +150,13 @@ jobs:
 
     strategy:
       matrix:
-        elixir: [1.19.0-rc.0]
-        otp: [27.3]
+        include:
+          - elixir: 1.18
+            otp: 28
+          - elixir: 1.18
+            otp: 27
+          - elixir: 1.18
+            otp: 26
 
     steps:
       - name: Checkout code

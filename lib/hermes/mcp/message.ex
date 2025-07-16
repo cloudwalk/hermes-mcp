@@ -70,9 +70,7 @@ defmodule Hermes.MCP.Message do
   }
 
   @completion_complete_params_schema %{
-    "ref" =>
-      {:required,
-       {:oneof, [@completion_prompt_ref_schema, @completion_resource_ref_schema]}},
+    "ref" => {:required, {:oneof, [@completion_prompt_ref_schema, @completion_resource_ref_schema]}},
     "argument" => {:required, @completion_argument_schema}
   }
 
@@ -101,9 +99,7 @@ defmodule Hermes.MCP.Message do
 
   @message_schema %{
     "role" => {:required, {:enum, ~w(user assistant system)}},
-    "content" =>
-      {:required,
-       {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}}
+    "content" => {:required, {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}}
   }
 
   @model_preferences_schema %{
@@ -138,38 +134,27 @@ defmodule Hermes.MCP.Message do
     end
   end
 
-  defp parse_request_params_by_method(%{"method" => "initialize"}),
-    do: {:ok, @init_params_schema}
+  defp parse_request_params_by_method(%{"method" => "initialize"}), do: {:ok, @init_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "ping"}),
-    do: {:ok, @ping_params_schema}
+  defp parse_request_params_by_method(%{"method" => "ping"}), do: {:ok, @ping_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "resources/list"}),
-    do: {:ok, @resources_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "resources/list"}), do: {:ok, @resources_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "resources/read"}),
-    do: {:ok, @resources_read_params_schema}
+  defp parse_request_params_by_method(%{"method" => "resources/read"}), do: {:ok, @resources_read_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "prompts/list"}),
-    do: {:ok, @prompts_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "prompts/list"}), do: {:ok, @prompts_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "prompts/get"}),
-    do: {:ok, @prompts_get_params_schema}
+  defp parse_request_params_by_method(%{"method" => "prompts/get"}), do: {:ok, @prompts_get_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "tools/list"}),
-    do: {:ok, @tools_list_params_schema}
+  defp parse_request_params_by_method(%{"method" => "tools/list"}), do: {:ok, @tools_list_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "tools/call"}),
-    do: {:ok, @tools_call_params_schema}
+  defp parse_request_params_by_method(%{"method" => "tools/call"}), do: {:ok, @tools_call_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "logging/setLevel"}),
-    do: {:ok, @set_log_level_params_schema}
+  defp parse_request_params_by_method(%{"method" => "logging/setLevel"}), do: {:ok, @set_log_level_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "completion/complete"}),
-    do: {:ok, @completion_complete_params_schema}
+  defp parse_request_params_by_method(%{"method" => "completion/complete"}), do: {:ok, @completion_complete_params_schema}
 
-  defp parse_request_params_by_method(%{"method" => "sampling/createMessage"}),
-    do: {:ok, @sampling_create_params}
+  defp parse_request_params_by_method(%{"method" => "sampling/createMessage"}), do: {:ok, @sampling_create_params}
 
   defp parse_request_params_by_method(%{"method" => "roots/list"}), do: {:ok, :map}
   defp parse_request_params_by_method(_), do: {:ok, :map}
@@ -219,9 +204,7 @@ defmodule Hermes.MCP.Message do
   defp parse_notification_params_by_method(%{"method" => "notifications/message"}),
     do: {:ok, @logging_message_notif_params_schema}
 
-  defp parse_notification_params_by_method(%{
-         "method" => "notifications/roots/list_changed"
-       }), do: {:ok, :map}
+  defp parse_notification_params_by_method(%{"method" => "notifications/roots/list_changed"}), do: {:ok, :map}
 
   defp parse_notification_params_by_method(_), do: {:ok, :map}
 
@@ -233,9 +216,7 @@ defmodule Hermes.MCP.Message do
 
   defschema(:sampling_result_schema, %{
     "role" => {:required, {:literal, "assistant"}},
-    "content" =>
-      {:required,
-       {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}},
+    "content" => {:required, {:oneof, [@text_content_schema, @image_content_schema, @audio_content_schema]}},
     "model" => {:required, :string},
     "stopReason" => {:string, {:default, "endTurn"}}
   })
@@ -507,8 +488,7 @@ defmodule Hermes.MCP.Message do
   """
   @spec encode_progress_notification(map(), term() | nil) ::
           {:ok, String.t()} | {:error, term()}
-  def encode_progress_notification(params, params_schema \\ @progress_notif_params_schema)
-      when is_map(params) do
+  def encode_progress_notification(params, params_schema \\ @progress_notif_params_schema) when is_map(params) do
     # Validate params against the provided schema
     case Peri.validate(params_schema, params) do
       {:ok, validated_params} ->
@@ -543,8 +523,7 @@ defmodule Hermes.MCP.Message do
         ) ::
           {:ok, String.t()} | {:error, term()}
   def encode_progress_notification(progress_token, progress, total)
-      when (is_binary(progress_token) or is_integer(progress_token)) and
-             is_number(progress) do
+      when (is_binary(progress_token) or is_integer(progress_token)) and is_number(progress) do
     params = %{
       "progressToken" => progress_token,
       "progress" => progress
@@ -628,8 +607,7 @@ defmodule Hermes.MCP.Message do
 
   defp maybe_add_logger(params, nil), do: params
 
-  defp maybe_add_logger(params, logger) when is_binary(logger),
-    do: Map.put(params, "logger", logger)
+  defp maybe_add_logger(params, logger) when is_binary(logger), do: Map.put(params, "logger", logger)
 
   @doc """
   Returns the progress notification parameters schema for 2025-03-26 (with message field).

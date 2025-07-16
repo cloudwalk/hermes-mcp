@@ -497,9 +497,7 @@ defmodule Hermes.Client.BaseTest do
       progress_token = "unregister_test_token"
 
       :ok =
-        Hermes.Client.Base.register_progress_callback(client, progress_token, fn _,
-                                                                                 _,
-                                                                                 _ ->
+        Hermes.Client.Base.register_progress_callback(client, progress_token, fn _, _, _ ->
           send(test_pid, :should_not_be_called)
         end)
 

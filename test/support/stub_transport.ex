@@ -12,7 +12,7 @@ defmodule StubTransport do
   alias Hermes.MCP.ID
   alias Hermes.MCP.Message
 
-  require Hermes.MCP.Message
+  require Message
 
   @type state :: %{
           messages: [String.t()],
@@ -171,8 +171,7 @@ defmodule StubTransport do
     end
   end
 
-  defp forward_to_server(message, state)
-       when Message.is_response(message) or Message.is_error(message) do
+  defp forward_to_server(message, state) when Message.is_response(message) or Message.is_error(message) do
     name = Hermes.Server.Registry.server(StubServer)
     GenServer.cast(name, {:response, message, state.session_id, %{}})
   end

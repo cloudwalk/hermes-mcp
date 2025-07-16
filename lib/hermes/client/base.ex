@@ -15,7 +15,7 @@ defmodule Hermes.Client.Base do
   alias Hermes.Protocol
   alias Hermes.Telemetry
 
-  require Hermes.MCP.Message
+  require Message
 
   @default_protocol_version Protocol.latest_version()
 
@@ -35,9 +35,7 @@ defmodule Hermes.Client.Base do
     - The return value is ignored
   """
   @type progress_callback ::
-          (progress_token :: String.t() | integer(),
-           progress :: number(),
-           total :: number() | nil ->
+          (progress_token :: String.t() | integer(), progress :: number(), total :: number() | nil ->
              any())
 
   @typedoc """
@@ -387,8 +385,7 @@ defmodule Hermes.Client.Base do
   Returns {:ok, result} if successful, {:error, reason} otherwise.
   """
   @spec set_log_level(t, String.t()) :: {:ok, Response.t()} | {:error, Error.t()}
-  def set_log_level(client, level)
-      when level in ~w(debug info notice warning error critical alert emergency) do
+  def set_log_level(client, level) when level in ~w(debug info notice warning error critical alert emergency) do
     operation =
       Operation.new(%{
         method: "logging/setLevel",
@@ -506,8 +503,7 @@ defmodule Hermes.Client.Base do
         ) ::
           :ok
   def register_progress_callback(client, progress_token, callback, opts \\ [])
-      when is_function(callback, 3) and
-             (is_binary(progress_token) or is_integer(progress_token)) do
+      when is_function(callback, 3) and (is_binary(progress_token) or is_integer(progress_token)) do
     timeout = opts[:timeout] || to_timeout(second: 5)
 
     GenServer.call(
@@ -554,8 +550,7 @@ defmodule Hermes.Client.Base do
         ) ::
           :ok | {:error, term()}
   def send_progress(client, progress_token, progress, total \\ nil, opts \\ [])
-      when is_number(progress) and
-             (is_binary(progress_token) or is_integer(progress_token)) do
+      when is_number(progress) and (is_binary(progress_token) or is_integer(progress_token)) do
     timeout = opts[:timeout] || to_timeout(second: 5)
 
     GenServer.call(
@@ -1036,10 +1031,7 @@ defmodule Hermes.Client.Base do
     end
   end
 
-  defp handle_server_request(
-         %{"method" => "sampling/createMessage", "id" => id} = request,
-         state
-       ) do
+  defp handle_server_request(%{"method" => "sampling/createMessage", "id" => id} = request, state) do
     params = Map.get(request, "params", %{})
 
     case validate_sampling_capability(state) do
@@ -1192,11 +1184,7 @@ defmodule Hermes.Client.Base do
     )
   end
 
-  defp handle_success_response(
-         %{"id" => id, "result" => %{"serverInfo" => _} = result},
-         id,
-         state
-       ) do
+  defp handle_success_response(%{"id" => id, "result" => %{"serverInfo" => _} = result}, id, state) do
     case State.remove_request(state, id) do
       {nil, state} ->
         state
@@ -1276,31 +1264,19 @@ defmodule Hermes.Client.Base do
     handle_cancelled_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/resources/list_changed"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/resources/list_changed"} = notification, state) do
     handle_resources_list_changed_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/resources/updated"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/resources/updated"} = notification, state) do
     handle_resource_updated_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/prompts/list_changed"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/prompts/list_changed"} = notification, state) do
     handle_prompts_list_changed_notification(notification, state)
   end
 
-  defp handle_notification(
-         %{"method" => "notifications/tools/list_changed"} = notification,
-         state
-       ) do
+  defp handle_notification(%{"method" => "notifications/tools/list_changed"} = notification, state) do
     handle_tools_list_changed_notification(notification, state)
   end
 
@@ -1366,9 +1342,7 @@ defmodule Hermes.Client.Base do
         _ -> :info
       end
 
-    Logging.client_event("server_log", %{level: level, data: data, logger: logger},
-      level: elixir_level
-    )
+    Logging.client_event("server_log", %{level: level, data: data, logger: logger}, level: elixir_level)
   end
 
   defp handle_resources_list_changed_notification(_notification, state) do

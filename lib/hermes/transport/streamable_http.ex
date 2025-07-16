@@ -159,9 +159,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:reply, {:error, :session_expired}, %{state | session_id: nil}}
 
       {:error, reason} ->
-        Logging.transport_event("http_request_error", %{reason: inspect(reason)},
-          level: :error
-        )
+        Logging.transport_event("http_request_error", %{reason: inspect(reason)}, level: :error)
 
         log_error(reason)
         {:reply, {:error, reason}, state}
@@ -202,8 +200,7 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, _ref, :process, pid, reason}, state)
-      when state.sse_task != nil do
+  def handle_info({:DOWN, _ref, :process, pid, reason}, state) when state.sse_task != nil do
     if pid == state.sse_task.pid do
       Logging.transport_event("sse_task_down", %{reason: reason})
       new_state = maybe_start_sse_connection(%{state | sse_task: nil})
@@ -286,8 +283,7 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:noreply, new_state}
 
       {_, content_type} ->
-        {:reply, {:error, {:unsupported_content_type, content_type}},
-         %{new_state | active_request: nil}}
+        {:reply, {:error, {:unsupported_content_type, content_type}}, %{new_state | active_request: nil}}
     end
   end
 
@@ -332,8 +328,7 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   defp put_session_header(headers, nil), do: headers
 
-  defp put_session_header(headers, session_id),
-    do: Map.put(headers, "mcp-session-id", session_id)
+  defp put_session_header(headers, session_id), do: Map.put(headers, "mcp-session-id", session_id)
 
   defp update_session_id(state, headers) do
     case get_header(headers, "mcp-session-id") do
@@ -467,6 +462,5 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   defp put_last_event_id_header(headers, nil), do: headers
 
-  defp put_last_event_id_header(headers, event_id),
-    do: Map.put(headers, "last-event-id", event_id)
+  defp put_last_event_id_header(headers, event_id), do: Map.put(headers, "last-event-id", event_id)
 end

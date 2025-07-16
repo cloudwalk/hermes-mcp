@@ -8,8 +8,8 @@ defmodule Hermes.Logging do
     quote do
       alias Hermes.Logging
 
-      require Hermes.Logging
       require Logger
+      require Logging
     end
   end
 

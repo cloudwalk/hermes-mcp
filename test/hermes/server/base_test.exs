@@ -96,9 +96,7 @@ defmodule Hermes.Server.BaseTest do
     setup do
       start_supervised!(Hermes.Server.Registry)
 
-      start_supervised!(
-        {Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry}
-      )
+      start_supervised!({Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry})
 
       :ok
     end

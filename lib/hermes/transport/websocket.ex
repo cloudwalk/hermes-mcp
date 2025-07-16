@@ -202,11 +202,7 @@ if Code.ensure_loaded?(:gun) do
     end
 
     @impl GenServer
-    def handle_call(
-          {:send, message},
-          _from,
-          %{gun_pid: pid, stream_ref: stream_ref} = state
-        )
+    def handle_call({:send, message}, _from, %{gun_pid: pid, stream_ref: stream_ref} = state)
         when not is_nil(pid) and not is_nil(stream_ref) do
       metadata = %{
         transport: :websocket,
@@ -224,9 +220,7 @@ if Code.ensure_loaded?(:gun) do
       {:reply, :ok, state}
     rescue
       e ->
-        Logging.transport_event("ws_send_failed", %{error: Exception.message(e)},
-          level: :error
-        )
+        Logging.transport_event("ws_send_failed", %{error: Exception.message(e)}, level: :error)
 
         {:reply, {:error, :send_failed}, state}
     end
@@ -255,10 +249,7 @@ if Code.ensure_loaded?(:gun) do
       {:noreply, state}
     end
 
-    def handle_info(
-          {:gun_ws, pid, stream_ref, :close},
-          %{gun_pid: pid, stream_ref: stream_ref} = state
-        ) do
+    def handle_info({:gun_ws, pid, stream_ref, :close}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
       Logging.transport_event("ws_closed", "Connection closed by server", level: :warning)
 
       Telemetry.execute(
@@ -273,10 +264,7 @@ if Code.ensure_loaded?(:gun) do
       {:stop, :normal, state}
     end
 
-    def handle_info(
-          {:gun_ws, pid, stream_ref, {:close, code, reason}},
-          %{gun_pid: pid, stream_ref: stream_ref} = state
-        ) do
+    def handle_info({:gun_ws, pid, stream_ref, {:close, code, reason}}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
       Logging.transport_event("ws_closed", %{code: code, reason: reason}, level: :warning)
 
       Telemetry.execute(
@@ -305,10 +293,7 @@ if Code.ensure_loaded?(:gun) do
       {:noreply, state}
     end
 
-    def handle_info(
-          {:gun_response, pid, stream_ref, _, status, headers},
-          %{gun_pid: pid, stream_ref: stream_ref} = state
-        ) do
+    def handle_info({:gun_response, pid, stream_ref, _, status, headers}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
       Logging.transport_event(
         "ws_upgrade_rejected",
         %{status: status, headers: headers},
@@ -318,10 +303,7 @@ if Code.ensure_loaded?(:gun) do
       {:stop, {:ws_upgrade_rejected, status}, state}
     end
 
-    def handle_info(
-          {:gun_error, pid, stream_ref, reason},
-          %{gun_pid: pid, stream_ref: stream_ref} = state
-        ) do
+    def handle_info({:gun_error, pid, stream_ref, reason}, %{gun_pid: pid, stream_ref: stream_ref} = state) do
       Logging.transport_event("gun_error", %{reason: reason}, level: :error)
       {:stop, {:gun_error, reason}, state}
     end

@@ -278,8 +278,7 @@ defmodule Hermes.Server.Component do
 
   def __clean_schema_for_peri__(schema), do: __inject_transforms__(schema)
 
-  defp __inject_transforms__({type, {:default, default}})
-       when type in ~w(date datetime naive_datetime time)a do
+  defp __inject_transforms__({type, {:default, default}}) when type in ~w(date datetime naive_datetime time)a do
     base = __inject_transforms__(type)
     {base, {:default, default}}
   end
@@ -319,8 +318,7 @@ defmodule Hermes.Server.Component do
 
   defp __validate_date__(%Date{} = date), do: {:ok, date}
 
-  defp __validate_date__(_),
-    do: {:error, "expected ISO 8601 date string or Date struct", []}
+  defp __validate_date__(_), do: {:error, "expected ISO 8601 date string or Date struct", []}
 
   defp __validate_time__(value) when is_binary(value) do
     case Time.from_iso8601(value) do
@@ -331,8 +329,7 @@ defmodule Hermes.Server.Component do
 
   defp __validate_time__(%Time{} = time), do: {:ok, time}
 
-  defp __validate_time__(_),
-    do: {:error, "expected ISO 8601 time string or Time struct", []}
+  defp __validate_time__(_), do: {:error, "expected ISO 8601 time string or Time struct", []}
 
   defp __validate_datetime__(value) when is_binary(value) do
     case DateTime.from_iso8601(value) do
@@ -343,8 +340,7 @@ defmodule Hermes.Server.Component do
 
   defp __validate_datetime__(%DateTime{} = datetime), do: {:ok, datetime}
 
-  defp __validate_datetime__(_),
-    do: {:error, "expected ISO 8601 datetime string or DateTime struct", []}
+  defp __validate_datetime__(_), do: {:error, "expected ISO 8601 datetime string or DateTime struct", []}
 
   defp __validate_naive_datetime__(value) when is_binary(value) do
     # NaiveDateTime.from_iso8601 accepts Z suffix but we want to reject it
@@ -358,9 +354,7 @@ defmodule Hermes.Server.Component do
     end
   end
 
-  defp __validate_naive_datetime__(%NaiveDateTime{} = naive_datetime),
-    do: {:ok, naive_datetime}
+  defp __validate_naive_datetime__(%NaiveDateTime{} = naive_datetime), do: {:ok, naive_datetime}
 
-  defp __validate_naive_datetime__(_),
-    do: {:error, "expected ISO 8601 naive datetime string or NaiveDateTime struct", []}
+  defp __validate_naive_datetime__(_), do: {:error, "expected ISO 8601 naive datetime string or NaiveDateTime struct", []}
 end

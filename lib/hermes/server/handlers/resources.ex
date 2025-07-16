@@ -39,11 +39,7 @@ defmodule Hermes.Server.Handlers.Resources do
 
   defp find_resource_module(resources, uri), do: Enum.find(resources, &(&1.uri == uri))
 
-  defp read_single_resource(
-         server,
-         %Resource{handler: nil, uri: uri, mime_type: mime_type},
-         frame
-       ) do
+  defp read_single_resource(server, %Resource{handler: nil, uri: uri, mime_type: mime_type}, frame) do
     case server.handle_resource_read(uri, frame) do
       {:reply, %Response{} = response, frame} ->
         content = Response.to_protocol(response, uri, mime_type)
@@ -58,11 +54,7 @@ defmodule Hermes.Server.Handlers.Resources do
     end
   end
 
-  defp read_single_resource(
-         _server,
-         %Resource{handler: handler, uri: uri, mime_type: mime_type},
-         frame
-       ) do
+  defp read_single_resource(_server, %Resource{handler: handler, uri: uri, mime_type: mime_type}, frame) do
     case handler.read(%{"uri" => uri}, frame) do
       {:reply, %Response{} = response, frame} ->
         content = Response.to_protocol(response, uri, mime_type)

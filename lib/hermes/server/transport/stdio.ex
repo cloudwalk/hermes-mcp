@@ -33,9 +33,7 @@ defmodule Hermes.Server.Transport.STDIO do
           | GenServer.option()
 
   defschema(:parse_options, [
-    {:server,
-     {:required,
-      {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
+    {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
     {:name, {:custom, &Hermes.genserver_name/1}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
     {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
@@ -132,8 +130,7 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   @impl GenServer
-  def handle_info({ref, result}, %{reading_task: %Task{ref: ref}} = state)
-      when is_reference(ref) do
+  def handle_info({ref, result}, %{reading_task: %Task{ref: ref}} = state) when is_reference(ref) do
     Process.demonitor(ref, [:flush])
 
     case result do

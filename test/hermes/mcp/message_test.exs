@@ -3,7 +3,7 @@ defmodule Hermes.MCP.MessageTest do
 
   alias Hermes.MCP.Message
 
-  require Hermes.MCP.Message
+  require Message
 
   @moduletag capture_log: true
 

@@ -155,9 +155,7 @@ defmodule Hermes.Server.ComponentFieldMacroTest do
         schema do
           field(:title, {:required, :string}, description: "Title of the item")
 
-          field(:priority, {:enum, ["low", "medium", "high"]},
-            description: "Priority level"
-          )
+          field(:priority, {:enum, ["low", "medium", "high"]}, description: "Priority level")
 
           field :metadata do
             field(:created_at, :string, format: "date-time")

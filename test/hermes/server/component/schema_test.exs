@@ -393,9 +393,7 @@ defmodule Hermes.Server.Component.SchemaTest do
   describe "to_json_schema/1 with mcp_field" do
     test "converts mcp_field with format and description" do
       schema = %{
-        email:
-          {:mcp_field, {:required, :string},
-           format: "email", description: "User's email address"},
+        email: {:mcp_field, {:required, :string}, format: "email", description: "User's email address"},
         age: {:mcp_field, :integer, description: "Age in years"}
       }
 
@@ -421,8 +419,7 @@ defmodule Hermes.Server.Component.SchemaTest do
     test "handles nested mcp_field with constraints" do
       schema = %{
         website: {:mcp_field, :string, format: "uri"},
-        score:
-          {:mcp_field, {:integer, {:range, {0, 100}}}, description: "Score percentage"}
+        score: {:mcp_field, {:integer, {:range, {0, 100}}}, description: "Score percentage"}
       }
 
       result = Schema.to_json_schema(schema)
@@ -508,9 +505,7 @@ defmodule Hermes.Server.Component.SchemaTest do
     test "handles nested schemas with mcp_field metadata" do
       schema = %{
         user: %{
-          email:
-            {:mcp_field, {:required, :string},
-             format: "email", description: "Email address"},
+          email: {:mcp_field, {:required, :string}, format: "email", description: "Email address"},
           profile: %{
             age: {:mcp_field, :integer, description: "User age"},
             website: {:mcp_field, :string, format: "uri"}
@@ -596,9 +591,7 @@ defmodule Hermes.Server.Component.SchemaTest do
 
       assert normalized == %{
                text: {:mcp_field, {:string, {:max, 150}}, [description: "Sample text"]},
-               count:
-                 {:mcp_field, {:integer, {:range, {1, 100}}},
-                  [description: "Count value"]}
+               count: {:mcp_field, {:integer, {:range, {1, 100}}}, [description: "Count value"]}
              }
     end
 
@@ -610,8 +603,7 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               name:
-                 {:mcp_field, {:required, :string}, [max: 50, description: "User name"]}
+               name: {:mcp_field, {:required, :string}, [max: 50, description: "User name"]}
              }
     end
 
@@ -691,8 +683,7 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               text:
-                 {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}
+               text: {:mcp_field, {:required, :string}, [max: 150, description: "Text field"]}
              }
     end
 
@@ -712,9 +703,7 @@ defmodule Hermes.Server.Component.SchemaTest do
       normalized = Schema.normalize(schema)
 
       assert normalized == %{
-               limit:
-                 {:mcp_field, {:integer, {:range, {1, 100}}},
-                  [default: 10, description: "Page limit"]}
+               limit: {:mcp_field, {:integer, {:range, {1, 100}}}, [default: 10, description: "Page limit"]}
              }
     end
   end
@@ -727,9 +716,7 @@ defmodule Hermes.Server.Component.SchemaTest do
         filters:
           {:object,
            %{
-             status:
-               {:required, {:enum, ["active", "inactive"]},
-                type: "string", description: "possible statuses"},
+             status: {:required, {:enum, ["active", "inactive"]}, type: "string", description: "possible statuses"},
              created_after: :datetime
            }, description: "Search filters"}
       }

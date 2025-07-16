@@ -61,8 +61,7 @@ defmodule Hermes.Server.Handlers do
           {list(struct), cursor :: String.t() | nil}
   def maybe_paginate(_, components, nil), do: {components, nil}
 
-  def maybe_paginate(%{"params" => %{"cursor" => cursor}}, components, limit)
-      when limit > 0 do
+  def maybe_paginate(%{"params" => %{"cursor" => cursor}}, components, limit) when limit > 0 do
     last_name = Base.decode64!(cursor, padding: false)
     {_taken, remain} = Enum.split_while(components, &(&1.name <= last_name))
     maybe_paginate(%{}, remain, limit)

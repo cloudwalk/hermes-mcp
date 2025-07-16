@@ -191,8 +191,7 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, prompt} = MyClient.get_prompt("greeting", %{name: "Alice"})
       """
-      def get_prompt(name, args \\ nil, opts \\ []),
-        do: Base.get_prompt(__MODULE__, name, args, opts)
+      def get_prompt(name, args \\ nil, opts \\ []), do: Base.get_prompt(__MODULE__, name, args, opts)
 
       @doc """
       Lists all available tools from the server.
@@ -212,8 +211,7 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, result} = MyClient.call_tool("search", %{query: "elixir"})
       """
-      def call_tool(name, args \\ nil, opts \\ []),
-        do: Base.call_tool(__MODULE__, name, args, opts)
+      def call_tool(name, args \\ nil, opts \\ []), do: Base.call_tool(__MODULE__, name, args, opts)
 
       @doc """
       Merges additional capabilities into the client.
@@ -221,8 +219,7 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.merge_capabilities(%{"experimental" => %{}})
       """
-      def merge_capabilities(add, opts \\ []),
-        do: Base.merge_capabilities(__MODULE__, add, opts)
+      def merge_capabilities(add, opts \\ []), do: Base.merge_capabilities(__MODULE__, add, opts)
 
       @doc """
       Gets the server's declared capabilities.
@@ -230,8 +227,7 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, capabilities} = MyClient.get_server_capabilities()
       """
-      def get_server_capabilities(opts \\ []),
-        do: Base.get_server_capabilities(__MODULE__, opts)
+      def get_server_capabilities(opts \\ []), do: Base.get_server_capabilities(__MODULE__, opts)
 
       @doc """
       Gets the server information including name and version.
@@ -247,8 +243,7 @@ defmodule Hermes.Client do
       ## Examples
           {:ok, result} = MyClient.complete(ref, "completed")
       """
-      def complete(ref, argument, opts \\ []),
-        do: Base.complete(__MODULE__, ref, argument, opts)
+      def complete(ref, argument, opts \\ []), do: Base.complete(__MODULE__, ref, argument, opts)
 
       @doc """
       Sets the server's log level.
@@ -264,14 +259,12 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.register_log_callback(fn log -> IO.puts(log) end)
       """
-      def register_log_callback(cb, opts \\ []),
-        do: Base.register_log_callback(__MODULE__, cb, opts)
+      def register_log_callback(cb, opts \\ []), do: Base.register_log_callback(__MODULE__, cb, opts)
 
       @doc """
       Unregisters the log callback.
       """
-      def unregister_log_callback(opts \\ []),
-        do: Base.unregister_log_callback(__MODULE__, opts)
+      def unregister_log_callback(opts \\ []), do: Base.unregister_log_callback(__MODULE__, opts)
 
       @doc """
       Registers a callback for progress updates.
@@ -328,8 +321,7 @@ defmodule Hermes.Client do
       ## Examples
           :ok = MyClient.add_root("file:///project", "My Project")
       """
-      def add_root(uri, name \\ nil, opts \\ []),
-        do: Base.add_root(__MODULE__, uri, name, opts)
+      def add_root(uri, name \\ nil, opts \\ []), do: Base.add_root(__MODULE__, uri, name, opts)
 
       @doc """
       Removes a root directory or resource.
@@ -367,13 +359,11 @@ defmodule Hermes.Client do
 
   @spec parse_capability(capability() | {capability(), capability_opts()}, map()) ::
           map()
-  defp parse_capability(capability, %{} = capabilities)
-       when is_client_capability(capability) do
+  defp parse_capability(capability, %{} = capabilities) when is_client_capability(capability) do
     Map.put(capabilities, to_string(capability), %{})
   end
 
-  defp parse_capability({capability, opts}, %{} = capabilities)
-       when is_client_capability(capability) do
+  defp parse_capability({capability, opts}, %{} = capabilities) when is_client_capability(capability) do
     list_changed? = opts[:list_changed?]
 
     capabilities
