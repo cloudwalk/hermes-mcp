@@ -76,7 +76,7 @@ defmodule Hermes.SSE do
       on_chunk = &process_sse_stream(&1, &2, dest, ref)
 
       case Finch.stream_while(req, Hermes.Finch, nil, on_chunk, http) do
-        {:ok, _} ->
+        {:ok, _acc} ->
           Hermes.Logging.transport_event("sse_reconnect", %{
             reason: "success",
             attempt: attempt,
@@ -86,12 +86,12 @@ defmodule Hermes.SSE do
           Process.sleep(backoff)
           loop_sse_stream(req, ref, dest, opts, attempt + 1)
 
-        {:error, err} ->
+        {:error, exc, _acc} ->
           Hermes.Logging.transport_event(
             "sse_reconnect",
             %{
               reason: "error",
-              error: err,
+              error: Exception.message(exc),
               attempt: attempt,
               max_attempts: retry[:max_reconnections]
             },

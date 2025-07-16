@@ -6,89 +6,62 @@ defmodule Hermes.Protocol do
   @type version :: String.t()
   @type feature :: atom()
 
-  @supported_versions ["2024-11-05", "2025-03-26"]
-  @latest_version "2025-03-26"
-  @fallback_version "2024-11-05"
+  @supported_versions ["2024-11-05", "2025-03-26", "2025-06-18"]
+  @latest_version "2025-06-18"
+  @fallback_version "2025-03-26"
 
-  # Features supported by each protocol version
-  @features_2024_11_05 MapSet.new([
-                         :basic_messaging,
-                         :resources,
-                         :tools,
-                         :prompts,
-                         :logging,
-                         :progress,
-                         :cancellation,
-                         :ping,
-                         :roots,
-                         :sampling
-                       ])
+  @features_2024_11_05 [
+    :basic_messaging,
+    :resources,
+    :tools,
+    :prompts,
+    :logging,
+    :progress,
+    :cancellation,
+    :ping,
+    :roots,
+    :sampling
+  ]
 
-  @features_2025_03_26 MapSet.new([
-                         :basic_messaging,
-                         :resources,
-                         :tools,
-                         :prompts,
-                         :logging,
-                         :progress,
-                         :cancellation,
-                         :ping,
-                         :roots,
-                         :sampling,
-                         :authorization,
-                         :audio_content,
-                         :tool_annotations,
-                         :progress_messages,
-                         :completion_capability
-                       ])
+  @features_2025_03_26 [
+    :authorization,
+    :audio_content,
+    :tool_annotations,
+    :progress_messages,
+    :completion_capability
+    | @features_2024_11_05
+  ]
+
+  @features_2025_06_18 [
+    :elicitation,
+    :structured_tool_results,
+    :tool_output_schemas,
+    :model_preferences,
+    :embedded_resources_in_prompts,
+    :embedded_resources_in_tools
+    | @features_2025_03_26
+  ]
 
   @doc """
   Returns all supported protocol versions.
-
-  ## Examples
-
-      iex> Hermes.Protocol.supported_versions()
-      ["2024-11-05", "2025-03-26"]
   """
   @spec supported_versions() :: [version()]
   def supported_versions, do: @supported_versions
 
   @doc """
   Returns the latest supported protocol version.
-
-  ## Examples
-
-      iex> Hermes.Protocol.latest_version()
-      "2025-03-26"
   """
   @spec latest_version() :: version()
   def latest_version, do: @latest_version
 
   @doc """
   Returns the fallback protocol version for compatibility.
-
-  ## Examples
-
-      iex> Hermes.Protocol.fallback_version()
-      "2024-11-05"
   """
   @spec fallback_version() :: version()
   def fallback_version, do: @fallback_version
 
   @doc """
   Validates if a protocol version is supported.
-
-  ## Parameters
-
-    * `version` - The protocol version to validate
-
-  ## Examples
-
-      iex> Hermes.Protocol.validate_version("2024-11-05")
-      :ok
-
-      iex> Hermes.Protocol.validate_version("1.0.0")
-      {:error, %Hermes.MCP.Error{reason: :unsupported_protocol_version}}
   """
   @spec validate_version(version()) :: :ok | {:error, Error.t()}
   def validate_version(version) when version in @supported_versions, do: :ok
@@ -103,19 +76,6 @@ defmodule Hermes.Protocol do
 
   @doc """
   Validates if a transport is compatible with a protocol version.
-
-  ## Parameters
-
-    * `version` - The protocol version
-    * `transport_module` - The transport module to validate
-
-  ## Examples
-
-      iex> Hermes.Protocol.validate_transport("2024-11-05", Hermes.Transport.SSE)
-      :ok
-
-      iex> Hermes.Protocol.validate_transport("2024-11-05", Hermes.Transport.StreamableHTTP)
-      {:error, %Hermes.MCP.Error{reason: :incompatible_transport}}
   """
   @spec validate_transport(version(), module()) :: :ok | {:error, Error.t()}
   def validate_transport(version, transport_module) do
@@ -135,62 +95,26 @@ defmodule Hermes.Protocol do
 
   @doc """
   Returns the set of features supported by a protocol version.
-
-  ## Parameters
-
-    * `version` - The protocol version
-
-  ## Examples
-
-      iex> features = Hermes.Protocol.get_features("2025-03-26")
-      iex> MapSet.member?(features, :authorization)
-      true
   """
-  @spec get_features(version()) :: MapSet.t(feature())
+  @spec get_features(version()) :: list(feature())
   def get_features("2024-11-05"), do: @features_2024_11_05
   def get_features("2025-03-26"), do: @features_2025_03_26
-  def get_features(_), do: MapSet.new()
+  def get_features("2025-06-18"), do: @features_2025_06_18
 
   @doc """
   Checks if a feature is supported by a protocol version.
-
-  ## Parameters
-
-    * `version` - The protocol version
-    * `feature` - The feature to check
-
-  ## Examples
-
-      iex> Hermes.Protocol.supports_feature?("2024-11-05", :authorization)
-      false
   """
   @spec supports_feature?(version(), feature()) :: boolean()
-  def supports_feature?(version, feature) do
+  def supports_feature?(version, feature) when is_binary(version) and is_atom(feature) do
     version
     |> get_features()
-    |> MapSet.member?(feature)
+    |> Enum.member?(feature)
   end
 
   @doc """
   Negotiates protocol version between client and server versions.
 
   Returns the best compatible version or an error if incompatible.
-
-  ## Parameters
-
-    * `client_version` - The client's preferred protocol version
-    * `server_version` - The server's supported protocol version
-
-  ## Examples
-
-      iex> Hermes.Protocol.negotiate_version("2025-03-26", "2025-03-26")
-      {:ok, "2025-03-26"}
-
-      iex> Hermes.Protocol.negotiate_version("2025-03-26", "2024-11-05")
-      {:ok, "2024-11-05"}
-
-      iex> Hermes.Protocol.negotiate_version("2024-11-05", "1.0.0")
-      {:error, %Hermes.MCP.Error{reason: :incompatible_versions}}
   """
   @spec negotiate_version(version(), version()) ::
           {:ok, version()} | {:error, Error.t()}
@@ -217,17 +141,6 @@ defmodule Hermes.Protocol do
 
   @doc """
   Returns transport modules that support a protocol version.
-
-  ## Parameters
-
-    * `version` - The protocol version
-    * `transport_modules` - List of transport modules to check
-
-  ## Examples
-
-      iex> transports = [Hermes.Transport.STDIO, Hermes.Transport.SSE]
-      iex> Hermes.Protocol.compatible_transports("2024-11-05", transports)
-      [Hermes.Transport.STDIO, Hermes.Transport.SSE]
   """
   @spec compatible_transports(version(), [module()]) :: [module()]
   def compatible_transports(version, transport_modules) do
@@ -244,18 +157,6 @@ defmodule Hermes.Protocol do
 
   This function checks if the client configuration is compatible with
   the specified protocol version, including transport and capabilities.
-
-  ## Parameters
-
-    * `version` - The protocol version
-    * `transport_module` - The transport module being used
-    * `capabilities` - The client capabilities
-
-  ## Examples
-
-      iex> capabilities = %{"resources" => %{}, "tools" => %{}}
-      iex> Hermes.Protocol.validate_client_config("2024-11-05", Hermes.Transport.SSE, capabilities)
-      :ok
   """
   @spec validate_client_config(version(), module(), map()) ::
           :ok | {:error, Error.t()}
