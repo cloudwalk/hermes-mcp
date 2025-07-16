@@ -450,6 +450,7 @@ defmodule Hermes.Server.Frame do
   def register_resource(%__MODULE__{} = frame, uri, opts) when is_binary(uri) do
     update_components(frame, %Resource{
       uri: uri,
+      title: opts[:title],
       name: opts[:name] || uri,
       description: opts[:description],
       mime_type: opts[:mime_type] || "text/plain"

@@ -82,10 +82,20 @@ defmodule Hermes.Server.Component.Resource do
           name: String.t(),
           description: String.t() | nil,
           mime_type: String.t(),
-          handler: module | nil
+          handler: module | nil,
+          title: String.t() | nil,
+          uri_template: String.t() | nil
         }
 
-  defstruct [:uri, :name, description: nil, mime_type: "text/plain", handler: nil]
+  defstruct [
+    :uri,
+    :name,
+    description: nil,
+    mime_type: "text/plain",
+    handler: nil,
+    title: nil,
+    uri_template: nil
+  ]
 
   @doc """
   Returns the URI that identifies this resource.
@@ -139,9 +149,20 @@ defmodule Hermes.Server.Component.Resource do
   defimpl JSON.Encoder, for: __MODULE__ do
     alias Hermes.Server.Component.Resource
 
+    def encode(%Resource{uri_template: uri_template} = resource, _) when not is_nil(uri_template) do
+      %{
+        uriTemplate: uri_template,
+        name: resource.name
+      }
+      |> then(&if resource.title, do: Map.put(&1, :title, resource.title), else: &1)
+      |> then(&if resource.description, do: Map.put(&1, :description, resource.description), else: &1)
+      |> then(&if resource.mime_type, do: Map.put(&1, :mimeType, resource.mime_type), else: &1)
+      |> JSON.encode!()
+    end
+
     def encode(%Resource{} = resource, _) do
       resource
-      |> Map.take([:name, :uri, :description])
+      |> Map.take([:name, :uri, :description, :title])
       |> Map.put(:mimeType, resource.mime_type)
       |> JSON.encode!()
     end

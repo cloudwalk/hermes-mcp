@@ -32,7 +32,21 @@ defmodule Hermes.Server.HandlersTest do
         %Resource{uri: "resource://b", name: "resource_b", mime_type: "text/plain"},
         %Resource{uri: "resource://c", name: "resource_c", mime_type: "text/plain"},
         %Resource{uri: "resource://d", name: "resource_d", mime_type: "text/plain"},
-        %Resource{uri: "resource://e", name: "resource_e", mime_type: "text/plain"}
+        %Resource{uri: "resource://e", name: "resource_e", mime_type: "text/plain"},
+        # Resource templates
+        %Resource{
+          uri_template: "file:///{path}",
+          name: "template_1",
+          title: "Project Files",
+          description: "Access project files",
+          mime_type: "application/octet-stream"
+        },
+        %Resource{
+          uri_template: "db:///{table}/{id}",
+          name: "template_2",
+          title: "Database Records",
+          mime_type: "application/json"
+        }
       ]
     end
   end
@@ -242,6 +256,54 @@ defmodule Hermes.Server.HandlersTest do
 
       assert length(response3["resources"]) == 1
       refute Map.has_key?(response3, "nextCursor")
+    end
+  end
+
+  describe "resources/templates/list" do
+    setup do
+      frame = Frame.new()
+      {:ok, frame: frame}
+    end
+
+    test "returns only resource templates", %{frame: frame} do
+      request = %{"method" => "resources/templates/list", "params" => %{}}
+
+      {:reply, response, _frame} = Handlers.handle(request, MockServer, frame)
+
+      assert length(response["resourceTemplates"]) == 2
+      refute Map.has_key?(response, "nextCursor")
+
+      assert [
+               %{uri_template: "file:///{path}", name: "template_1", title: "Project Files"},
+               %{
+                 uri_template: "db:///{table}/{id}",
+                 name: "template_2",
+                 title: "Database Records"
+               }
+             ] = response["resourceTemplates"]
+    end
+
+    test "returns paginated resource templates when limit is set", %{frame: frame} do
+      frame = Frame.put_pagination_limit(frame, 1)
+      request = %{"method" => "resources/templates/list", "params" => %{}}
+
+      {:reply, response, _frame} = Handlers.handle(request, MockServer, frame)
+
+      assert length(response["resourceTemplates"]) == 1
+      assert response["nextCursor"]
+      assert [%{name: "template_1"}] = response["resourceTemplates"]
+    end
+
+    test "handles cursor-based pagination for templates", %{frame: frame} do
+      frame = Frame.put_pagination_limit(frame, 1)
+      cursor = Base.encode64("template_1", padding: false)
+      request = %{"method" => "resources/templates/list", "params" => %{"cursor" => cursor}}
+
+      {:reply, response, _frame} = Handlers.handle(request, MockServer, frame)
+
+      assert length(response["resourceTemplates"]) == 1
+      refute Map.has_key?(response, "nextCursor")
+      assert [%{name: "template_2"}] = response["resourceTemplates"]
     end
   end
 

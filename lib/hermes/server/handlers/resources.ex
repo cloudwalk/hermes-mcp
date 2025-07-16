@@ -21,6 +21,20 @@ defmodule Hermes.Server.Handlers.Resources do
      ), frame}
   end
 
+  @spec handle_templates_list(map, Frame.t(), module()) ::
+          {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
+  def handle_templates_list(request, frame, server_module) do
+    templates = Handlers.get_server_resource_templates(server_module, frame)
+    limit = frame.private[:pagination_limit]
+    {templates, cursor} = Handlers.maybe_paginate(request, templates, limit)
+
+    {:reply,
+     then(
+       %{"resourceTemplates" => templates},
+       &if(cursor, do: Map.put(&1, "nextCursor", cursor), else: &1)
+     ), frame}
+  end
+
   @spec handle_read(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
   def handle_read(%{"params" => %{"uri" => uri}}, frame, server) when is_binary(uri) do

@@ -31,6 +31,7 @@ defmodule Hermes.Server.Handlers do
     case action do
       "list" -> Resources.handle_list(request, frame, module)
       "read" -> Resources.handle_read(request, frame, module)
+      "templates/list" -> Resources.handle_templates_list(request, frame, module)
     end
   end
 
@@ -51,10 +52,15 @@ defmodule Hermes.Server.Handlers do
   end
 
   def get_server_resources(module, frame) do
-    Enum.sort_by(
-      module.__components__(:resource) ++ Frame.get_resources(frame),
-      & &1.name
-    )
+    (module.__components__(:resource) ++ Frame.get_resources(frame))
+    |> Enum.reject(& &1.uri_template)
+    |> Enum.sort_by(& &1.name)
+  end
+
+  def get_server_resource_templates(module, frame) do
+    (module.__components__(:resource) ++ Frame.get_resources(frame))
+    |> Enum.filter(& &1.uri_template)
+    |> Enum.sort_by(& &1.name)
   end
 
   @spec maybe_paginate(map, list(struct), non_neg_integer | nil) ::

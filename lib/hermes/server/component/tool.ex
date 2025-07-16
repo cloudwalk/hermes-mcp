@@ -66,6 +66,7 @@ defmodule Hermes.Server.Component.Tool do
 
   @type t :: %__MODULE__{
           name: String.t(),
+          title: String.t() | nil,
           description: String.t() | nil,
           input_schema: map | nil,
           annotations: map | nil,
@@ -75,6 +76,7 @@ defmodule Hermes.Server.Component.Tool do
 
   defstruct [
     :name,
+    title: nil,
     description: nil,
     input_schema: nil,
     annotations: nil,
@@ -155,6 +157,7 @@ defmodule Hermes.Server.Component.Tool do
         "description" => tool.description,
         "inputSchema" => tool.input_schema
       }
+      |> then(&if t = tool.title, do: Map.put(&1, "title", t), else: &1)
       |> then(&if a = tool.annotations, do: Map.put(&1, "annotations", a), else: &1)
       |> JSON.encode!()
     end
