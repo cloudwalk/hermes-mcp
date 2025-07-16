@@ -411,7 +411,12 @@ defmodule Hermes.Server.Frame do
   @doc """
   Registers a tool definition.
   """
-  @spec register_tool(t, String.t(), keyword()) :: t
+  @spec register_tool(t, String.t(), list(tool_opt)) :: t
+        when tool_opt:
+               {:description, String.t() | nil}
+               | {:input_schema, map | nil}
+               | {:title, String.t() | nil}
+               | {:annotations, map | nil}
   def register_tool(%__MODULE__{} = frame, name, opts) when is_binary(name) do
     input_schema = Schema.normalize(opts[:input_schema] || %{})
     raw_schema = Component.__clean_schema_for_peri__(input_schema)
@@ -429,7 +434,8 @@ defmodule Hermes.Server.Frame do
   @doc """
   Registers a prompt definition.
   """
-  @spec register_prompt(t, String.t(), keyword()) :: t
+  @spec register_prompt(t, String.t(), list(prompt_opt)) :: t
+        when prompt_opt: {:description, String.t() | nil} | {:arguments, map | nil}
   def register_prompt(%__MODULE__{} = frame, name, opts) when is_binary(name) do
     arguments = Schema.normalize(opts[:arguments] || %{})
     raw_schema = Component.__clean_schema_for_peri__(arguments)
@@ -444,9 +450,14 @@ defmodule Hermes.Server.Frame do
   end
 
   @doc """
-  Registers a resource definition.
+  Registers a resource definition. THis also supports resource templates (via URI templates).
   """
-  @spec register_resource(t, String.t(), keyword()) :: t
+  @spec register_resource(t, String.t(), list(resource_opt)) :: t
+        when resource_opt:
+               {:title, String.t() | nil}
+               | {:name, String.t() | nil}
+               | {:description, String.t() | nil}
+               | {:mime_type, String.t() | nil}
   def register_resource(%__MODULE__{} = frame, uri, opts) when is_binary(uri) do
     update_components(frame, %Resource{
       uri: uri,
