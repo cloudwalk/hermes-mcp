@@ -269,6 +269,8 @@ defmodule Hermes.Client.JSONSchemaConverter do
     end
   end
 
+  @type validator :: (term() -> {:ok, term()} | {:error, list(Peri.Error.t())})
+
   @doc """
   Creates a validator function from a JSON Schema.
 
@@ -276,7 +278,6 @@ defmodule Hermes.Client.JSONSchemaConverter do
   `{:ok, value}` or `{:error, errors}`.
   """
   @spec validator(json_schema()) :: {:ok, validator} | {:error, list(Peri.Error.t())}
-        when validator: (term() -> {:ok, term()} | {:error, list()})
   def validator(json_schema) do
     with {:ok, peri_schema} <- to_peri(json_schema) do
       {:ok, fn value -> Peri.validate(peri_schema, value) end}
