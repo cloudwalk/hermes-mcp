@@ -82,8 +82,6 @@ if Code.ensure_loaded?(Plug) do
     - 500: Internal server error
     """
 
-    @deprecated "Use Hermes.Server.Transport.StreamableHTTP.Plug instead"
-
     @behaviour Plug
 
     use Hermes.Logging
@@ -98,6 +96,8 @@ if Code.ensure_loaded?(Plug) do
     alias Plug.Conn.Unfetched
 
     require Message
+
+    @deprecated "Use Hermes.Server.Transport.StreamableHTTP.Plug instead"
 
     @default_timeout 30_000
 

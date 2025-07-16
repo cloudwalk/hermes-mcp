@@ -140,7 +140,7 @@ defmodule Hermes.Server.Supervisor do
         "The SSE transport is maintained only for backward compatibility with MCP protocol version 2024-11-05.",
       []
     )
-    
+
     name = registry.transport(server, :sse)
     opts = Keyword.merge(opts, name: name, server: server, registry: registry)
     {SSE, opts}

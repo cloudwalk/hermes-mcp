@@ -64,8 +64,6 @@ defmodule Hermes.Server.Transport.SSE do
   - `:name` - Process registration name
   """
 
-  @deprecated "Use Hermes.Server.Transport.StreamableHTTP instead"
-
   @behaviour Hermes.Transport.Behaviour
 
   use GenServer
@@ -78,6 +76,8 @@ defmodule Hermes.Server.Transport.SSE do
   alias Hermes.Transport.Behaviour, as: Transport
 
   require Message
+
+  @deprecated "Use Hermes.Server.Transport.StreamableHTTP instead"
 
   @type t :: GenServer.server()
 

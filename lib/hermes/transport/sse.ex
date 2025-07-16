@@ -22,8 +22,6 @@ defmodule Hermes.Transport.SSE do
   > the [Transport options](./transport_options.html) guides for reference.
   """
 
-  @deprecated "Use Hermes.Transport.StreamableHTTP instead"
-
   @behaviour Hermes.Transport.Behaviour
 
   use GenServer
@@ -36,6 +34,8 @@ defmodule Hermes.Transport.SSE do
   alias Hermes.SSE.Event
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
+
+  @deprecated "Use Hermes.Transport.StreamableHTTP instead"
 
   @type t :: GenServer.server()
 
