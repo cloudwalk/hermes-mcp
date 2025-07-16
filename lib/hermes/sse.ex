@@ -119,8 +119,7 @@ defmodule Hermes.SSE do
   end
 
   # the raw streaming response
-  defp process_sse_stream({:status, status}, acc, _dest, _ref) when status != 200,
-    do: {:halt, acc}
+  defp process_sse_stream({:status, status}, acc, _dest, _ref) when status != 200, do: {:halt, acc}
 
   defp process_sse_stream(chunk, acc, dest, ref) do
     send(dest, {:chunk, chunk, ref})

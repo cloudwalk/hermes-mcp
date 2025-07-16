@@ -248,8 +248,7 @@ defmodule Hermes.Server.Transport.SSE do
   end
 
   @impl GenServer
-  def handle_call({:handle_message, session_id, message, context}, _from, state)
-      when is_map(message) do
+  def handle_call({:handle_message, session_id, message, context}, _from, state) when is_map(message) do
     server = state.registry.whereis_server(state.server)
     timeout = state.request_timeout
 

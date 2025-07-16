@@ -103,8 +103,7 @@ defmodule StubServer do
   end
 
   defp handle_tool_call(%{"name" => name}, frame) do
-    {:error, Error.protocol(:invalid_request, %{message: "tool #{name} not found"}),
-     frame}
+    {:error, Error.protocol(:invalid_request, %{message: "tool #{name} not found"}), frame}
   end
 
   defp handle_read_resource(%{"uri" => uri}, frame) do

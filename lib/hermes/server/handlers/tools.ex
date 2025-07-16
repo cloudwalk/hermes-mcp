@@ -24,11 +24,7 @@ defmodule Hermes.Server.Handlers.Tools do
 
   @spec handle_call(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_call(
-        %{"params" => %{"name" => tool_name, "arguments" => params}},
-        frame,
-        server
-      ) do
+  def handle_call(%{"params" => %{"name" => tool_name, "arguments" => params}}, frame, server) do
     registered_tools = Handlers.get_server_tools(server, frame)
 
     if tool = find_tool_module(registered_tools, tool_name) do

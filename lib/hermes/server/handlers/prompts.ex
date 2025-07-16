@@ -24,11 +24,7 @@ defmodule Hermes.Server.Handlers.Prompts do
 
   @spec handle_get(map(), Frame.t(), module()) ::
           {:reply, map(), Frame.t()} | {:error, Error.t(), Frame.t()}
-  def handle_get(
-        %{"params" => %{"name" => prompt_name, "arguments" => params}},
-        frame,
-        server
-      ) do
+  def handle_get(%{"params" => %{"name" => prompt_name, "arguments" => params}}, frame, server) do
     registered_prompts = Handlers.get_server_prompts(server, frame)
 
     if prompt = find_prompt_module(registered_prompts, prompt_name) do

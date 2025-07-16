@@ -24,6 +24,5 @@ test = [
     "priv/dev/upcase/{lib,config,test}/*.{ex,exs}"
   ],
   locals_without_parens: locals ++ test,
-  export: locals,
-  line_length: 90
+  export: locals
 ]

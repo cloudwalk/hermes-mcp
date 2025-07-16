@@ -172,8 +172,7 @@ defmodule Hermes.Server.Frame do
       # count remains 5
   """
   @spec assign_new(t, key :: atom, value_fun :: (-> term)) :: t
-  def assign_new(%__MODULE__{} = frame, key, fun)
-      when is_atom(key) and is_function(fun, 0) do
+  def assign_new(%__MODULE__{} = frame, key, fun) when is_atom(key) and is_function(fun, 0) do
     case frame.assigns do
       %{^key => _} -> frame
       _ -> assign(frame, key, fun.())
@@ -203,8 +202,7 @@ defmodule Hermes.Server.Frame do
     %{frame | private: Map.put(frame.private, key, value)}
   end
 
-  def put_private(%__MODULE__{} = frame, private)
-      when is_map(private) or is_list(private) do
+  def put_private(%__MODULE__{} = frame, private) when is_map(private) or is_list(private) do
     Enum.reduce(private, frame, fn {key, value}, frame ->
       put_private(frame, key, value)
     end)
@@ -232,8 +230,7 @@ defmodule Hermes.Server.Frame do
     %{frame | transport: Map.put(frame.transport, key, value)}
   end
 
-  def put_transport(%__MODULE__{} = frame, transport)
-      when is_map(transport) or is_list(transport) do
+  def put_transport(%__MODULE__{} = frame, transport) when is_map(transport) or is_list(transport) do
     Enum.reduce(transport, frame, fn {key, value}, frame ->
       put_transport(frame, key, value)
     end)
@@ -378,8 +375,7 @@ defmodule Hermes.Server.Frame do
       # => nil
   """
   @spec get_req_header(t, String.t()) :: String.t() | nil
-  def get_req_header(%__MODULE__{transport: %{type: :http, req_headers: headers}}, name)
-      when is_binary(name) do
+  def get_req_header(%__MODULE__{transport: %{type: :http, req_headers: headers}}, name) when is_binary(name) do
     case List.keyfind(headers, String.downcase(name), 0) do
       {_, value} -> value
       nil -> nil

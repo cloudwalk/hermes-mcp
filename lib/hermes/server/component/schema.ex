@@ -221,11 +221,9 @@ defmodule Hermes.Server.Component.Schema do
 
   defp describe_base_type({:enum, values}), do: "one of: #{inspect(values, pretty: true)}"
 
-  defp describe_base_type({:list, {type, _}}),
-    do: "array of #{describe_base_type(type)} elements parameter"
+  defp describe_base_type({:list, {type, _}}), do: "array of #{describe_base_type(type)} elements parameter"
 
-  defp describe_base_type({:list, type}),
-    do: "array of #{describe_base_type(type)} elements parameter"
+  defp describe_base_type({:list, type}), do: "array of #{describe_base_type(type)} elements parameter"
 
   defp describe_base_type({:map, _}), do: "object parameter"
   defp describe_base_type({type, _}), do: "#{to_string(type)} parameter"

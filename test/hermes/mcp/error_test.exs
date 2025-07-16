@@ -5,7 +5,7 @@ defmodule Hermes.MCP.ErrorTest do
 
   @moduletag capture_log: true
 
-  doctest Hermes.MCP.Error
+  doctest Error
 
   describe "protocol errors" do
     test "protocol/2 creates parse error" do

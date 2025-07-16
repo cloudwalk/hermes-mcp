@@ -48,9 +48,7 @@ if Code.ensure_loaded?(:gun) do
       header = UI.header("HERMES MCP WEBSOCKET INTERACTIVE")
       IO.puts(header)
 
-      IO.puts(
-        "#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n"
-      )
+      IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
 
       SupervisedShell.start(
         transport_module: WebSocket,

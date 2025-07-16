@@ -185,8 +185,7 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
-  def image(%{type: :tool} = r, data, mime_type)
-      when is_binary(data) and is_binary(mime_type) do
+  def image(%{type: :tool} = r, data, mime_type) when is_binary(data) and is_binary(mime_type) do
     add_content(r, %{"type" => "image", "data" => data, "mimeType" => mime_type})
   end
 
@@ -423,8 +422,7 @@ defmodule Hermes.Server.Response do
         values: [%{"value" => "tool:calculator", "description" => "Math calculator tool"}]
       }
   """
-  def completion_value(%{type: :completion} = r, value, opts \\ [])
-      when is_binary(value) do
+  def completion_value(%{type: :completion} = r, value, opts \\ []) when is_binary(value) do
     completion_item =
       %{"value" => value}
       |> maybe_put("description", opts[:description])
@@ -493,8 +491,7 @@ defmodule Hermes.Server.Response do
         hasMore: true
       }
   """
-  def with_pagination(%{type: :completion} = r, total, has_more)
-      when is_integer(total) and is_boolean(has_more) do
+  def with_pagination(%{type: :completion} = r, total, has_more) when is_integer(total) and is_boolean(has_more) do
     %{r | total: total, hasMore: has_more}
   end
 

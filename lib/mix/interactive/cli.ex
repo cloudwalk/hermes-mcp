@@ -75,9 +75,7 @@ defmodule Mix.Interactive.CLI do
 
     sse = Process.whereis(transport)
 
-    IO.puts(
-      "#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n"
-    )
+    IO.puts("#{UI.colors().info}Connecting to SSE server at: #{server_url}#{UI.colors().reset}\n")
 
     check_sse_connection(sse)
 
@@ -85,9 +83,7 @@ defmodule Mix.Interactive.CLI do
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
-    IO.puts(
-      "\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n"
-    )
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
   end
@@ -115,9 +111,7 @@ defmodule Mix.Interactive.CLI do
 
     ws = Process.whereis(transport)
 
-    IO.puts(
-      "#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n"
-    )
+    IO.puts("#{UI.colors().info}Connecting to WebSocket server at: #{server_url}#{UI.colors().reset}\n")
 
     check_websocket_connection(ws)
 
@@ -125,9 +119,7 @@ defmodule Mix.Interactive.CLI do
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
-    IO.puts(
-      "\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n"
-    )
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
   end
@@ -138,9 +130,7 @@ defmodule Mix.Interactive.CLI do
 
     IO.puts(UI.header("HERMES MCP STDIO INTERACTIVE"))
 
-    IO.puts(
-      "#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n"
-    )
+    IO.puts("#{UI.colors().info}Starting STDIO interaction MCP server#{UI.colors().reset}\n")
 
     if cmd == "mcp" and not (!!System.find_executable("mcp")) do
       IO.puts(
@@ -170,9 +160,7 @@ defmodule Mix.Interactive.CLI do
     IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
     check_client_connection(client)
 
-    IO.puts(
-      "\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n"
-    )
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
 
     Shell.loop(client)
   end
@@ -182,26 +170,18 @@ defmodule Mix.Interactive.CLI do
   def check_client_connection(_client, attempt) when attempt <= 0 do
     IO.puts("#{UI.colors().error}✗ Server connection not established#{UI.colors().reset}")
 
-    IO.puts(
-      "#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
   end
 
   def check_client_connection(client, attempt) do
     :timer.sleep(200 * attempt)
 
     if cap = Hermes.Client.Base.get_server_capabilities(client) do
-      IO.puts(
-        "#{UI.colors().info}Server capabilities: #{inspect(cap, pretty: true)}#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().info}Server capabilities: #{inspect(cap, pretty: true)}#{UI.colors().reset}")
 
-      IO.puts(
-        "#{UI.colors().success}✓ Successfully connected to server#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().success}✓ Successfully connected to server#{UI.colors().reset}")
     else
-      IO.puts(
-        "#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
 
       check_client_connection(client, attempt - 1)
     end
@@ -212,9 +192,7 @@ defmodule Mix.Interactive.CLI do
   def check_sse_connection(_sse, attempt) when attempt <= 0 do
     IO.puts("#{UI.colors().error}✗ SSE connection not established#{UI.colors().reset}")
 
-    IO.puts(
-      "#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
   end
 
   def check_sse_connection(sse, attempt) do
@@ -223,9 +201,7 @@ defmodule Mix.Interactive.CLI do
     state = :sys.get_state(sse)
 
     if state[:message_url] == nil do
-      IO.puts(
-        "#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
 
       check_sse_connection(sse, attempt - 1)
     else
@@ -233,22 +209,16 @@ defmodule Mix.Interactive.CLI do
         "#{UI.colors().info}SSE connection:\n\s\s- sse stream url: #{state[:sse_url]}\n\s\s- message url: #{state[:message_url]}#{UI.colors().reset}"
       )
 
-      IO.puts(
-        "#{UI.colors().success}✓ Successfully connected via SSE#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().success}✓ Successfully connected via SSE#{UI.colors().reset}")
     end
   end
 
   def check_websocket_connection(ws, attempt \\ 3)
 
   def check_websocket_connection(_ws, attempt) when attempt <= 0 do
-    IO.puts(
-      "#{UI.colors().error}✗ WebSocket connection not established#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().error}✗ WebSocket connection not established#{UI.colors().reset}")
 
-    IO.puts(
-      "#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}"
-    )
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
   end
 
   def check_websocket_connection(ws, attempt) do
@@ -257,19 +227,13 @@ defmodule Mix.Interactive.CLI do
     state = :sys.get_state(ws)
 
     if state[:stream_ref] == nil do
-      IO.puts(
-        "#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
 
       check_websocket_connection(ws, attempt - 1)
     else
-      IO.puts(
-        "#{UI.colors().info}WebSocket connection:\n\s\s- ws url: #{state[:ws_url]}#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().info}WebSocket connection:\n\s\s- ws url: #{state[:ws_url]}#{UI.colors().reset}")
 
-      IO.puts(
-        "#{UI.colors().success}✓ Successfully connected via WebSocket#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().success}✓ Successfully connected via WebSocket#{UI.colors().reset}")
     end
   end
 

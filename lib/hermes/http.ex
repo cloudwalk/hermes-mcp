@@ -37,8 +37,7 @@ defmodule Hermes.HTTP do
 
   defp do_follow_redirect(_req, _resp, 0), do: {:error, :max_redirects}
 
-  defp do_follow_redirect(req, %Finch.Response{status: 307, headers: headers}, attempts)
-       when is_integer(attempts) do
+  defp do_follow_redirect(req, %Finch.Response{status: 307, headers: headers}, attempts) when is_integer(attempts) do
     location = List.keyfind(headers, "location", 0)
 
     Hermes.Logging.transport_event("redirect", %{

@@ -37,10 +37,7 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
       start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       %{transport: transport, server: StubServer}
     end

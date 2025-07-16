@@ -31,8 +31,7 @@ defmodule Hermes.MCP.Builders do
     }
   end
 
-  def init_response(request_id, capabilities)
-      when is_binary(request_id) and is_map(capabilities) do
+  def init_response(request_id, capabilities) when is_binary(request_id) and is_map(capabilities) do
     init_response(
       request_id,
       "2025-03-26",

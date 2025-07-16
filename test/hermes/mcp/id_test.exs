@@ -5,7 +5,7 @@ defmodule Hermes.MCP.IDTest do
 
   @moduletag capture_log: true
 
-  doctest Hermes.MCP.ID
+  doctest ID
 
   describe "generate/0" do
     test "generates a unique ID" do

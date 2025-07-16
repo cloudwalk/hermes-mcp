@@ -148,9 +148,7 @@ if Code.ensure_loaded?(Plug) do
             )
 
           {:error, reason} ->
-            Logging.transport_event("sse_registration_failed", %{reason: reason},
-              level: :error
-            )
+            Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
 
             send_error(conn, 500, "Could not establish SSE connection")
         end
@@ -280,10 +278,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp maybe_read_request_body(
-           %{body_params: %Unfetched{aspect: :body_params}} = conn,
-           %{timeout: timeout}
-         ) do
+    defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
       case Plug.Conn.read_body(conn, read_timeout: timeout) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}

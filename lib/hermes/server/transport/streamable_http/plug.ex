@@ -106,9 +106,7 @@ if Code.ensure_loaded?(Plug) do
             start_sse_streaming(conn, transport, session_id, session_header)
 
           {:error, reason} ->
-            Logging.transport_event("sse_registration_failed", %{reason: reason},
-              level: :error
-            )
+            Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
 
             send_error(conn, 500, "Could not establish SSE connection")
         end
@@ -158,8 +156,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp process_message(message, conn, transport, session_id, context, session_header)
-         when is_map(message) do
+    defp process_message(message, conn, transport, session_id, context, session_header) when is_map(message) do
       if Message.is_request(message) do
         handle_request_with_possible_sse(
           conn,
@@ -188,9 +185,7 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp format_notification_response({:error, reason}, conn) do
-      Logging.transport_event("notification_handling_failed", %{reason: reason},
-        level: :error
-      )
+      Logging.transport_event("notification_handling_failed", %{reason: reason}, level: :error)
 
       send_jsonrpc_error(
         conn,
@@ -217,14 +212,7 @@ if Code.ensure_loaded?(Plug) do
 
     # Handle requests that might need SSE streaming
 
-    defp handle_request_with_possible_sse(
-           conn,
-           transport,
-           session_id,
-           body,
-           context,
-           session_header
-         ) do
+    defp handle_request_with_possible_sse(conn, transport, session_id, body, context, session_header) do
       if wants_sse?(conn) do
         handle_sse_request(
           conn,
@@ -288,15 +276,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp route_sse_response(
-           conn,
-           transport,
-           session_id,
-           response,
-           body,
-           context,
-           session_header
-         ) do
+    defp route_sse_response(conn, transport, session_id, response, body, context, session_header) do
       if handler_pid = StreamableHTTP.get_sse_handler(transport, session_id) do
         send(handler_pid, {:sse_message, response})
 
@@ -329,23 +309,14 @@ if Code.ensure_loaded?(Plug) do
       )
     end
 
-    defp establish_sse_for_request(
-           conn,
-           transport,
-           session_id,
-           body,
-           context,
-           session_header
-         ) do
+    defp establish_sse_for_request(conn, transport, session_id, body, context, session_header) do
       case StreamableHTTP.register_sse_handler(transport, session_id) do
         :ok ->
           start_background_request(transport, session_id, body, context)
           start_sse_streaming(conn, transport, session_id, session_header)
 
         {:error, reason} ->
-          Logging.transport_event("sse_registration_failed", %{reason: reason},
-            level: :error
-          )
+          Logging.transport_event("sse_registration_failed", %{reason: reason}, level: :error)
 
           send_jsonrpc_error(
             conn,
@@ -417,8 +388,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp determine_session_id(_conn, _header, [message])
-         when Message.is_initialize(message) do
+    defp determine_session_id(_conn, _header, [message]) when Message.is_initialize(message) do
       ID.generate_session_id()
     end
 
@@ -457,10 +427,7 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp maybe_read_request_body(
-           %{body_params: %Unfetched{aspect: :body_params}} = conn,
-           %{timeout: timeout}
-         ) do
+    defp maybe_read_request_body(%{body_params: %Unfetched{aspect: :body_params}} = conn, %{timeout: timeout}) do
       case Plug.Conn.read_body(conn, read_timeout: timeout) do
         {:ok, body, conn} -> {:ok, body, conn}
         {:error, reason} -> {:error, reason}

@@ -287,8 +287,7 @@ defmodule Hermes.Server do
   """
   @callback handle_call(request :: term, from :: GenServer.from(), Frame.t()) ::
               {:reply, reply :: term, Frame.t()}
-              | {:reply, reply :: term, Frame.t(),
-                 timeout() | :hibernate | {:continue, arg :: term}}
+              | {:reply, reply :: term, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
               | {:noreply, Frame.t()}
               | {:noreply, Frame.t(), timeout() | :hibernate | {:continue, arg :: term}}
               | {:stop, reason :: term, reply :: term, Frame.t()}
@@ -481,8 +480,7 @@ defmodule Hermes.Server do
               "Use `use Hermes.Server.Component, type: :tool/:prompt/:resource`"
       end
 
-      @components {Component.get_type(module),
-                   opts[:name] || Hermes.Server.__derive_component_name__(module), module}
+      @components {Component.get_type(module), opts[:name] || Hermes.Server.__derive_component_name__(module), module}
     end
   end
 
@@ -500,16 +498,13 @@ defmodule Hermes.Server do
     opts = get_server_opts(env.module)
 
     quote do
-      def __components__,
-        do: Hermes.Server.parse_components(unquote(Macro.escape(components)))
+      def __components__, do: Hermes.Server.parse_components(unquote(Macro.escape(components)))
 
       def __components__(:tool), do: Enum.filter(__components__(), &match?(%Tool{}, &1))
 
-      def __components__(:prompt),
-        do: Enum.filter(__components__(), &match?(%Prompt{}, &1))
+      def __components__(:prompt), do: Enum.filter(__components__(), &match?(%Prompt{}, &1))
 
-      def __components__(:resource),
-        do: Enum.filter(__components__(), &match?(%Resource{}, &1))
+      def __components__(:resource), do: Enum.filter(__components__(), &match?(%Resource{}, &1))
 
       @impl Hermes.Server
       def handle_request(%{} = request, frame) do
@@ -636,8 +631,7 @@ defmodule Hermes.Server do
   end
 
   @doc false
-  def parse_capability(capability, %{} = capabilities)
-      when is_server_capability(capability) do
+  def parse_capability(capability, %{} = capabilities) when is_server_capability(capability) do
     Map.put(capabilities, to_string(capability), %{})
   end
 
@@ -656,8 +650,7 @@ defmodule Hermes.Server do
     )
   end
 
-  def parse_capability({capability, opts}, %{} = capabilities)
-      when is_server_capability(capability) do
+  def parse_capability({capability, opts}, %{} = capabilities) when is_server_capability(capability) do
     list_changed? = opts[:list_changed?]
 
     capabilities
@@ -702,8 +695,7 @@ defmodule Hermes.Server do
     raise ConfigurationError, module: module, missing_key: :version
   end
 
-  def validate_server_info!(_, name, version) when is_binary(name) and is_binary(version),
-    do: :ok
+  def validate_server_info!(_, name, version) when is_binary(name) and is_binary(version), do: :ok
 
   # Notification Functions
 
@@ -841,8 +833,7 @@ defmodule Hermes.Server do
                  | {:max_token, non_neg_integer | nil}
                  | {:timeout, non_neg_integer | nil}
                )
-  def send_sampling_request(%Frame{} = frame, messages, opts \\ [])
-      when is_list(messages) do
+  def send_sampling_request(%Frame{} = frame, messages, opts \\ []) when is_list(messages) do
     params = %{"messages" => messages}
 
     params =

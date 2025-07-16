@@ -41,8 +41,7 @@ defmodule Mix.Interactive.Commands do
 
   def process_command("get_prompt", client, loop_fn), do: get_prompt(client, loop_fn)
 
-  def process_command("initialize", client, loop_fn),
-    do: initialize_client(client, loop_fn)
+  def process_command("initialize", client, loop_fn), do: initialize_client(client, loop_fn)
 
   def process_command("show_state", client, loop_fn), do: show_state(client, loop_fn)
 
@@ -64,18 +63,14 @@ defmodule Mix.Interactive.Commands do
     IO.puts("\n#{UI.colors().info}Available commands:#{UI.colors().reset}")
 
     Enum.each(@commands, fn {cmd, desc} ->
-      IO.puts(
-        "  #{UI.colors().command}#{String.pad_trailing(cmd, 15)}#{UI.colors().reset} #{desc}"
-      )
+      IO.puts("  #{UI.colors().command}#{String.pad_trailing(cmd, 15)}#{UI.colors().reset} #{desc}")
     end)
 
     IO.puts(
       "\n#{UI.colors().info}Note:#{UI.colors().reset} All commands that make server requests support custom timeouts."
     )
 
-    IO.puts(
-      "      You will be prompted for timeout value (in milliseconds) when running commands."
-    )
+    IO.puts("      You will be prompted for timeout value (in milliseconds) when running commands.")
 
     IO.puts("")
     loop_fn.()
@@ -100,9 +95,7 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Tool name: #{UI.colors().reset}")
     tool_name = "" |> IO.gets() |> String.trim()
 
-    IO.write(
-      "#{UI.colors().prompt}Tool arguments (JSON or @filepath): #{UI.colors().reset}"
-    )
+    IO.write("#{UI.colors().prompt}Tool arguments (JSON or @filepath): #{UI.colors().reset}")
 
     args_input = "" |> IO.gets() |> String.trim()
 
@@ -155,9 +148,7 @@ defmodule Mix.Interactive.Commands do
     IO.write("#{UI.colors().prompt}Prompt name: #{UI.colors().reset}")
     prompt_name = "" |> IO.gets() |> String.trim()
 
-    IO.write(
-      "#{UI.colors().prompt}Prompt arguments (JSON or @filepath): #{UI.colors().reset}"
-    )
+    IO.write("#{UI.colors().prompt}Prompt arguments (JSON or @filepath): #{UI.colors().reset}")
 
     args_input = "" |> IO.gets() |> String.trim()
 
@@ -217,9 +208,7 @@ defmodule Mix.Interactive.Commands do
 
     timeout_opts = prompt_for_timeout()
 
-    IO.puts(
-      "\n#{UI.colors().info}Reading resource #{resource_uri}...#{UI.colors().reset}"
-    )
+    IO.puts("\n#{UI.colors().info}Reading resource #{resource_uri}...#{UI.colors().reset}")
 
     case Hermes.Client.Base.read_resource(client, resource_uri, timeout_opts) do
       {:ok, %Response{result: result}} ->
@@ -249,9 +238,7 @@ defmodule Mix.Interactive.Commands do
   end
 
   defp initialize_client(client, loop_fn) do
-    IO.puts(
-      "\n#{UI.colors().info}Reinitializing client connection...#{UI.colors().reset}"
-    )
+    IO.puts("\n#{UI.colors().info}Reinitializing client connection...#{UI.colors().reset}")
 
     old_state = :sys.get_state(client)
 
@@ -271,14 +258,10 @@ defmodule Mix.Interactive.Commands do
       Interactive.CLI.check_client_connection(client)
       loop_fn.()
     else
-      IO.puts(
-        "#{UI.colors().error}Client #{inspect(client)} is not alive#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().error}Client #{inspect(client)} is not alive#{UI.colors().reset}")
 
       if old_state do
-        IO.puts(
-          "#{UI.colors().info}Last client state before failure:#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().info}Last client state before failure:#{UI.colors().reset}")
 
         State.print_state(client)
       end
@@ -293,9 +276,7 @@ defmodule Mix.Interactive.Commands do
     verbose = System.get_env("HERMES_VERBOSE") == "1"
 
     if verbose && state do
-      IO.puts(
-        "\n#{UI.colors().info}Additional error context (HERMES_VERBOSE=1):#{UI.colors().reset}"
-      )
+      IO.puts("\n#{UI.colors().info}Additional error context (HERMES_VERBOSE=1):#{UI.colors().reset}")
 
       case error do
         %{reason: :connection_refused} ->
@@ -313,9 +294,7 @@ defmodule Mix.Interactive.Commands do
           IO.puts("    #{inspect(state, pretty: true, limit: 10)}")
       end
     else
-      IO.puts(
-        "#{UI.colors().info}For more detailed error information, set HERMES_VERBOSE=1#{UI.colors().reset}"
-      )
+      IO.puts("#{UI.colors().info}For more detailed error information, set HERMES_VERBOSE=1#{UI.colors().reset}")
     end
   end
 
@@ -323,9 +302,7 @@ defmodule Mix.Interactive.Commands do
     transport_info = state.transport
     print_transport_details(transport_info)
 
-    IO.puts(
-      "  #{UI.colors().info}Client Info:#{UI.colors().reset} #{inspect(state.client_info)}"
-    )
+    IO.puts("  #{UI.colors().info}Client Info:#{UI.colors().reset} #{inspect(state.client_info)}")
   end
 
   defp print_transport_details(%{layer: SSE} = transport_info) do
@@ -344,22 +321,16 @@ defmodule Mix.Interactive.Commands do
   end
 
   defp print_transport_details(transport_info) do
-    IO.puts(
-      "  #{UI.colors().info}Transport:#{UI.colors().reset} #{inspect(transport_info)}"
-    )
+    IO.puts("  #{UI.colors().info}Transport:#{UI.colors().reset} #{inspect(transport_info)}")
   end
 
   defp print_sse_details(transport_pid) do
     if Process.alive?(transport_pid) do
       transport_state = :sys.get_state(transport_pid)
 
-      IO.puts(
-        "  #{UI.colors().info}Server URL:#{UI.colors().reset} #{transport_state[:server_url]}"
-      )
+      IO.puts("  #{UI.colors().info}Server URL:#{UI.colors().reset} #{transport_state[:server_url]}")
 
-      IO.puts(
-        "  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{transport_state[:sse_url]}"
-      )
+      IO.puts("  #{UI.colors().info}SSE URL:#{UI.colors().reset} #{transport_state[:sse_url]}")
     end
   end
 
@@ -367,9 +338,7 @@ defmodule Mix.Interactive.Commands do
     if Process.alive?(transport_pid) do
       transport_state = :sys.get_state(transport_pid)
 
-      IO.puts(
-        "  #{UI.colors().info}Command:#{UI.colors().reset} #{transport_state.command}"
-      )
+      IO.puts("  #{UI.colors().info}Command:#{UI.colors().reset} #{transport_state.command}")
 
       print_stdio_args(transport_state)
     end
@@ -379,54 +348,36 @@ defmodule Mix.Interactive.Commands do
     if Process.alive?(transport_pid) do
       transport_state = :sys.get_state(transport_pid)
 
-      IO.puts(
-        "  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}"
-      )
+      IO.puts("  #{UI.colors().info}MCP URL:#{UI.colors().reset} #{URI.to_string(transport_state.mcp_url)}")
 
       if transport_state.session_id do
-        IO.puts(
-          "  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}"
-        )
+        IO.puts("  #{UI.colors().info}Session ID:#{UI.colors().reset} #{transport_state.session_id}")
       end
     end
   end
 
   defp print_timeout_error_context(state) do
-    IO.puts(
-      "  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}"
-    )
+    IO.puts("  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}")
 
-    IO.puts(
-      "  #{UI.colors().info}Pending Requests:#{UI.colors().reset} #{map_size(state.pending_requests)}"
-    )
+    IO.puts("  #{UI.colors().info}Pending Requests:#{UI.colors().reset} #{map_size(state.pending_requests)}")
 
     if state.server_capabilities do
-      IO.puts(
-        "  #{UI.colors().info}Server Capabilities:#{UI.colors().reset} #{inspect(state.server_capabilities)}"
-      )
+      IO.puts("  #{UI.colors().info}Server Capabilities:#{UI.colors().reset} #{inspect(state.server_capabilities)}")
     end
   end
 
   defp print_server_error_context(data, state) do
-    IO.puts(
-      "  #{UI.colors().info}Server Error Data:#{UI.colors().reset} #{inspect(data)}"
-    )
+    IO.puts("  #{UI.colors().info}Server Error Data:#{UI.colors().reset} #{inspect(data)}")
 
-    IO.puts(
-      "  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}"
-    )
+    IO.puts("  #{UI.colors().info}Protocol Version:#{UI.colors().reset} #{state.protocol_version}")
 
     if state.server_info do
-      IO.puts(
-        "  #{UI.colors().info}Server Info:#{UI.colors().reset} #{inspect(state.server_info)}"
-      )
+      IO.puts("  #{UI.colors().info}Server Info:#{UI.colors().reset} #{inspect(state.server_info)}")
     end
   end
 
   defp show_state(client, loop_fn) do
-    IO.puts(
-      "\n#{UI.colors().info}Getting internal state information...#{UI.colors().reset}"
-    )
+    IO.puts("\n#{UI.colors().info}Getting internal state information...#{UI.colors().reset}")
 
     State.print_state(client)
 
@@ -493,9 +444,7 @@ defmodule Mix.Interactive.Commands do
   end
 
   defp prompt_for_timeout do
-    IO.write(
-      "#{UI.colors().prompt}Timeout in ms (optional, press Enter for default): #{UI.colors().reset}"
-    )
+    IO.write("#{UI.colors().prompt}Timeout in ms (optional, press Enter for default): #{UI.colors().reset}")
 
     timeout_input = "" |> IO.gets() |> String.trim()
     parse_timeout_option(timeout_input)
@@ -509,9 +458,7 @@ defmodule Mix.Interactive.Commands do
         [timeout: timeout_ms]
 
       _ ->
-        IO.puts(
-          "#{UI.colors().warning}Invalid timeout value, using default#{UI.colors().reset}"
-        )
+        IO.puts("#{UI.colors().warning}Invalid timeout value, using default#{UI.colors().reset}")
 
         []
     end

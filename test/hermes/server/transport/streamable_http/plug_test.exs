@@ -69,10 +69,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       sup = registry.task_supervisor(StubServer)
 
       {:ok, transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 
@@ -142,10 +139,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 
@@ -208,10 +202,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       sup = registry.task_supervisor(StubServer)
 
       {:ok, transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 
@@ -247,10 +238,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       sup = registry.task_supervisor(StubServer)
 
       {:ok, _transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 
@@ -298,10 +286,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       start_supervised!({Task.Supervisor, name: sup})
 
       {:ok, transport} =
-        start_supervised(
-          {StreamableHTTP,
-           server: StubServer, name: name, registry: registry, task_supervisor: sup}
-        )
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
 
       opts = StreamableHTTPPlug.init(server: StubServer)
 

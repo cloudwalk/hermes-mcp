@@ -106,8 +106,7 @@ defmodule Hermes.Server.Component.ToolAnnotationsTest do
 
       # Start session supervisor
       start_supervised!(
-        {Hermes.Server.Session.Supervisor,
-         server: ServerWithAnnotatedTools, registry: Hermes.Server.Registry}
+        {Hermes.Server.Session.Supervisor, server: ServerWithAnnotatedTools, registry: Hermes.Server.Registry}
       )
 
       server_opts = [

@@ -5,7 +5,7 @@ defmodule Hermes.MCP.ResponseTest do
 
   @moduletag capture_log: true
 
-  doctest Hermes.MCP.Response
+  doctest Response
 
   describe "from_json_rpc/1" do
     test "creates a response from a JSON-RPC response" do

@@ -80,8 +80,7 @@ defmodule Hermes.Server.Session.Supervisor do
       # Attempting to close non-existent session
       {:error, :not_found} = Session.Supervisor.close_session(MyRegistry, MyServer, "unknown")
   """
-  def close_session(registry \\ Hermes.Server.Registry, server, session_id)
-      when is_binary(session_id) do
+  def close_session(registry \\ Hermes.Server.Registry, server, session_id) when is_binary(session_id) do
     name = registry.supervisor(@kind, server)
 
     if pid = registry.whereis_server_session(server, session_id) do
