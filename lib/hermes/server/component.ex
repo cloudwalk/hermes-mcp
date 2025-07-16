@@ -24,7 +24,7 @@ defmodule Hermes.Server.Component do
     quote do
       @behaviour unquote(behaviour_module)
 
-      import Hermes.Server.Component, only: [schema: 1, field: 3, field: 2]
+      import Hermes.Server.Component, only: [schema: 1, output_schema: 1, field: 3, field: 2]
       import Hermes.Server.Frame
 
       @doc false
@@ -73,30 +73,6 @@ defmodule Hermes.Server.Component do
 
   The schema uses Peri's validation DSL and is automatically validated
   before the component's callback is executed.
-
-  ## Examples
-
-      schema do
-        %{
-          query: {:required, :string},
-          limit: {:integer, {:default, 10}},
-          filters: %{
-            status: {:enum, ["active", "inactive", "pending"]},
-            created_after: :datetime
-          }
-        }
-      end
-
-      # With field metadata for JSON Schema (no braces needed!)
-      schema do
-        field(:email, {:required, :string}, format: "email", description: "User's email address")
-        field(:age, :integer, description: "Age in years")
-        field :address, description: "User's address" do
-          field(:street, {:required, :string})
-          field(:city, :string)
-          field(:country, :string, description: "ISO 3166-1 alpha-2 code")
-        end
-      end
   """
   defmacro schema(do: schema_def) do
     wrapped_schema =
@@ -119,8 +95,51 @@ defmodule Hermes.Server.Component do
       @doc false
       def __mcp_raw_schema__, do: unquote(wrapped_schema)
 
-      defschema :mcp_schema,
-                Component.__clean_schema_for_peri__(unquote(wrapped_schema))
+      defschema(
+        :mcp_schema,
+        Component.__clean_schema_for_peri__(unquote(wrapped_schema))
+      )
+    end
+  end
+
+  @doc """
+  Defines the output schema for a tool component.
+
+  This schema describes the expected structure of the tool's output in the
+  structuredContent field. Only available for tool components.
+  """
+  defmacro output_schema(do: schema_def) do
+    wrapped_schema =
+      case schema_def do
+        {:%{}, _, _} = map_ast ->
+          map_ast
+
+        {:__block__, _, field_calls} ->
+          {:%{}, [], field_calls}
+
+        single_field ->
+          {:%{}, [], [single_field]}
+      end
+
+    quote do
+      import Peri
+
+      alias Hermes.Server.Component
+
+      @doc false
+      def __mcp_output_schema__, do: unquote(wrapped_schema)
+
+      defschema(
+        :mcp_output_schema,
+        Component.__clean_schema_for_peri__(unquote(wrapped_schema))
+      )
+
+      @impl true
+      def output_schema do
+        alias Hermes.Server.Component.Schema
+
+        Schema.to_json_schema(__mcp_output_schema__())
+      end
     end
   end
 

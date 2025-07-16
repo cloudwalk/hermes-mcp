@@ -69,9 +69,11 @@ defmodule Hermes.Server.Component.Tool do
           title: String.t() | nil,
           description: String.t() | nil,
           input_schema: map | nil,
+          output_schema: map | nil,
           annotations: map | nil,
           handler: module | nil,
-          validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
+          validate_input: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil,
+          validate_output: (map -> {:ok, map} | {:error, [Peri.Error.t()]}) | nil
         }
 
   defstruct [
@@ -79,9 +81,11 @@ defmodule Hermes.Server.Component.Tool do
     title: nil,
     description: nil,
     input_schema: nil,
+    output_schema: nil,
     annotations: nil,
     handler: nil,
-    validate_input: nil
+    validate_input: nil,
+    validate_output: nil
   ]
 
   @doc """
@@ -91,6 +95,15 @@ defmodule Hermes.Server.Component.Tool do
   The schema should follow the JSON Schema specification.
   """
   @callback input_schema() :: schema()
+
+  @doc """
+  Returns the JSON Schema for the tool's output structure.
+
+  This schema defines the expected structure of the tool's output in the
+  structuredContent field. The schema should follow the JSON Schema specification.
+  This is an optional callback.
+  """
+  @callback output_schema() :: schema()
 
   @doc """
   Returns optional annotations for the tool.
@@ -146,7 +159,7 @@ defmodule Hermes.Server.Component.Tool do
               | {:noreply, new_state :: Frame.t()}
               | {:error, error :: Error.t(), new_state :: Frame.t()}
 
-  @optional_callbacks annotations: 0
+  @optional_callbacks annotations: 0, output_schema: 0
 
   defimpl JSON.Encoder, for: __MODULE__ do
     alias Hermes.Server.Component.Tool
@@ -158,6 +171,7 @@ defmodule Hermes.Server.Component.Tool do
         "inputSchema" => tool.input_schema
       }
       |> then(&if t = tool.title, do: Map.put(&1, "title", t), else: &1)
+      |> then(&if os = tool.output_schema, do: Map.put(&1, "outputSchema", os), else: &1)
       |> then(&if a = tool.annotations, do: Map.put(&1, "annotations", a), else: &1)
       |> JSON.encode!()
     end

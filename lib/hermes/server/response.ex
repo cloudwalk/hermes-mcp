@@ -33,6 +33,7 @@ defmodule Hermes.Server.Response do
           total: integer | nil,
           hasMore: boolean,
           isError: boolean,
+          structured_content: map | nil,
           metadata: map
         }
 
@@ -45,6 +46,7 @@ defmodule Hermes.Server.Response do
     total: nil,
     hasMore: false,
     isError: false,
+    structured_content: nil,
     metadata: %{}
   ]
 
@@ -165,6 +167,33 @@ defmodule Hermes.Server.Response do
 
   def json(%{type: :resource} = r, data) do
     %{r | contents: %{"text" => JSON.encode!(data)}}
+  end
+
+  @doc """
+  Set structured content for a tool response.
+
+  This adds structured JSON content that conforms to the tool's output schema.
+  For backward compatibility, this also adds the JSON as text content.
+
+  ## Parameters
+
+    * `response` - A tool response struct
+    * `data` - A map containing the structured data
+
+  ## Examples
+
+      iex> Response.tool() |> Response.structured(%{temperature: 22.5, conditions: "Partly cloudy"})
+      %Response{
+        type: :tool,
+        content: [%{"type" => "text", "text" => "{\\"temperature\\":22.5,\\"conditions\\":\\"Partly cloudy\\"}"}],
+        structured_content: %{temperature: 22.5, conditions: "Partly cloudy"},
+        isError: false
+      }
+  """
+  def structured(%{type: :tool} = r, data) when is_map(data) do
+    r
+    |> Map.put(:structured_content, data)
+    |> add_content(%{"type" => "text", "text" => JSON.encode!(data)})
   end
 
   @doc """
@@ -516,7 +545,11 @@ defmodule Hermes.Server.Response do
       %{"text" => "data"}
   """
   def to_protocol(%{type: :tool} = r) do
-    %{"content" => r.content, "isError" => r.isError}
+    base = %{"content" => r.content, "isError" => r.isError}
+
+    if r.structured_content,
+      do: Map.put(base, "structuredContent", r.structured_content),
+      else: base
   end
 
   def to_protocol(%{type: :prompt} = r) do

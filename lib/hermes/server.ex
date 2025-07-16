@@ -528,6 +528,16 @@ defmodule Hermes.Server do
 
   def parse_components({:tool, name, mod}) do
     annotations = if Hermes.exported?(mod, :annotations, 0), do: mod.annotations()
+    output_schema = if Hermes.exported?(mod, :output_schema, 0), do: mod.output_schema()
+
+    validate_output =
+      if output_schema do
+        fn params ->
+          mod.__mcp_output_schema__()
+          |> Component.__clean_schema_for_peri__()
+          |> Peri.validate(params)
+        end
+      end
 
     if Hermes.exported?(mod, :input_schema, 0) do
       validate_input = fn params ->
@@ -541,9 +551,11 @@ defmodule Hermes.Server do
           name: name,
           description: Component.get_description(mod),
           input_schema: mod.input_schema(),
+          output_schema: output_schema,
           annotations: annotations,
           handler: mod,
-          validate_input: validate_input
+          validate_input: validate_input,
+          validate_output: validate_output
         }
       ]
     else

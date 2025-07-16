@@ -415,6 +415,7 @@ defmodule Hermes.Server.Frame do
         when tool_opt:
                {:description, String.t() | nil}
                | {:input_schema, map | nil}
+               | {:output_schema, map | nil}
                | {:title, String.t() | nil}
                | {:annotations, map | nil}
   def register_tool(%__MODULE__{} = frame, name, opts) when is_binary(name) do
@@ -422,12 +423,22 @@ defmodule Hermes.Server.Frame do
     raw_schema = Component.__clean_schema_for_peri__(input_schema)
     validate_input = fn params -> Peri.validate(raw_schema, params) end
 
+    output_schema = if s = opts[:output_schema], do: Schema.normalize(s)
+
+    validate_output =
+      if output_schema do
+        raw_output = Component.__clean_schema_for_peri__(output_schema)
+        fn params -> Peri.validate(raw_output, params) end
+      end
+
     update_components(frame, %Tool{
       name: name,
       description: opts[:description],
       input_schema: Schema.to_json_schema(input_schema),
+      output_schema: if(output_schema, do: Schema.to_json_schema(output_schema)),
       annotations: opts[:annotations],
-      validate_input: validate_input
+      validate_input: validate_input,
+      validate_output: validate_output
     })
   end
 
