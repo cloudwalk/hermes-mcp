@@ -307,6 +307,14 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  @impl GenServer
+  def format_status(status) do
+    Map.new(status, fn
+      {:state, state} -> {:state, sanitize_state(state)}
+      key_value -> key_value
+    end)
+  end
+
   defguardp is_server_initialized(decoded, session)
             when Message.is_initialize_lifecycle(decoded) or
                    Session.is_initialized(session)
@@ -906,5 +914,90 @@ defmodule Hermes.Server.Base do
       {:stop, reason, new_frame} ->
         {:stop, reason, %{state | frame: new_frame}}
     end
+  end
+
+  # Sanitization helpers for format_status
+
+  defp sanitize_state(state) when is_map(state) do
+    patterns = get_redact_patterns(state.module)
+    Map.update(state, :frame, nil, &sanitize_frame(&1, patterns))
+  end
+
+  defp sanitize_state(state), do: state
+
+  defp sanitize_frame(%Frame{} = frame, patterns) do
+    %{
+      frame
+      | assigns: sanitize_data(frame.assigns, patterns),
+        private: sanitize_private(frame.private),
+        transport: sanitize_transport(frame.transport, patterns),
+        request: frame.request
+    }
+  end
+
+  defp sanitize_frame(frame, _), do: frame
+
+  defp sanitize_private(private) when is_map(private) do
+    Map.new(private, fn
+      {:client_info, info} ->
+        {:client_info, sanitize_client_info(info)}
+
+      {:__mcp_components__, components} ->
+        {:__mcp_components__, "[#{length(components)} components]"}
+
+      kv ->
+        kv
+    end)
+  end
+
+  defp sanitize_private(private), do: private
+
+  defp sanitize_client_info(info) when is_map(info) do
+    Map.take(info, ["name", "version"])
+  end
+
+  defp sanitize_transport(%{type: type, req_headers: headers} = transport, patterns)
+       when type in ~w(http sse)a and is_list(headers) do
+    %{transport | req_headers: sanitize_data(headers, patterns)}
+  end
+
+  defp sanitize_transport(%{type: :stdio, env: env} = transport, patterns)
+       when is_map(env) do
+    %{transport | env: sanitize_data(env, patterns)}
+  end
+
+  defp sanitize_transport(_transport, _), do: %{}
+
+  defp sanitize_data(data, patterns) when is_map(data) or is_list(data) do
+    Enum.map(data, fn {key, value} ->
+      if matches_pattern?(key, patterns) do
+        {key, "[REDACTED]"}
+      else
+        {key, value}
+      end
+    end)
+  end
+
+  defp sanitize_data(data, _), do: data
+
+  defp matches_pattern?(key, patterns) when is_list(patterns) do
+    key_str = key |> to_string() |> String.downcase()
+
+    Enum.any?(patterns, fn
+      %Regex{} = regex ->
+        Regex.match?(regex, key_str)
+
+      pattern when is_binary(pattern) ->
+        String.contains?(key_str, String.downcase(pattern))
+
+      _ ->
+        false
+    end)
+  end
+
+  defp matches_pattern?(_, _), do: false
+
+  defp get_redact_patterns(module) do
+    Application.get_env(:hermes_mcp, module)[:redact_patterns] || []
   end
 end
