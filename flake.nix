@@ -2,7 +2,7 @@
   description = "Model Context Protocol SDK for Elixir";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05-small";
     elixir-overlay.url = "github:zoedsoupe/elixir-overlay";
   };
 
@@ -37,8 +37,8 @@
       default = pkgs.mkShell {
         name = "hermes-mcp-dev";
         packages = with pkgs; [
-          elixir-bin."1.19.0-rc.0"
-          erlang
+          (elixir-with-otp erlang_28)."1.18.4"
+          erlang_28
           uv
           just
           go
