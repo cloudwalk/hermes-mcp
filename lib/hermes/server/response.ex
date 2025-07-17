@@ -28,7 +28,7 @@ defmodule Hermes.Server.Response do
           type: :tool | :prompt | :resource | :completion,
           content: list(map),
           messages: list(map),
-          contents: list(map) | nil,
+          contents: map | nil,
           values: list(map),
           total: integer | nil,
           hasMore: boolean,

@@ -37,6 +37,12 @@ defmodule Hermes.MixProject do
     ]
   end
 
+  def cli do
+    [
+      preferred_envs: [dialyzer: :test]
+    ]
+  end
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
