@@ -37,6 +37,13 @@ defmodule Hermes.Server.Response do
           metadata: map
         }
 
+  @type annotations ::
+          Enumerable.t(
+            {:last_modified, DateTime.t() | nil}
+            | {:audience, list(:user | :assistant) | nil}
+            | {:priority, float | nil}
+          )
+
   defstruct [
     :type,
     content: [],
@@ -58,6 +65,7 @@ defmodule Hermes.Server.Response do
       iex> Response.tool()
       %Response{type: :tool, content: [], isError: false}
   """
+  @spec tool :: t()
   def tool, do: %__MODULE__{type: :tool}
 
   @doc """
@@ -75,6 +83,8 @@ defmodule Hermes.Server.Response do
       iex> Response.prompt("Weather assistant prompt")
       %Response{type: :prompt, messages: [], description: "Weather assistant prompt"}
   """
+  @spec prompt :: t()
+  @spec prompt(description :: String.t() | nil) :: t()
   def prompt(description \\ nil) do
     response = %__MODULE__{type: :prompt}
     if description, do: Map.put(response, :description, description), else: response
@@ -91,6 +101,7 @@ defmodule Hermes.Server.Response do
       iex> Response.resource()
       %Response{type: :resource, contents: nil}
   """
+  @spec resource :: t()
   def resource, do: %__MODULE__{type: :resource}
 
   @doc """
@@ -101,6 +112,7 @@ defmodule Hermes.Server.Response do
       iex> Response.completion()
       %Response{type: :completion, values: [], hasMore: false}
   """
+  @spec completion :: t()
   def completion, do: %__MODULE__{type: :completion}
 
   @doc """
@@ -126,12 +138,19 @@ defmodule Hermes.Server.Response do
       iex> Response.resource() |> Response.text("File contents")
       %Response{type: :resource, contents: %{"text" => "File contents"}}
   """
-  def text(%{type: :tool} = r, text) when is_binary(text) do
-    add_content(r, %{"type" => "text", "text" => text})
+  @spec text(t(), content :: String.t(), annotations) :: t
+  def text(r, text, opts \\ [])
+
+  def text(%{type: :tool} = r, text, opts) when is_binary(text) do
+    content = %{"type" => "text", "text" => text}
+    content = maybe_add_annotations(content, opts[:annotations])
+    add_content(r, content)
   end
 
-  def text(%{type: :resource} = r, text) when is_binary(text) do
-    %{r | contents: %{"text" => text}}
+  def text(%{type: :resource} = r, text, opts) when is_binary(text) do
+    contents = %{"text" => text}
+    contents = maybe_add_annotations(contents, opts[:annotations])
+    %{r | contents: contents}
   end
 
   @doc """
@@ -161,12 +180,9 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
-  def json(%{type: :tool} = r, data) do
-    add_content(r, %{"type" => "text", "text" => JSON.encode!(data)})
-  end
-
-  def json(%{type: :resource} = r, data) do
-    %{r | contents: %{"text" => JSON.encode!(data)}}
+  @spec json(t(), data :: map, annotations) :: t
+  def json(%{type: type} = r, data, opts \\ []) when type in ~w(tool resource)a do
+    text(r, JSON.encode!(data), opts)
   end
 
   @doc """
@@ -190,10 +206,11 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
+  @spec structured(t(), data :: map) :: t
   def structured(%{type: :tool} = r, data) when is_map(data) do
     r
+    |> json(data)
     |> Map.put(:structured_content, data)
-    |> add_content(%{"type" => "text", "text" => JSON.encode!(data)})
   end
 
   @doc """
@@ -214,8 +231,11 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
-  def image(%{type: :tool} = r, data, mime_type) when is_binary(data) and is_binary(mime_type) do
-    add_content(r, %{"type" => "image", "data" => data, "mimeType" => mime_type})
+  @spec image(t(), blob :: binary, mime_type :: String.t(), annotations) :: t
+  def image(%{type: :tool} = r, data, mime_type, opts \\ []) when is_binary(data) and is_binary(mime_type) do
+    content = %{"type" => "image", "data" => data, "mimeType" => mime_type}
+    content = maybe_add_annotations(content, opts[:annotations])
+    add_content(r, content)
   end
 
   @doc """
@@ -250,6 +270,7 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
+  @spec audio(t(), blob :: binary, mime_type :: String.t(), annotations) :: t
   def audio(%{type: :tool} = r, data, mime_type, opts \\ []) do
     content = %{"type" => "audio", "data" => data, "mimeType" => mime_type}
 
@@ -258,6 +279,7 @@ defmodule Hermes.Server.Response do
         do: Map.put(content, "transcription", opts[:transcription]),
         else: content
 
+    content = maybe_add_annotations(content, opts[:annotations])
     add_content(r, content)
   end
 
@@ -283,16 +305,69 @@ defmodule Hermes.Server.Response do
       ...>   text: "File contents"
       ...> )
   """
+  @spec embedded_resource(t, uri :: String.t(), annotations) :: t
   def embedded_resource(%{type: :tool} = r, uri, opts \\ []) do
     resource =
       %{"uri" => uri}
       |> maybe_put("name", opts[:name])
+      |> maybe_put("title", opts[:title])
       |> maybe_put("description", opts[:description])
       |> maybe_put("mimeType", opts[:mime_type])
       |> maybe_put("text", opts[:text])
       |> maybe_put("blob", opts[:blob])
 
+    resource = maybe_add_annotations(resource, opts[:annotations])
     add_content(r, %{"type" => "resource", "resource" => resource})
+  end
+
+  @doc """
+  Add a resource link to a tool response.
+
+  ## Parameters
+
+    * `response` - A tool response struct
+    * `uri` - The resource URI
+    * `name` - The name of the resource
+    * `opts` - Optional keyword list with:
+      * `:title` - Human-readable title
+      * `:description` - Resource description
+      * `:mime_type` - MIME type
+      * `:size` - Size in bytes
+      * `:annotations` - Optional annotations map
+
+  ## Examples
+
+      iex> Response.tool() |> Response.resource_link("file://main.rs", "main.rs",
+      ...>   title: "Main File",
+      ...>   description: "Primary application entry point",
+      ...>   mime_type: "text/x-rust",
+      ...>   annotations: %{audience: ["assistant"], priority: 0.9}
+      ...> )
+      %Response{
+        type: :tool,
+        content: [%{
+          "type" => "resource_link",
+          "uri" => "file://main.rs",
+          "name" => "main.rs",
+          "title" => "Main File",
+          "description" => "Primary application entry point",
+          "mimeType" => "text/x-rust",
+          "annotations" => %{"audience" => ["assistant"], "priority" => 0.9}
+        }],
+        isError: false
+      }
+  """
+  @spec resource_link(t, uri :: String.t(), name :: String.t(), annotations) :: t
+  def resource_link(%{type: :tool} = r, uri, name, opts \\ []) when is_binary(uri) and is_binary(name) do
+    content =
+      %{"type" => "resource_link", "uri" => uri, "name" => name}
+      |> maybe_put("title", opts[:title])
+      |> maybe_put("description", opts[:description])
+      |> maybe_put("mimeType", opts[:mime_type])
+      |> maybe_put("size", opts[:size])
+      |> maybe_add_annotations(opts[:annotations])
+
+    add_content(r, content)
   end
 
   @doc """
@@ -312,6 +387,7 @@ defmodule Hermes.Server.Response do
         isError: true
       }
   """
+  @spec error(t, message :: String.t()) :: t
   def error(%{type: :tool} = r, message) when is_binary(message) do
     r
     |> text(message)
@@ -334,6 +410,7 @@ defmodule Hermes.Server.Response do
         messages: [%{"role" => "user", "content" => "What's the weather?"}]
       }
   """
+  @spec user_message(t, term) :: t
   def user_message(%{type: :prompt} = r, content) do
     add_message(r, %{"role" => "user", "content" => build_message_content(content)})
   end
@@ -354,6 +431,7 @@ defmodule Hermes.Server.Response do
         messages: [%{"role" => "assistant", "content" => "Let me check the weather for you."}]
       }
   """
+  @spec assistant_message(t, term) :: t
   def assistant_message(%{type: :prompt} = r, content) do
     add_message(r, %{
       "role" => "assistant",
@@ -377,6 +455,7 @@ defmodule Hermes.Server.Response do
         messages: [%{"role" => "system", "content" => "You are a helpful weather assistant."}]
       }
   """
+  @spec system_message(t, term) :: t
   def system_message(%{type: :prompt} = r, content) do
     add_message(r, %{"role" => "system", "content" => build_message_content(content)})
   end
@@ -387,15 +466,15 @@ defmodule Hermes.Server.Response do
   ## Parameters
 
     * `response` - A resource response struct
-    * `data` - Base64 encoded binary data
+    * `data` - binary data
 
   ## Examples
 
-      iex> Response.resource() |> Response.blob(base64_data)
+      iex> Response.resource() |> Response.blob(data)
       %Response{type: :resource, contents: %{"blob" => base64_data}}
   """
   def blob(%{type: :resource} = r, data) when is_binary(data) do
-    %{r | contents: %{"blob" => data}}
+    %{r | contents: %{"blob" => Base.url_encode64(data, padding: false)}}
   end
 
   @doc """
@@ -411,6 +490,7 @@ defmodule Hermes.Server.Response do
       iex> Response.resource() |> Response.name("Configuration File")
       %Response{type: :resource, metadata: %{name: "Configuration File"}}
   """
+  @spec name(t, String.t()) :: t
   def name(%{type: :resource} = r, name) when is_binary(name) do
     put_metadata(r, :name, name)
   end
@@ -428,8 +508,27 @@ defmodule Hermes.Server.Response do
       iex> Response.resource() |> Response.description("Application configuration settings")
       %Response{type: :resource, metadata: %{description: "Application configuration settings"}}
   """
+  @spec description(t, String.t()) :: t
   def description(%{type: :resource} = r, desc) when is_binary(desc) do
     put_metadata(r, :description, desc)
+  end
+
+  @doc """
+  Set optional size for a resource response.
+
+  ## Parameters
+
+    * `response` - A resource response struct
+    * `size` - Size in bytes
+
+  ## Examples
+
+      iex> Response.resource() |> Response.size(1024)
+      %Response{type: :resource, metadata: %{size: 1024}}
+  """
+  @spec size(t, non_neg_integer) :: t
+  def size(%{type: :resource} = r, size) when is_integer(size) and size >= 0 do
+    put_metadata(r, :size, size)
   end
 
   @doc """
@@ -451,6 +550,8 @@ defmodule Hermes.Server.Response do
         values: [%{"value" => "tool:calculator", "description" => "Math calculator tool"}]
       }
   """
+  @spec completion_value(t, value :: String.t(), list(completion_opt)) :: t
+        when completion_opt: {:description, String.t() | nil} | {:label, String.t() | nil}
   def completion_value(%{type: :completion} = r, value, opts \\ []) when is_binary(value) do
     completion_item =
       %{"value" => value}
@@ -481,6 +582,12 @@ defmodule Hermes.Server.Response do
       ...>   %{value: "bar", description: "Bar option"}
       ...> ])
   """
+  @spec completion_values(t, list(completion)) :: t
+        when completion: %{
+               required(:value) => binary,
+               optional(:description) => String.t() | nil,
+               optional(:label) => String.t() | nil
+             }
   def completion_values(%{type: :completion} = r, values) when is_list(values) do
     normalized_values =
       Enum.map(values, fn
@@ -520,6 +627,7 @@ defmodule Hermes.Server.Response do
         hasMore: true
       }
   """
+  @spec with_pagination(t, total :: non_neg_integer, has_more? :: boolean) :: t
   def with_pagination(%{type: :completion} = r, total, has_more) when is_integer(total) and is_boolean(has_more) do
     %{r | total: total, hasMore: has_more}
   end
@@ -544,6 +652,7 @@ defmodule Hermes.Server.Response do
       iex> Response.resource() |> Response.text("data") |> Response.to_protocol()
       %{"text" => "data"}
   """
+  @spec to_protocol(t) :: map
   def to_protocol(%{type: :tool} = r) do
     base = %{"content" => r.content, "isError" => r.isError}
 
@@ -588,4 +697,21 @@ defmodule Hermes.Server.Response do
 
   defp build_message_content(text) when is_binary(text), do: text
   defp build_message_content(content), do: content
+
+  @annotations_schema %{
+    last_modified: :datetime,
+    priority: {:float, gte: 0.0, lte: 1.0},
+    audience: {:list, {:enum, ~w(user assistant)}}
+  }
+
+  defp maybe_add_annotations(map, nil), do: map
+
+  defp maybe_add_annotations(map, annotations) do
+    {:ok, annotations} = Peri.validate(@annotations_schema, annotations)
+
+    annotations
+    |> then(&if(l = &1[:last_modified], do: Map.put(&1, :lastModified, l), else: &1))
+    |> Map.delete(:last_modified)
+    |> then(fn a -> Map.put(map, "annotations", a) end)
+  end
 end
