@@ -62,7 +62,8 @@ defmodule Hermes.Client.State do
         id: request_id,
         method: operation.method,
         from: from,
-        timer_ref: timer_ref
+        timer_ref: timer_ref,
+        params: operation.params
       })
 
     pending_requests = Map.put(state.pending_requests, request_id, request)

@@ -19,22 +19,19 @@ defmodule Hermes.Client.Cache do
     :ets.delete_all_objects(table_name)
 
     tools
-    |> Enum.reduce([], &fetch_tool_validator/2)
+    |> Enum.filter(& &1["outputSchema"])
+    |> Enum.flat_map(&fetch_tool_validator/1)
     |> then(&:ets.insert(table_name, &1))
 
     :ok
   end
 
-  defp fetch_tool_validator(%{"outputSchema" => nil}, validators), do: validators
-
-  defp fetch_tool_validator(%{"outputSchema" => s, "name" => name}, validators) when is_map(s) do
+  defp fetch_tool_validator(%{"outputSchema" => s, "name" => name}) when is_map(s) do
     case JSONSchemaConverter.validator(s) do
-      {:ok, validator} -> [{name, validator} | validators]
-      {:error, _errors} -> :ok
+      {:ok, validator} -> [{name, validator}]
+      {:error, _errors} -> []
     end
   end
-
-  defp fetch_tool_validator(_tool, validators), do: validators
 
   @doc """
   Gets a tool output validator from the cache.

@@ -6,10 +6,11 @@ defmodule Hermes.Client.Request do
           method: String.t(),
           from: GenServer.from(),
           timer_ref: reference(),
-          start_time: integer()
+          start_time: integer(),
+          params: map()
         }
 
-  defstruct [:id, :method, :from, :timer_ref, :start_time]
+  defstruct [:id, :method, :from, :timer_ref, :start_time, :params]
 
   @doc """
   Creates a new request struct.
@@ -26,7 +27,8 @@ defmodule Hermes.Client.Request do
           id: String.t(),
           method: String.t(),
           from: GenServer.from(),
-          timer_ref: reference()
+          timer_ref: reference(),
+          params: map()
         }) :: t()
   def new(attrs) do
     %__MODULE__{
@@ -34,6 +36,7 @@ defmodule Hermes.Client.Request do
       method: attrs.method,
       from: attrs.from,
       timer_ref: attrs.timer_ref,
+      params: attrs.params,
       start_time: System.monotonic_time(:millisecond)
     }
   end
