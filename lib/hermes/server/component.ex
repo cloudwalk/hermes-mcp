@@ -24,7 +24,18 @@ defmodule Hermes.Server.Component do
     quote do
       @behaviour unquote(behaviour_module)
 
-      import Hermes.Server.Component, only: [schema: 1, output_schema: 1, field: 3, field: 2]
+      import Hermes.Server.Component,
+        only: [
+          schema: 1,
+          output_schema: 1,
+          field: 3,
+          field: 2,
+          embeds_many: 3,
+          embeds_many: 2,
+          embeds_one: 3,
+          embeds_one: 2
+        ]
+
       import Hermes.Server.Frame
 
       @doc false
@@ -204,6 +215,75 @@ defmodule Hermes.Server.Component do
     end
   end
 
+  @doc """
+  Defines a field that embeds many objects (array of objects).
+
+  ## Examples
+
+      embeds_many :users, description: "List of users" do
+        field :id, :string, required: true, description: "User ID"
+        field :name, :string, description: "User name"
+      end
+
+      embeds_many :tags, required: true do
+        field :name, :string, required: true
+        field :value, :string
+      end
+  """
+  defmacro embeds_many(name, opts \\ [], do: block) do
+    {required, remaining_opts} = Keyword.pop(opts, :required, false)
+
+    nested_content =
+      case block do
+        {:__block__, _, expressions} ->
+          {:%{}, [], expressions}
+
+        single_expr ->
+          {:%{}, [], [single_expr]}
+      end
+
+    type = if required, do: {:required, {:list, nested_content}}, else: {:list, nested_content}
+
+    quote do
+      {unquote(name), {:mcp_field, unquote(type), unquote(remaining_opts)}}
+    end
+  end
+
+  @doc """
+  Defines a field that embeds one object.
+
+  ## Examples
+
+      embeds_one :user, description: "User object" do
+        field :id, :string, required: true, description: "User ID"
+        field :name, :string, description: "User name"
+      end
+
+      embeds_one :address, required: true do
+        field :street, :string, required: true
+        field :city, :string, required: true
+        field :zip, :string
+      end
+  """
+  defmacro embeds_one(name, opts \\ [], do: block) do
+    {required, remaining_opts} = Keyword.pop(opts, :required, false)
+
+    nested_content =
+      case block do
+        {:__block__, _, expressions} ->
+          {:%{}, [], expressions}
+
+        single_expr ->
+          {:%{}, [], [single_expr]}
+      end
+
+    type = if required, do: {:required, nested_content}, else: nested_content
+
+    quote do
+      {unquote(name), {:mcp_field, unquote(type), unquote(remaining_opts)}}
+    end
+  end
+
   defp get_behaviour_module(:tool), do: Tool
   defp get_behaviour_module(:prompt), do: Prompt
   defp get_behaviour_module(:resource), do: Resource
@@ -324,6 +404,10 @@ defmodule Hermes.Server.Component do
 
   defp __inject_transforms__({:list, type}) do
     {:list, __inject_transforms__(type)}
+  end
+
+  defp __inject_transforms__(nested) when is_map(nested) do
+    __clean_schema_for_peri__(nested)
   end
 
   defp __inject_transforms__(type), do: type
