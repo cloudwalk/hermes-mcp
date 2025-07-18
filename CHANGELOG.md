@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.12.1...v0.13.0) (2025-07-18)
+
+
+### Features
+
+* allow redact patterns on server assigns/data ([#190](https://github.com/cloudwalk/hermes-mcp/issues/190)) ([07af99f](https://github.com/cloudwalk/hermes-mcp/commit/07af99f9e43d2afa87bf5504437ecf21c346a1d7))
+* better dsl for embedded nested fields on server components ([#199](https://github.com/cloudwalk/hermes-mcp/issues/199)) ([097f5fd](https://github.com/cloudwalk/hermes-mcp/commit/097f5fd8f788aaaa73c5e3d6699937656488886f))
+* new server response contents for tools/resources with annotations (2025-06-18) ([#195](https://github.com/cloudwalk/hermes-mcp/issues/195)) ([9b65308](https://github.com/cloudwalk/hermes-mcp/commit/9b653087a6ddfac399b33be2c4be54d564335c84))
+* resources templates ([#193](https://github.com/cloudwalk/hermes-mcp/issues/193)) ([1457e59](https://github.com/cloudwalk/hermes-mcp/commit/1457e59f16b77ca894b07a731d69ca5f8337c42b))
+* tools output schema feature (2025-06-18) ([#194](https://github.com/cloudwalk/hermes-mcp/issues/194)) ([8088a49](https://github.com/cloudwalk/hermes-mcp/commit/8088a49ce4463a01e899418bb9c34fce30427d3c))
+
+
+### Miscellaneous Chores
+
+* deprecate sse transport ([#187](https://github.com/cloudwalk/hermes-mcp/issues/187)) ([1932fbc](https://github.com/cloudwalk/hermes-mcp/commit/1932fbcdef12194c496d3ac074b17ef65fe18e49))
+* **deps:** bump the npm_and_yarn group across 1 directory with 2 updates ([#198](https://github.com/cloudwalk/hermes-mcp/issues/198)) ([5e21aac](https://github.com/cloudwalk/hermes-mcp/commit/5e21aac07ab1e709cb2bad8ddf9f45ba3ff99ef9))
+* readme ([bed6ff7](https://github.com/cloudwalk/hermes-mcp/commit/bed6ff78ed617af3eaba6d316c1107643e8aea06))
+
 ## [0.12.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.12.0...v0.12.1) (2025-07-14)
 
 

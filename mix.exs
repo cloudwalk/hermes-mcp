@@ -1,7 +1,7 @@
 defmodule Hermes.MixProject do
   use Mix.Project
 
-  @version "0.12.1"
+  @version "0.13.0"
   @source_url "https://github.com/cloudwalk/hermes-mcp"
 
   def project do
@@ -57,7 +57,7 @@ defmodule Hermes.MixProject do
       {:bypass, "~> 2.1", only: :test},
       {:cowboy, "~> 2.10", only: :test},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
+      {:ex_doc, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false}
     ]
