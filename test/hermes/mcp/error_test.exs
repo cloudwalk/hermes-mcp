@@ -139,7 +139,7 @@ defmodule Hermes.MCP.ErrorTest do
       error = Error.protocol(:parse_error)
       {:ok, encoded} = Error.to_json_rpc(error, "req-123")
 
-      decoded = Jason.decode!(encoded)
+      decoded = JSON.decode!(encoded)
       assert decoded["jsonrpc"] == "2.0"
       assert decoded["id"] == "req-123"
       assert decoded["error"]["code"] == -32_700
@@ -150,7 +150,7 @@ defmodule Hermes.MCP.ErrorTest do
       error = Error.protocol(:invalid_params, %{field: "name"})
       {:ok, encoded} = Error.to_json_rpc(error, 1)
 
-      decoded = Jason.decode!(encoded)
+      decoded = JSON.decode!(encoded)
       assert decoded["error"]["data"]["field"] == "name"
     end
 
@@ -158,7 +158,7 @@ defmodule Hermes.MCP.ErrorTest do
       error = Error.execution("Custom error message")
       {:ok, encoded} = Error.to_json_rpc(error, 1)
 
-      decoded = Jason.decode!(encoded)
+      decoded = JSON.decode!(encoded)
       assert decoded["error"]["message"] == "Custom error message"
     end
   end

@@ -476,6 +476,174 @@ Any assign key matching these patterns will be redacted as `[REDACTED]` in logs:
 
 This helps prevent accidental exposure of sensitive data in error logs or crash reports while maintaining debugging capabilities.
 
+### OAuth 2.1 Authorization
+
+Hermes provides built-in OAuth 2.1 authorization for HTTP transports, implementing RFC 9728 (OAuth 2.0 Protected Resource Metadata). This allows you to secure your MCP server with standard OAuth bearer tokens.
+
+#### Quick Start
+
+Most OAuth setups fall into two categories: JWT tokens or opaque tokens. Hermes has built-in validators for both.
+
+**For JWT tokens** (most common):
+
+```elixir
+# In your application.ex
+auth_config = [
+  authorization_servers: ["https://auth.example.com"],
+  realm: "my-app-realm",
+  scopes_supported: ["read", "write", "admin"],
+  validator: Hermes.Server.Authorization.JWTValidator,
+  jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+]
+
+children = [
+  Hermes.Server.Registry,
+  {MyApp.Server, transport: {:streamable_http, authorization: auth_config}},
+  {Bandit, plug: MyApp.Router, port: 4000}
+]
+```
+
+**For opaque tokens** (with introspection):
+
+```elixir
+auth_config = [
+  authorization_servers: ["https://auth.example.com"],
+  realm: "my-app-realm",
+  scopes_supported: ["read", "write", "admin"],
+  validator: Hermes.Server.Authorization.IntrospectionValidator,
+  token_introspection_endpoint: "https://auth.example.com/oauth/introspect",
+  introspection_client_id: "my-mcp-server",
+  introspection_client_secret: System.fetch_env!("OAUTH_CLIENT_SECRET")
+]
+```
+
+#### Built-in Validators
+
+Hermes includes two production-ready validators that handle most OAuth scenarios:
+
+**JWTValidator** - Best for:
+- Auth0, Okta, Keycloak, AWS Cognito
+- Self-signed JWT tokens
+- When you want offline token validation
+- Supports RS256/384/512 and ES256/384/512
+
+**IntrospectionValidator** - Best for:
+- Opaque (non-JWT) tokens
+- When you need real-time revocation
+- Legacy OAuth systems
+- Extra security through server-side validation
+
+#### Using Authorization in Your Components
+
+Once configured, all your tools, resources, and prompts have access to authentication info:
+
+```elixir
+defmodule MyApp.SecureOperation do
+  use Hermes.Server.Component, type: :tool
+
+  schema do
+    %{operation: {:required, {:enum, ["read_data", "write_data"]}}}
+  end
+
+  def execute(%{operation: operation}, frame) do
+    # Check if user is authenticated
+    unless Hermes.Server.Frame.authenticated?(frame) do
+      error = Hermes.MCP.Error.execution("unauthorized", %{
+        message: "Authentication required"
+      })
+      return {:error, error, frame}
+    end
+    
+    # Get user info
+    user = Hermes.Server.Frame.get_auth_subject(frame)
+    scopes = Hermes.Server.Frame.get_auth_scopes(frame)
+    
+    # Check specific scope
+    if operation == "write_data" and not Hermes.Server.Frame.has_scope?(frame, "write") do
+      error = Hermes.MCP.Error.execution("unauthorized", %{
+        message: "This operation requires 'write' scope"
+      })
+      {:error, error, frame}
+    else
+      {:ok, "Operation completed by #{user}"}
+    end
+  end
+end
+```
+
+#### Custom Validators (Advanced)
+
+Only create a custom validator if the built-in ones don't meet your needs (rare). Examples include:
+
+- Proprietary token formats
+- Local token validation with custom logic
+- Integration with non-standard auth systems
+
+```elixir
+defmodule MyApp.CustomValidator do
+  @behaviour Hermes.Server.Authorization.Validator
+
+  @impl true
+  def validate_token(token, config) do
+    case MyApp.Auth.verify_token(token) do
+      {:ok, claims} ->
+        {:ok, %{
+          sub: claims["sub"],
+          aud: claims["aud"],
+          scope: claims["scope"],
+          exp: claims["exp"],
+          active: true
+        }}
+      
+      {:error, _reason} ->
+        {:error, :invalid_token}
+    end
+  end
+end
+```
+
+#### OAuth Metadata Discovery
+
+Hermes automatically serves OAuth 2.0 Protected Resource Metadata at `/.well-known/oauth-protected-resource`:
+
+```bash
+curl http://localhost:4000/.well-known/oauth-protected-resource
+
+{
+  "resource": "http://localhost:4000",
+  "authorization_servers": ["https://auth.example.com"],
+  "bearer_methods_supported": ["header"],
+  "scopes_supported": ["read", "write", "admin"]
+}
+```
+
+This helps clients discover your server's OAuth requirements automatically.
+
+#### Testing Your Protected Server
+
+```bash
+# Get a token from your auth server first
+TOKEN="your-access-token"
+
+# Initialize MCP session
+curl -X POST http://localhost:4000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {"name": "test-client", "version": "1.0.0"}
+    }
+  }'
+```
+
+The authorization is transparent to your MCP implementation - tokens are validated at the transport layer, and auth info flows through the frame context.
+
 ## What's Next?
 
 You've seen how to expose your Elixir application's capabilities to AI assistants. What patterns interest you most?

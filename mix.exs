@@ -49,6 +49,7 @@ defmodule Hermes.MixProject do
       {:finch, "~> 0.19"},
       {:peri, "~> 0.4"},
       {:telemetry, "~> 1.2"},
+      {:joken, "~> 2.6"},
       {:gun, "~> 2.2", optional: true},
       {:burrito, "~> 1.0", optional: true},
       {:plug, "~> 1.18", optional: true},

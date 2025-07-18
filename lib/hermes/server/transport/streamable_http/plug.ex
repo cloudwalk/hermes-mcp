@@ -63,6 +63,7 @@ if Code.ensure_loaded?(Plug) do
     alias Hermes.MCP.Error
     alias Hermes.MCP.ID
     alias Hermes.MCP.Message
+    alias Hermes.Server.Authorization
     alias Hermes.Server.Transport.StreamableHTTP
     alias Hermes.SSE.Streaming
     alias Plug.Conn.Unfetched
@@ -82,10 +83,28 @@ if Code.ensure_loaded?(Plug) do
       session_header = Keyword.get(opts, :session_header, @default_session_header)
       timeout = Keyword.get(opts, :timeout, @default_timeout)
 
-      %{transport: transport, session_header: session_header, timeout: timeout}
+      base_opts = %{
+        transport: transport,
+        session_header: session_header,
+        timeout: timeout
+      }
+
+      if auth_config = Keyword.get(opts, :authorization) do
+        auth_opts = Authorization.Plug.init(authorization: auth_config)
+        Map.put(base_opts, :authorization, auth_opts)
+      else
+        base_opts
+      end
     end
 
     @impl Plug
+    def call(conn, %{authorization: auth_opts} = opts) when not is_nil(auth_opts) do
+      case Authorization.Plug.call(conn, auth_opts) do
+        %{halted: true} = conn -> conn
+        conn -> call(conn, Map.delete(opts, :authorization))
+      end
+    end
+
     def call(conn, opts) do
       case conn.method do
         "GET" -> handle_get(conn, opts)
@@ -466,7 +485,7 @@ if Code.ensure_loaded?(Plug) do
     defp extract_request_id(_), do: nil
 
     defp build_request_context(conn) do
-      %{
+      context = %{
         assigns: conn.assigns,
         type: :http,
         req_headers: conn.req_headers,
@@ -477,6 +496,11 @@ if Code.ensure_loaded?(Plug) do
         port: conn.port,
         request_path: conn.request_path
       }
+
+      case conn.assigns[:mcp_auth] do
+        nil -> context
+        auth_info -> Map.put(context, :auth, auth_info)
+      end
     end
 
     defp fetch_query_params_safe(conn) do
