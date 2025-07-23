@@ -140,3 +140,20 @@ defmodule Hermes.Server.Session do
     Agent.get(session, & &1.pending_requests)
   end
 end
+
+defimpl Inspect, for: Hermes.Server.Session do
+  import Inspect.Algebra
+
+  def inspect(session, opts) do
+    info = [
+      id: session.id,
+      initialized: session.initialized,
+      pending_requests: map_size(session.pending_requests)
+    ]
+
+    info = if session.protocol_version, do: [{:protocol_version, session.protocol_version} | info], else: info
+    info = if session.client_info, do: [{:client_info, session.client_info["name"] || "unknown"} | info], else: info
+
+    concat(["#Session<", to_doc(info, opts), ">"])
+  end
+end
