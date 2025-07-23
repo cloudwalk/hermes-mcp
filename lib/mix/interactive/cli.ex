@@ -16,6 +16,8 @@ defmodule Mix.Interactive.CLI do
           transport: :string,
           base_url: :string,
           base_path: :string,
+          mcp_path: :string,
+          header: :keep,
           sse_path: :string,
           ws_path: :string,
           command: :string,
@@ -41,15 +43,19 @@ defmodule Mix.Interactive.CLI do
       "stdio" ->
         run_stdio_interactive(opts)
 
+      "streamable_http" ->
+        run_streamable_http_interactive(opts)
+
       _ ->
         IO.puts("""
         #{UI.colors().error}ERROR: Unknown transport type "#{transport}"
-        Usage: hermes-mcp --transport [sse|websocket|stdio] [options]
+        Usage: hermes-mcp --transport [sse|websocket|stdio|streamable_http] [options]
 
         Available transports:
-          sse       - SSE transport implementation
-          websocket - WebSocket transport implementation
-          stdio     - STDIO transport implementation
+          sse             - SSE transport implementation
+          websocket       - WebSocket transport implementation
+          stdio           - STDIO transport implementation
+          streamable_http - StreamableHTTP transport implementation
 
         Run with --help for more information#{UI.colors().reset}
         """)
@@ -165,6 +171,67 @@ defmodule Mix.Interactive.CLI do
     Shell.loop(client)
   end
 
+  defp run_streamable_http_interactive(opts) do
+    headers = parse_headers(Keyword.get_values(opts, :header))
+
+    server_options =
+      opts
+      |> Keyword.put(:headers, headers)
+      |> Keyword.put_new(:base_url, "http://localhost:8000")
+
+    server_url =
+      Path.join(server_options[:base_url], server_options[:base_path] || "")
+
+    IO.puts(UI.header("HERMES MCP STREAMABLE HTTP INTERACTIVE"))
+
+    client_info = %{"name" => "Hermes.CLI.StreamableHTTP", "version" => "0.1.0"}
+    name = StreamableHTTPTest
+    transport = StreamableHTTPTest.Transport
+
+    opts = [
+      name: name,
+      transport: {:streamable_http, server_options},
+      client_info: client_info
+    ]
+
+    {:ok, _} = Hermes.Client.Supervisor.start_link(name, opts)
+
+    http = Process.whereis(transport)
+
+    IO.puts("#{UI.colors().info}Connecting to StreamableHTTP server at: #{server_url}#{UI.colors().reset}\n")
+
+    check_streamable_http_connection(http)
+
+    client = Process.whereis(name)
+    IO.puts("#{UI.colors().info}• Starting client connection...#{UI.colors().reset}")
+    check_client_connection(client)
+
+    IO.puts("\nType #{UI.colors().command}help#{UI.colors().reset} for available commands\n")
+
+    Shell.loop(client)
+  end
+
+  defp parse_headers(header_list) when is_list(header_list) do
+    header_list
+    |> Enum.map(&parse_header/1)
+    |> Enum.reject(&is_nil/1)
+    |> Map.new()
+  end
+
+  defp parse_header(header_string) do
+    case String.split(header_string, ":", parts: 2) do
+      [key, value] ->
+        {String.trim(key), String.trim(value)}
+
+      _ ->
+        IO.puts(
+          "#{UI.colors().warning}Warning: Invalid header format '#{header_string}'. Expected 'Header-Name: value'#{UI.colors().reset}"
+        )
+
+        nil
+    end
+  end
+
   def check_client_connection(client, attempt \\ 5)
 
   def check_client_connection(_client, attempt) when attempt <= 0 do
@@ -237,6 +304,32 @@ defmodule Mix.Interactive.CLI do
     end
   end
 
+  def check_streamable_http_connection(http, attempt \\ 3)
+
+  def check_streamable_http_connection(_http, attempt) when attempt <= 0 do
+    IO.puts("#{UI.colors().error}✗ StreamableHTTP connection not established#{UI.colors().reset}")
+
+    IO.puts("#{UI.colors().info}Use the 'initialize' command to retry connection#{UI.colors().reset}")
+  end
+
+  def check_streamable_http_connection(http, attempt) do
+    :timer.sleep(500)
+
+    state = :sys.get_state(http)
+
+    if state[:message_url] == nil do
+      IO.puts("#{UI.colors().warning}! Waiting for server connection...#{UI.colors().reset}")
+
+      check_streamable_http_connection(http, attempt - 1)
+    else
+      IO.puts(
+        "#{UI.colors().info}StreamableHTTP connection:\n\s\s- base url: #{state[:base_url]}\n\s\s- message url: #{state[:message_url]}#{UI.colors().reset}"
+      )
+
+      IO.puts("#{UI.colors().success}✓ Successfully connected via StreamableHTTP#{UI.colors().reset}")
+    end
+  end
+
   @doc false
   def show_help do
     colors = UI.colors()
@@ -250,7 +343,7 @@ defmodule Mix.Interactive.CLI do
 
     #{colors.info}OPTIONS:#{colors.reset}
       #{colors.command}-h, --help#{colors.reset}             Show this help message and exit
-      #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|websocket|stdio) [default: sse]
+      #{colors.command}-t, --transport TYPE#{colors.reset}   Transport type to use (sse|websocket|stdio|streamable_http) [default: sse]
       #{colors.command}-v#{colors.reset}                     Set log level: -v (warning), -vv (info), -vvv (debug) [default: error]
       
     #{colors.info}SSE TRANSPORT OPTIONS:#{colors.reset}
@@ -262,6 +355,11 @@ defmodule Mix.Interactive.CLI do
       #{colors.command}--base-url URL#{colors.reset}         Base URL for WebSocket server [default: http://localhost:8000]
       #{colors.command}--base-path PATH#{colors.reset}       Base path for the WebSocket server
       #{colors.command}--ws-path PATH#{colors.reset}         Path for WebSocket endpoint [default: /ws]
+
+    #{colors.info}STREAMABLE HTTP TRANSPORT OPTIONS:#{colors.reset}
+      #{colors.command}--base-url URL#{colors.reset}         Base URL for StreamableHTTP server [default: http://localhost:8000]
+      #{colors.command}--mcp-path PATH#{colors.reset}        Base path for the StreamableHTTP server [default: /mcp]
+      #{colors.command}--header HEADER#{colors.reset}        Pass HTTP header to the server, can be passed multiple times
 
     #{colors.info}STDIO TRANSPORT OPTIONS:#{colors.reset}
       #{colors.command}-c, --command CMD#{colors.reset}      Command to execute [default: mcp]
@@ -277,6 +375,9 @@ defmodule Mix.Interactive.CLI do
 
       # Connect to a WebSocket server
       hermes-mcp --transport websocket --base-url http://localhost:8000 --ws-path /mcp/ws
+
+      # Connect to a StreamableHTTP server
+      hermes-mcp --transport streamable_http --base-url http://localhost:8000
 
       # Run a local MCP server with stdio
       hermes-mcp --transport stdio --command ./my-mcp-server --args arg1,arg2
