@@ -65,7 +65,7 @@ defmodule Hermes.Server.Component.Resource do
             timestamp: DateTime.utc_now()
           }
           
-          {:ok, Jason.encode!(status), frame}
+          {:ok, JSON.encode!(status), frame}
         end
       end
   """

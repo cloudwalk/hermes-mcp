@@ -65,13 +65,13 @@ defmodule MyApp.OAuthResource do
   def read(_params, frame) do
     case frame.assigns[:oauth_token] do
       nil ->
-        {:ok, Jason.encode!(%{
+        {:ok, JSON.encode!(%{
           authenticated: false,
           login_url: generate_oauth_url(frame.private.session_id)
         })}
 
       token ->
-        {:ok, Jason.encode!(%{
+        {:ok, JSON.encode!(%{
           authenticated: true,
           user: fetch_user_info(token)
         })}

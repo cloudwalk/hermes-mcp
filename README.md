@@ -102,6 +102,7 @@ We have build some elixir implementation examples using `plug` based and `phoeni
 1. [upcase-server](/priv/dev/upcase/README.md): `plug` based MCP server using streamable_http
 2. [echo-elixir](/priv/dev/echo-elixir/README.md): `phoenix` based MCP server using sse
 3. [ascii-server](/priv/dev/ascii/README.md): `phoenix_live_view` based MCP server using streamable_http and UI
+4. [oauth-example](/priv/dev/oauth_example/README.md): `plug` based MCP server using streamable_http + Oauth authorization (mocked)
 
 ## License
 

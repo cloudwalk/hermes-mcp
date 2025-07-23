@@ -255,6 +255,103 @@ defmodule Hermes.Server.Frame do
   end
 
   @doc """
+  Gets the authentication context from the frame.
+
+  Returns the token information if the request is authenticated via OAuth 2.1,
+  or nil if the request is not authenticated.
+
+  ## Examples
+
+      # For authenticated requests
+      auth = Frame.get_auth(frame)
+      # => %{sub: "user123", scope: "read write", exp: 1234567890, ...}
+      
+      # For unauthenticated requests
+      auth = Frame.get_auth(frame)
+      # => nil
+  """
+  @spec get_auth(t) :: map() | nil
+  def get_auth(%__MODULE__{transport: %{auth: auth}}), do: auth
+  def get_auth(%__MODULE__{}), do: nil
+
+  @doc """
+  Checks if the current request is authenticated.
+
+  Returns true if the request includes valid OAuth 2.1 authentication,
+  false otherwise.
+
+  ## Examples
+
+      if Frame.authenticated?(frame) do
+        # Handle authenticated request
+      else
+        # Handle unauthenticated request
+      end
+  """
+  @spec authenticated?(t) :: boolean()
+  def authenticated?(frame), do: not is_nil(get_auth(frame))
+
+  @doc """
+  Gets the authenticated subject (user/client ID).
+
+  Returns the subject claim from the OAuth token if authenticated,
+  or nil if not authenticated.
+
+  ## Examples
+
+      subject = Frame.get_auth_subject(frame)
+      # => "user123" or nil
+  """
+  @spec get_auth_subject(t) :: String.t() | nil
+  def get_auth_subject(frame) do
+    case get_auth(frame) do
+      %{sub: subject} -> subject
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Gets the OAuth scopes for the authenticated request.
+
+  Returns the scope string from the OAuth token if authenticated,
+  or nil if not authenticated.
+
+  ## Examples
+
+      scopes = Frame.get_auth_scopes(frame)
+      # => "read write admin" or nil
+  """
+  @spec get_auth_scopes(t) :: String.t() | nil
+  def get_auth_scopes(frame) do
+    case get_auth(frame) do
+      %{scope: scope} -> scope
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Checks if the authenticated request has a specific scope.
+
+  Returns true if the token includes the specified scope,
+  false if not authenticated or scope not present.
+
+  ## Examples
+
+      if Frame.has_scope?(frame, "write") do
+        # Allow write operation
+      else
+        # Deny write operation
+      end
+  """
+  @spec has_scope?(t, String.t()) :: boolean()
+  def has_scope?(frame, required_scope) when is_binary(required_scope) do
+    case get_auth_scopes(frame) do
+      nil -> false
+      scopes -> required_scope in String.split(scopes, " ", trim: true)
+    end
+  end
+
+  @doc """
   Sets the pagination limit for listing operations.
 
   This limit is used by handlers when returning lists of tools, prompts, or resources
