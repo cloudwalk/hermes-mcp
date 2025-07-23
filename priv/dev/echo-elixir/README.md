@@ -89,15 +89,36 @@ This approach, inspired by Phoenix LiveView's socket assigns, provides a familia
 
 ### Running the Server
 
+The Echo server supports two transport modes: SSE (Server-Sent Events) and STDIO.
+
+#### SSE Transport (default)
+
 ```bash
 # Install dependencies
 mix setup
 
-# Start Phoenix server with MCP endpoint
+# Start Phoenix server with SSE transport
 mix phx.server
+
+# Or explicitly set transport
+MCP_TRANSPORT=sse mix phx.server
 ```
 
 The server starts on port 4000, with the SSE endpoint accessible at `http://localhost:4000/mcp/sse`.
+
+#### STDIO Transport
+
+For direct STDIO communication (useful for CLI tools and testing):
+
+```bash
+# Run with STDIO transport
+MCP_TRANSPORT=stdio mix run --no-halt
+
+# Or use the just command from the project root
+just echo-ex-server transport=stdio
+```
+
+In STDIO mode, the server communicates via standard input/output, making it compatible with MCP clients that expect traditional pipe-based communication.
 
 ## Extension Opportunities
 

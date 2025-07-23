@@ -1,7 +1,8 @@
 import Config
 
 config :echo,
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  mcp_transport: :sse
 
 config :echo, EchoWeb.Endpoint,
   url: [host: "localhost"],

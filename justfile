@@ -17,5 +17,5 @@ ascii-server:
     iex -S mix phx.server
 
 [working-directory: 'priv/dev/echo-elixir']
-echo-ex-server:
-    iex -S mix phx.server
+echo-ex-server transport="sse":
+    MCP_TRANSPORT={{transport}} {{ if transport == "sse" { "iex -S mix phx.server" } else { "mix run --no-halt" } }}

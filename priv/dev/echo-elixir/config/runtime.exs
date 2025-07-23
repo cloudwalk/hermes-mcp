@@ -1,5 +1,10 @@
 import Config
 
+# Configure MCP transport based on environment variable
+if transport = System.get_env("MCP_TRANSPORT") do
+  config :echo, :mcp_transport, String.to_atom(transport)
+end
+
 if System.get_env("PHX_SERVER") do
   config :echo, EchoWeb.Endpoint, server: true
 end
