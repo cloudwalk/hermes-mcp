@@ -237,7 +237,9 @@ defmodule Hermes.Server.Base do
       {:noreply, state}
     else
       {:error, err} ->
-        Logging.server_event("failed_send_notification", %{method: method, error: err}, level: :error)
+        Logging.server_event("failed_send_notification", %{method: method, error: err},
+          level: :error
+        )
 
         {:noreply, state}
     end
@@ -300,14 +302,6 @@ defmodule Hermes.Server.Base do
     end
   end
 
-  @impl GenServer
-  def format_status(status) do
-    Map.new(status, fn
-      {:state, state} -> {:state, sanitize_state(state)}
-      key_value -> key_value
-    end)
-  end
-
   defguardp is_server_initialized(decoded, session)
             when Message.is_initialize_lifecycle(decoded) or
                    Session.is_initialized(session)
@@ -361,7 +355,8 @@ defmodule Hermes.Server.Base do
 
   # Request handling
 
-  defp handle_request(%{"params" => params} = request, session, state) when Message.is_initialize(request) do
+  defp handle_request(%{"params" => params} = request, session, state)
+       when Message.is_initialize(request) do
     %{
       "clientInfo" => client_info,
       "capabilities" => client_capabilities,
@@ -400,7 +395,11 @@ defmodule Hermes.Server.Base do
     {:reply, {:ok, Message.build_response(result, request["id"])}, state}
   end
 
-  defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
+  defp handle_request(
+         %{"id" => request_id, "method" => "logging/setLevel"} = request,
+         session,
+         state
+       )
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
     :ok = Session.set_log_level(session.name, level)
@@ -430,7 +429,11 @@ defmodule Hermes.Server.Base do
 
   # Notification handling
 
-  defp handle_notification(%{"method" => "notifications/initialized"}, session, %{module: module} = state) do
+  defp handle_notification(
+         %{"method" => "notifications/initialized"},
+         session,
+         %{module: module} = state
+       ) do
     Logging.server_event("client_initialized", %{session_id: session.id})
     :ok = Session.mark_initialized(session.name)
 
@@ -449,7 +452,11 @@ defmodule Hermes.Server.Base do
     {:noreply, %{state | frame: frame}}
   end
 
-  defp handle_notification(%{"method" => "notifications/cancelled"} = notification, session, state) do
+  defp handle_notification(
+         %{"method" => "notifications/cancelled"} = notification,
+         session,
+         state
+       ) do
     params = notification["params"] || %{}
     request_id = params["requestId"]
     reason = Map.get(params, "reason", "cancelled")
@@ -499,7 +506,10 @@ defmodule Hermes.Server.Base do
 
   # Helper functions
 
-  defp server_request(%{"id" => request_id, "method" => method} = request, %{module: module} = state) do
+  defp server_request(
+         %{"id" => request_id, "method" => method} = request,
+         %{module: module} = state
+       ) do
     case module.handle_request(request, state.frame) do
       {:reply, response, %Frame{} = frame} ->
         Telemetry.execute(
@@ -559,7 +569,8 @@ defmodule Hermes.Server.Base do
 
   @spec maybe_attach_session(session_id :: String.t(), map, t) ::
           {:ok, {session :: Session.t(), t}}
-  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
+  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state)
+       when is_map_key(sessions, session_id) do
     {session_name, _ref} = sessions[session_id]
     session = Session.get(session_name)
     state = reset_session_expiry(session_id, state)
@@ -567,7 +578,11 @@ defmodule Hermes.Server.Base do
     {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
-  defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
+  defp maybe_attach_session(
+         session_id,
+         context,
+         %{sessions: sessions, registry: registry} = state
+       ) do
     session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(registry, state.module, session_id) do
@@ -651,7 +666,10 @@ defmodule Hermes.Server.Base do
     Process.send_after(self(), {:session_expired, session_id}, timeout)
   end
 
-  defp reset_session_expiry(session_id, %{expiry_timers: timers, session_idle_timeout: timeout} = state) do
+  defp reset_session_expiry(
+         session_id,
+         %{expiry_timers: timers, session_idle_timeout: timeout} = state
+       ) do
     if timer = Map.get(timers, session_id), do: Process.cancel_timer(timer)
 
     timer = schedule_session_expiry(session_id, timeout)
@@ -729,7 +747,9 @@ defmodule Hermes.Server.Base do
         {:noreply, state}
 
       {_request_info, updated_requests} ->
-        Logging.server_event("sampling_request_timeout", %{request_id: request_id}, level: :warning)
+        Logging.server_event("sampling_request_timeout", %{request_id: request_id},
+          level: :warning
+        )
 
         {:noreply, %{state | server_requests: updated_requests}}
     end
@@ -871,89 +891,5 @@ defmodule Hermes.Server.Base do
       {:stop, reason, new_frame} ->
         {:stop, reason, %{state | frame: new_frame}}
     end
-  end
-
-  # Sanitization helpers for format_status
-
-  defp sanitize_state(state) when is_map(state) do
-    patterns = get_redact_patterns(state.module)
-    Map.update(state, :frame, nil, &sanitize_frame(&1, patterns))
-  end
-
-  defp sanitize_state(state), do: state
-
-  defp sanitize_frame(%Frame{} = frame, patterns) do
-    %{
-      frame
-      | assigns: sanitize_data(frame.assigns, patterns),
-        private: sanitize_private(frame.private),
-        transport: sanitize_transport(frame.transport, patterns),
-        request: frame.request
-    }
-  end
-
-  defp sanitize_frame(frame, _), do: frame
-
-  defp sanitize_private(private) when is_map(private) do
-    Map.new(private, fn
-      {:client_info, info} ->
-        {:client_info, sanitize_client_info(info)}
-
-      {:__mcp_components__, components} ->
-        {:__mcp_components__, "[#{length(components)} components]"}
-
-      kv ->
-        kv
-    end)
-  end
-
-  defp sanitize_private(private), do: private
-
-  defp sanitize_client_info(info) when is_map(info) do
-    Map.take(info, ["name", "version"])
-  end
-
-  defp sanitize_transport(%{type: type, req_headers: headers} = transport, patterns)
-       when type in ~w(http sse)a and is_list(headers) do
-    %{transport | req_headers: sanitize_data(headers, patterns)}
-  end
-
-  defp sanitize_transport(%{type: :stdio, env: env} = transport, patterns) when is_map(env) do
-    %{transport | env: sanitize_data(env, patterns)}
-  end
-
-  defp sanitize_transport(_transport, _), do: %{}
-
-  defp sanitize_data(data, patterns) when is_map(data) or is_list(data) do
-    Enum.map(data, fn {key, value} ->
-      if matches_pattern?(key, patterns) do
-        {key, "[REDACTED]"}
-      else
-        {key, value}
-      end
-    end)
-  end
-
-  defp sanitize_data(data, _), do: data
-
-  defp matches_pattern?(key, patterns) when is_list(patterns) do
-    key_str = key |> to_string() |> String.downcase()
-
-    Enum.any?(patterns, fn
-      %Regex{} = regex ->
-        Regex.match?(regex, key_str)
-
-      pattern when is_binary(pattern) ->
-        String.contains?(key_str, String.downcase(pattern))
-
-      _ ->
-        false
-    end)
-  end
-
-  defp matches_pattern?(_, _), do: false
-
-  defp get_redact_patterns(module) do
-    Application.get_env(:hermes_mcp, module)[:redact_patterns] || []
   end
 end

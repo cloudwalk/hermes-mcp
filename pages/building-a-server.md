@@ -445,37 +445,6 @@ defmodule MyApp.ServerTest do
 end
 ```
 
-## Security Configuration
-
-### Sensitive Data Redaction
-
-Hermes automatically redacts sensitive internal data (like HTTP headers, environment variables) when logging errors or crashes. For your application's `assigns` data, you can configure custom redaction patterns:
-
-```elixir
-# In your config/config.exs or runtime.exs
-config :hermes_mcp,
-  MyApp.Server,
-  redact_patterns: [
-    "password",
-    "token",
-    "secret",
-    ~r/api[_-]?key/i,
-    ~r/auth/i
-  ]
-```
-
-Any assign key matching these patterns will be redacted as `[REDACTED]` in logs:
-
-```elixir
-# Original frame assigns
-%{api_key: "sk-123", username: "alice", password: "secret123"}
-
-# Appears in logs as
-%{api_key: "[REDACTED]", username: "alice", password: "[REDACTED]"}
-```
-
-This helps prevent accidental exposure of sensitive data in error logs or crash reports while maintaining debugging capabilities.
-
 ## What's Next?
 
 You've seen how to expose your Elixir application's capabilities to AI assistants. What patterns interest you most?
