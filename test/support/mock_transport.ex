@@ -12,5 +12,5 @@ defmodule MockTransport do
   def shutdown(_), do: :ok
 
   @impl true
-  def supported_protocol_versions, do: ["2025-06-18", "2025-03-26", "2024-11-05"]
+  def supported_protocol_versions, do: :all
 end

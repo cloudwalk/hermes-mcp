@@ -95,9 +95,7 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   @impl Transport
-  def supported_protocol_versions do
-    ["2024-11-05", "2025-03-26"]
-  end
+  def supported_protocol_versions, do: :all
 
   @impl GenServer
   def init(opts) do

@@ -78,8 +78,8 @@ defmodule Hermes.Protocol do
   Validates if a transport is compatible with a protocol version.
   """
   @spec validate_transport(version(), module()) :: :ok | {:error, Error.t()}
-  def validate_transport(version, transport_module) do
-    supported_versions = transport_module.supported_protocol_versions()
+  def validate_transport(version, transport) do
+    supported_versions = supported_transport_versions(transport)
 
     if version in supported_versions do
       :ok
@@ -87,9 +87,16 @@ defmodule Hermes.Protocol do
       {:error,
        Error.transport(:incompatible_transport, %{
          version: version,
-         transport: transport_module,
+         transport: transport,
          supported_versions: supported_versions
        })}
+    end
+  end
+
+  defp supported_transport_versions(transport) do
+    case transport.supported_protocol_versions() do
+      :all -> @supported_versions
+      [_ | _] = versions -> versions
     end
   end
 

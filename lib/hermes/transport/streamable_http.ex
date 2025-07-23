@@ -77,7 +77,7 @@ defmodule Hermes.Transport.StreamableHTTP do
           | {:enable_sse, boolean()}
           | GenServer.option()
 
-  defschema :options_schema, %{
+  defschema(:options_schema, %{
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
     client: {:required, Hermes.get_schema(:process_name)},
     base_url: {:required, {:string, {:transform, &URI.new!/1}}},
@@ -86,7 +86,7 @@ defmodule Hermes.Transport.StreamableHTTP do
     transport_opts: {:any, {:default, []}},
     http_options: {:any, {:default, []}},
     enable_sse: {:boolean, {:default, false}}
-  }
+  })
 
   @impl Transport
   @spec start_link(params_t) :: GenServer.on_start()
@@ -106,9 +106,7 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl Transport
-  def supported_protocol_versions do
-    ["2025-03-26"]
-  end
+  def supported_protocol_versions, do: ["2025-03-26", "2025-06-18"]
 
   @impl GenServer
   def init(opts) do

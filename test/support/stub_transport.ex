@@ -90,9 +90,7 @@ defmodule StubTransport do
   end
 
   @impl true
-  def supported_protocol_versions do
-    ["2024-11-05", "2025-03-26"]
-  end
+  def supported_protocol_versions, do: :all
 
   @impl true
   def init(state) do

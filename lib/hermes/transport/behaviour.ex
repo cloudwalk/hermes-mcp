@@ -22,5 +22,5 @@ defmodule Hermes.Transport.Behaviour do
       iex> MyTransport.supported_protocol_versions()
       ["2024-11-05", "2025-03-26"]
   """
-  @callback supported_protocol_versions() :: [String.t()]
+  @callback supported_protocol_versions() :: [String.t()] | :all
 end
