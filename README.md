@@ -61,7 +61,7 @@ children = [
 ]
 
 # Add to your Plug/Phoenix router (if using HTTP)
-forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug, server: MyApp.MCPServer
+forward "/mcp", to: Hermes.Server.Transport.StreamableHTTP.Plug, init_opts: [server: MyApp.MCPServer]
 ```
 
 Now you can achieve your MCP server on `http://localhost:<port>/mcp`
