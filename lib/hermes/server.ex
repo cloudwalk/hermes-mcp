@@ -467,7 +467,7 @@ defmodule Hermes.Server do
 
       # Register with auto-derived name
       component MyServer.Tools.Calculator
-      
+
       # Register with custom name
       component MyServer.Tools.FileManager, name: "files"
   """
@@ -591,6 +591,7 @@ defmodule Hermes.Server do
         %Resource{
           uri: mod.uri(),
           name: name,
+          title: Component.get_title(mod),
           description: Component.get_description(mod),
           mime_type: mod.mime_type(),
           handler: mod
@@ -830,7 +831,7 @@ defmodule Hermes.Server do
       ]
 
       model_preferences = %{"costPriority" => 1.0, "speedPriority" => 0.1, "hints" => [%{"name" => "claude"}]}
-      
+
       :ok = Hermes.Server.send_sampling_request(frame, messages,
         model_preferences: model_preferences,
         system_prompt: "You are a helpful assistant",
