@@ -1469,15 +1469,14 @@ defmodule Hermes.Client.Base do
     send_notification(state, "notifications/cancelled", params)
   end
 
-  # StreamableHTTP with headers
-  defp send_to_transport(%{layer: StreamableHTTP} = transport, data, headers) when not is_nil(headers) do
-    with {:error, reason} <-
-           StreamableHTTP.send_message_with_headers(transport.name, data, headers) do
+  defp send_to_transport(transport, data, headers) when not is_nil(headers) do
+    opts = [headers: headers]
+
+    with {:error, reason} <- transport.layer.send_message(transport.name, data, opts) do
       {:error, Error.transport(:send_failure, %{original_reason: reason})}
     end
   end
 
-  # Default case: no headers or different transport
   defp send_to_transport(transport, data, _headers) do
     send_to_transport(transport, data)
   end

@@ -96,30 +96,8 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl Transport
-  def send_message(pid \\ __MODULE__, message) when is_binary(message) do
-    GenServer.call(pid, {:send, message}, 15_000)
-  end
-
-  @doc """
-  Sends a message with additional headers to the MCP server via HTTP POST.
-
-  This function allows sending per-request headers in addition to the transport's
-  configured headers. Only available for StreamableHTTP transport.
-
-  ## Parameters
-
-    * `pid` - The transport process ID
-    * `message` - The message to send (must be a binary)
-    * `headers` - Additional headers to include with this request (map)
-
-  ## Returns
-
-    * `:ok` - Message sent successfully
-    * `{:error, reason}` - Failed to send message
-  """
-  @spec send_message_with_headers(t(), Transport.message(), map()) :: :ok | {:error, term()}
-  def send_message_with_headers(pid \\ __MODULE__, message, headers) when is_binary(message) and is_map(headers) do
-    GenServer.call(pid, {:send_with_headers, message, headers}, 15_000)
+  def send_message(pid \\ __MODULE__, message, opts \\ []) when is_binary(message) do
+    GenServer.call(pid, {:send, message, opts})
   end
 
   @impl Transport
@@ -158,18 +136,24 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:send_with_headers, message, additional_headers}, from, state) do
+  def handle_call({:send, message, opts}, from, state) do
     emit_telemetry(:send, state, %{message_size: byte_size(message)})
 
-    Logging.transport_event("sending_http_request_with_headers", %{
+    headers = Keyword.get(opts, :headers)
+    log_event = if headers, do: "sending_http_request_with_headers", else: "sending_http_request"
+
+    log_data = %{
       url: URI.to_string(state.mcp_url),
-      size: byte_size(message),
-      additional_headers: Map.keys(additional_headers)
-    })
+      size: byte_size(message)
+    }
+
+    log_data = if headers, do: Map.put(log_data, :additional_headers, Map.keys(headers)), else: log_data
+
+    Logging.transport_event(log_event, log_data)
 
     new_state = %{state | active_request: from}
 
-    case send_http_request(new_state, message, additional_headers) do
+    case send_http_request(new_state, message, headers) do
       {:ok, response} ->
         Logging.transport_event("got_http_response", %{status: response.status})
         handle_response(response, new_state)
@@ -179,37 +163,9 @@ defmodule Hermes.Transport.StreamableHTTP do
         {:reply, {:error, :session_expired}, %{new_state | session_id: nil}}
 
       {:error, reason} ->
-        Logging.transport_event("http_request_error", %{reason: reason})
-        {:reply, {:error, reason}, %{new_state | active_request: nil}}
-    end
-  end
-
-  @impl GenServer
-  def handle_call({:send, message}, from, state) do
-    emit_telemetry(:send, state, %{message_size: byte_size(message)})
-
-    Logging.transport_event("sending_http_request", %{
-      url: URI.to_string(state.mcp_url),
-      size: byte_size(message)
-    })
-
-    new_state = %{state | active_request: from}
-
-    case send_http_request(new_state, message, nil) do
-      {:ok, response} ->
-        Logging.transport_event("got_http_response", %{status: response.status})
-        handle_response(response, new_state)
-
-      {:error, {:http_error, 404, _body}} when not is_nil(state.session_id) ->
-        Logging.transport_event("session_expired", %{session_id: state.session_id})
-        GenServer.cast(state.client, :session_expired)
-        {:reply, {:error, :session_expired}, %{state | session_id: nil}}
-
-      {:error, reason} ->
         Logging.transport_event("http_request_error", %{reason: inspect(reason)}, level: :error)
-
         log_error(reason)
-        {:reply, {:error, reason}, state}
+        {:reply, {:error, reason}, %{new_state | active_request: nil}}
     end
   end
 
@@ -273,33 +229,27 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   # Private functions
 
-  # With additional headers
-  defp send_http_request(state, message, additional_headers) when not is_nil(additional_headers) do
-    case validate_headers(additional_headers) do
-      :ok ->
-        headers =
-          state.headers
-          |> Map.put("accept", "application/json, text/event-stream")
-          |> Map.put("content-type", "application/json")
-          |> put_session_header(state.session_id)
-          |> Map.merge(additional_headers)
-
-        do_send_http_request(state, message, headers)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  # Without additional headers
-  defp send_http_request(state, message, nil) do
-    headers =
+  defp send_http_request(state, message, additional_headers) do
+    base_headers =
       state.headers
       |> Map.put("accept", "application/json, text/event-stream")
       |> Map.put("content-type", "application/json")
       |> put_session_header(state.session_id)
 
-    do_send_http_request(state, message, headers)
+    case additional_headers do
+      nil ->
+        do_send_http_request(state, message, base_headers)
+
+      headers when is_map(headers) ->
+        case validate_headers(headers) do
+          :ok ->
+            final_headers = Map.merge(base_headers, headers)
+            do_send_http_request(state, message, final_headers)
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
   end
 
   # Common HTTP request logic
