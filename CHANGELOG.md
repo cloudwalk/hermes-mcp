@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.2...v0.13.3) (2025-08-04)
+
+
+### Bug Fixes
+
+* otp to v27.3.4.1 ([#219](https://github.com/cloudwalk/hermes-mcp/issues/219)) ([2ba5896](https://github.com/cloudwalk/hermes-mcp/commit/2ba589662115667c81b92a68a8bc2c286fdd0e40))
+
 ## [0.13.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.1...v0.13.2) (2025-08-04)
 
 
