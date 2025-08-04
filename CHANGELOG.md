@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.2](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.1...v0.13.2) (2025-08-04)
+
+
+### Bug Fixes
+
+* just use elixir v1.19 locally ([#217](https://github.com/cloudwalk/hermes-mcp/issues/217)) ([b8963a7](https://github.com/cloudwalk/hermes-mcp/commit/b8963a744cf73b3ca05e9d961b7a6ed1d9594ea1))
+
 ## [0.13.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.0...v0.13.1) (2025-08-04)
 
 
