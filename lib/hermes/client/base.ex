@@ -6,7 +6,6 @@ defmodule Hermes.Client.Base do
 
   import Peri
 
-  alias Hermes.Client.Cache
   alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.Client.State
@@ -1110,8 +1109,6 @@ defmodule Hermes.Client.Base do
       })
     end
 
-    Cache.cleanup(state.client_info["name"])
-
     state.transport.layer.shutdown(state.transport.name)
   end
 
@@ -1178,15 +1175,15 @@ defmodule Hermes.Client.Base do
       method: request.method
     })
 
-    meta =
-      if is_map(error),
-        do: %{error_code: error["code"], error_message: error["message"]},
-        else: %{errors: Enum.map(error, &Peri.Error.error_to_map/1)}
-
     Telemetry.execute(
       Telemetry.event_client_error(),
       %{duration: elapsed_ms, system_time: System.system_time()},
-      Map.merge(%{id: id, method: request.method}, meta)
+      %{
+        id: id,
+        method: request.method,
+        error_code: error["code"],
+        error_message: error["message"]
+      }
     )
   end
 
@@ -1225,44 +1222,6 @@ defmodule Hermes.Client.Base do
     end
   end
 
-  defp process_successful_response(%{method: "tools/call"} = request, result, id, state) do
-    response = Response.from_json_rpc(%{"result" => result, "id" => id})
-    response = %{response | method: request.method}
-    elapsed_ms = Request.elapsed_time(request)
-
-    client = state.client_info["name"]
-    structured = result["structuredContent"]
-    tool = request.params["name"]
-    validator = Cache.get_tool_validator(client, tool)
-
-    if is_map(structured) and is_function(validator, 1) do
-      case validator.(structured) do
-        {:ok, _} ->
-          GenServer.reply(request.from, {:ok, response})
-
-        {:error, errors} ->
-          log_error_response(request, id, elapsed_ms, errors)
-
-          GenServer.reply(
-            request.from,
-            {:error,
-             Error.protocol(:parse_error, %{
-               errors: errors,
-               tool: tool,
-               request_id: request.id,
-               request_params: request.params,
-               request_method: request.method
-             })}
-          )
-      end
-    else
-      log_success_response(request, id, elapsed_ms)
-      GenServer.reply(request.from, {:ok, response})
-    end
-
-    state
-  end
-
   defp process_successful_response(request, result, id, state) do
     response = Response.from_json_rpc(%{"result" => result, "id" => id})
     response = %{response | method: request.method}
@@ -1272,13 +1231,6 @@ defmodule Hermes.Client.Base do
 
     method = request.method
     from = request.from
-
-    if method == "tools/list" do
-      tools = response.result["tools"]
-      client = state.client_info["name"]
-      Cache.clear_tool_validators(client)
-      Cache.put_tool_validators(client, tools)
-    end
 
     if method == "ping",
       do: GenServer.reply(from, :pong),
