@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.13.4](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.3...v0.13.4) (2025-08-05)
+
+
+### Reverts
+
+* revert cache impl ([#221](https://github.com/cloudwalk/hermes-mcp/issues/221)) ([cf94019](https://github.com/cloudwalk/hermes-mcp/commit/cf940196d890e39fe2f67cca43ba6821dd94bf7f))
+
 ## [0.13.3](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.2...v0.13.3) (2025-08-04)
 
 

@@ -54,7 +54,7 @@
     packages = forAllSystems (pkgs: {
       default = pkgs.stdenv.mkDerivation {
         pname = "hermes-mcp";
-        version = "0.13.3"; # x-release-please-version
+        version = "0.13.4"; # x-release-please-version
         src = ./.;
 
         buildInputs = with pkgs; [
