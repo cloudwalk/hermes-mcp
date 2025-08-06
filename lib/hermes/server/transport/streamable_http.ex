@@ -105,8 +105,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     * `{:error, reason}` otherwise
   """
   @impl Transport
-  @spec send_message(GenServer.server(), binary()) :: :ok | {:error, term()}
-  def send_message(transport, message) when is_binary(message) do
+  @spec send_message(GenServer.server(), binary(), keyword()) :: :ok | {:error, term()}
+  def send_message(transport, message, _opts) when is_binary(message) do
     GenServer.call(transport, {:send_message, message})
   end
 

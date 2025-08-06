@@ -57,7 +57,7 @@ defmodule Hermes.Transport.STDIOTest do
     end
 
     test "sends message successfully", %{transport_pid: pid} do
-      assert :ok = STDIO.send_message(pid, "test message")
+      assert :ok = STDIO.send_message(pid, "test message", [])
     end
   end
 
@@ -80,7 +80,7 @@ defmodule Hermes.Transport.STDIOTest do
     test "forwards data to client", %{transport_pid: pid} do
       :ok = StubClient.clear_messages()
 
-      STDIO.send_message(pid, "echo test\n")
+      STDIO.send_message(pid, "echo test\n", [])
 
       Process.sleep(100)
 

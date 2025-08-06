@@ -52,6 +52,8 @@ defmodule Hermes.Transport.StreamableHTTP do
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
+  @default_timeout 15_000
+
   @type t :: GenServer.server()
   @type params_t :: Enumerable.t(option)
 
@@ -97,7 +99,8 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   @impl Transport
   def send_message(pid \\ __MODULE__, message, opts \\ []) when is_binary(message) do
-    GenServer.call(pid, {:send, message, opts})
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    GenServer.call(pid, {:send, message, opts}, timeout)
   end
 
   @impl Transport

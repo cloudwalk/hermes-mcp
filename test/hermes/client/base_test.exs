@@ -18,7 +18,7 @@ defmodule Hermes.Client.BaseTest do
 
   describe "start_link/1" do
     test "starts the client with proper initialization" do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         assert String.contains?(message, "initialize")
         assert String.contains?(message, "protocolVersion")
         assert String.contains?(message, "capabilities")
@@ -46,7 +46,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "ping sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "ping"
         assert decoded["params"] == %{}
@@ -69,7 +69,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "list_resources sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         assert decoded["params"] == %{}
@@ -99,7 +99,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "list_resources with cursor", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         assert decoded["params"] == %{"cursor" => "next-page"}
@@ -132,7 +132,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "read_resource sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/read"
         assert decoded["params"] == %{"uri" => "test://uri"}
@@ -162,7 +162,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "list_prompts sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "prompts/list"
         assert decoded["params"] == %{}
@@ -192,7 +192,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "get_prompt sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "prompts/get"
 
@@ -232,7 +232,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "list_tools sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/list"
         assert decoded["params"] == %{}
@@ -262,7 +262,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "call_tool sends correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/call"
 
@@ -300,7 +300,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "handles domain error responses as {:ok, response}", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/call"
 
@@ -346,7 +346,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "ping sends correct request since it is always supported", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "ping"
         assert decoded["params"] == %{}
@@ -381,7 +381,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "handles error response", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "ping"
         :ok
@@ -404,7 +404,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "handles transport error", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, _message ->
+      expect(Hermes.MockTransport, :send_message, fn _, _message, _opts ->
         {:error, :connection_closed}
       end)
 
@@ -416,7 +416,7 @@ defmodule Hermes.Client.BaseTest do
 
   describe "capability management" do
     test "merge_capabilities correctly merges capabilities" do
-      expect(Hermes.MockTransport, :send_message, fn _, _message -> :ok end)
+      expect(Hermes.MockTransport, :send_message, fn _, _message, _opts -> :ok end)
 
       client =
         start_supervised!(
@@ -512,7 +512,7 @@ defmodule Hermes.Client.BaseTest do
     test "request with progress token includes it in params", %{client: client} do
       progress_token = "request_token_test"
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
 
@@ -564,7 +564,7 @@ defmodule Hermes.Client.BaseTest do
          }
 
     test "set_log_level sends the correct request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "logging/setLevel"
         assert decoded["params"]["level"] == "info"
@@ -596,7 +596,7 @@ defmodule Hermes.Client.BaseTest do
       ref = %{"type" => "ref/prompt", "name" => "code_review"}
       argument = %{"name" => "language", "value" => "py"}
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "completion/complete"
         assert decoded["params"]["ref"]["type"] == "ref/prompt"
@@ -639,7 +639,7 @@ defmodule Hermes.Client.BaseTest do
       ref = %{"type" => "ref/resource", "uri" => "file:///path/to/file.txt"}
       argument = %{"name" => "encoding", "value" => "ut"}
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "completion/complete"
         assert decoded["params"]["ref"]["type"] == "ref/resource"
@@ -708,14 +708,14 @@ defmodule Hermes.Client.BaseTest do
     test "sends initialized notification after init" do
       Hermes.MockTransport
       # the handle_continue
-      |> expect(:send_message, fn _, message ->
+      |> expect(:send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "initialize"
         assert decoded["jsonrpc"] == "2.0"
         :ok
       end)
       # the send_notification
-      |> expect(:send_message, fn _, message ->
+      |> expect(:send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "notifications/initialized"
         :ok
@@ -745,7 +745,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "handles cancelled notification from server", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "tools/call"
         :ok
@@ -773,7 +773,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "client can cancel a request", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         :ok
@@ -786,7 +786,7 @@ defmodule Hermes.Client.BaseTest do
       request_id = get_request_id(client, "resources/list")
       assert request_id != nil
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "notifications/cancelled"
         assert decoded["params"]["requestId"] == request_id
@@ -817,7 +817,7 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "cancel_all_requests cancels all pending requests", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, 2, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, 2, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] in ["resources/list", "tools/list"]
         :ok
@@ -832,7 +832,7 @@ defmodule Hermes.Client.BaseTest do
       pending_count = map_size(state.pending_requests)
       assert pending_count == 2
 
-      expect(Hermes.MockTransport, :send_message, 2, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, 2, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "notifications/cancelled"
         assert decoded["params"]["reason"] == "batch cancellation"
@@ -857,13 +857,13 @@ defmodule Hermes.Client.BaseTest do
     test "request timeout sends cancellation notification", %{client: client} do
       test_timeout = 50
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         :ok
       end)
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "notifications/cancelled"
         assert decoded["params"]["reason"] == "timeout"
@@ -888,14 +888,14 @@ defmodule Hermes.Client.BaseTest do
          %{client: client} do
       test_timeout = 50
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         Process.sleep(test_timeout + 10)
         :ok
       end)
 
-      expect(Hermes.MockTransport, :send_message, fn _, _ -> :ok end)
+      expect(Hermes.MockTransport, :send_message, fn _, _, _opts -> :ok end)
 
       Process.flag(:trap_exit, true)
 
@@ -912,13 +912,13 @@ defmodule Hermes.Client.BaseTest do
     end
 
     test "client.close sends cancellation for pending requests", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "resources/list"
         :ok
       end)
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["method"] == "notifications/cancelled"
         assert decoded["params"]["reason"] == "client closed"
@@ -1069,7 +1069,7 @@ defmodule Hermes.Client.BaseTest do
 
       request_id = "server_req_123"
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["id"] == request_id
@@ -1151,7 +1151,7 @@ defmodule Hermes.Client.BaseTest do
         "modelPreferences" => %{}
       }
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["id"] == request_id
@@ -1188,7 +1188,7 @@ defmodule Hermes.Client.BaseTest do
         "modelPreferences" => %{}
       }
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["id"] == request_id
@@ -1226,7 +1226,7 @@ defmodule Hermes.Client.BaseTest do
       request_id = "server_sampling_req_789"
       params = %{"messages" => [], "modelPreferences" => %{}}
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["id"] == request_id
@@ -1264,7 +1264,7 @@ defmodule Hermes.Client.BaseTest do
       request_id = "server_sampling_req_999"
       params = %{"messages" => [], "modelPreferences" => %{}}
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["id"] == request_id
@@ -1295,7 +1295,7 @@ defmodule Hermes.Client.BaseTest do
 
     @tag client_capabilities: %{"roots" => %{"listChanged" => true}}
     test "sends notification when adding a root", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["method"] == "notifications/roots/list_changed"
@@ -1318,7 +1318,7 @@ defmodule Hermes.Client.BaseTest do
 
       Process.sleep(50)
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["method"] == "notifications/roots/list_changed"
@@ -1350,7 +1350,7 @@ defmodule Hermes.Client.BaseTest do
 
       Process.sleep(50)
 
-      expect(Hermes.MockTransport, :send_message, fn _, message ->
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)
         assert decoded["jsonrpc"] == "2.0"
         assert decoded["method"] == "notifications/roots/list_changed"
@@ -1379,7 +1379,7 @@ defmodule Hermes.Client.BaseTest do
     setup :initialized_client
 
     test "handles tools with complex outputSchema", %{client: client} do
-      expect(Hermes.MockTransport, :send_message, fn _, _ -> :ok end)
+      expect(Hermes.MockTransport, :send_message, fn _, _, _opts -> :ok end)
 
       task = Task.async(fn -> Hermes.Client.Base.list_tools(client) end)
       Process.sleep(50)

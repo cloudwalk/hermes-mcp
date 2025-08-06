@@ -80,7 +80,7 @@ defmodule StubTransport do
   end
 
   @impl true
-  def send_message(transport \\ __MODULE__, message) do
+  def send_message(transport \\ __MODULE__, message, _opts \\ []) do
     GenServer.call(transport, {:send_message, message})
   end
 
