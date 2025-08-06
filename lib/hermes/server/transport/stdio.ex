@@ -78,7 +78,7 @@ defmodule Hermes.Server.Transport.STDIO do
   """
   @impl Transport
   @spec send_message(GenServer.server(), binary(), keyword()) :: :ok | {:error, term()}
-  def send_message(transport, message, _opts) when is_binary(message) do
+  def send_message(transport, message, _opts \\ []) when is_binary(message) do
     GenServer.cast(transport, {:send, message})
   end
 
