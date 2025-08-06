@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.14.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.4...v0.14.0) (2025-08-06)
+
+
+### Features
+
+* propagating opts from client.base ([#223](https://github.com/cloudwalk/hermes-mcp/issues/223)) ([c47a54b](https://github.com/cloudwalk/hermes-mcp/commit/c47a54bc8c30aee2780eefc85781d147f73d69b1))
+
 ## [0.13.4](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.3...v0.13.4) (2025-08-05)
 
 
