@@ -83,7 +83,7 @@ defmodule Hermes.Transport.StreamableHTTP do
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
     client: {:required, Hermes.get_schema(:process_name)},
     base_url: {:required, {:string, {:transform, &URI.new!/1}}},
-    mcp_path: {:string, {:default, "/mcp/"}},
+    mcp_path: {:string, {:default, "/"}},
     headers: {:map, {:default, %{}}},
     transport_opts: {:any, {:default, []}},
     http_options: {:any, {:default, []}},
@@ -266,10 +266,10 @@ defmodule Hermes.Transport.StreamableHTTP do
       headers: headers
     })
 
-    request = HTTP.build(:post, url, headers, message, options)
+    request = HTTP.build(:post, url, headers, message, options) |> dbg()
 
     request
-    |> HTTP.follow_redirect()
+    |> HTTP.follow_redirect() |> dbg()
     |> case do
       {:ok, %{status: status} = response} when status in 200..299 ->
         {:ok, response}
