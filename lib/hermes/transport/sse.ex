@@ -101,7 +101,7 @@ defmodule Hermes.Transport.SSE do
   end
 
   @impl Transport
-  def send_message(pid, message) when is_binary(message) do
+  def send_message(pid, message, _opts \\ []) when is_binary(message) do
     GenServer.call(pid, {:send, message})
   end
 

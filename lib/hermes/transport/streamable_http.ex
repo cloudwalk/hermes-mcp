@@ -52,6 +52,8 @@ defmodule Hermes.Transport.StreamableHTTP do
   alias Hermes.Telemetry
   alias Hermes.Transport.Behaviour, as: Transport
 
+  @default_timeout 15_000
+
   @type t :: GenServer.server()
   @type params_t :: Enumerable.t(option)
 
@@ -81,7 +83,7 @@ defmodule Hermes.Transport.StreamableHTTP do
     name: {{:custom, &Hermes.genserver_name/1}, {:default, __MODULE__}},
     client: {:required, Hermes.get_schema(:process_name)},
     base_url: {:required, {:string, {:transform, &URI.new!/1}}},
-    mcp_path: {:string, {:default, "/mcp"}},
+    mcp_path: {:string, {:default, "/mcp/"}},
     headers: {:map, {:default, %{}}},
     transport_opts: {:any, {:default, []}},
     http_options: {:any, {:default, []}},
@@ -96,8 +98,9 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl Transport
-  def send_message(pid \\ __MODULE__, message) when is_binary(message) do
-    GenServer.call(pid, {:send, message})
+  def send_message(pid \\ __MODULE__, message, opts \\ []) when is_binary(message) do
+    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    GenServer.call(pid, {:send, message, opts}, timeout)
   end
 
   @impl Transport
@@ -136,31 +139,36 @@ defmodule Hermes.Transport.StreamableHTTP do
   end
 
   @impl GenServer
-  def handle_call({:send, message}, from, state) do
+  def handle_call({:send, message, opts}, from, state) do
     emit_telemetry(:send, state, %{message_size: byte_size(message)})
 
-    Logging.transport_event("sending_http_request", %{
+    headers = Keyword.get(opts, :headers)
+    log_event = if headers, do: "sending_http_request_with_headers", else: "sending_http_request"
+
+    log_data = %{
       url: URI.to_string(state.mcp_url),
       size: byte_size(message)
-    })
+    }
+
+    log_data = if headers, do: Map.put(log_data, :additional_headers, Map.keys(headers)), else: log_data
+
+    Logging.transport_event(log_event, log_data)
 
     new_state = %{state | active_request: from}
 
-    case send_http_request(new_state, message) do
+    case send_http_request(new_state, message, headers) do
       {:ok, response} ->
         Logging.transport_event("got_http_response", %{status: response.status})
         handle_response(response, new_state)
 
       {:error, {:http_error, 404, _body}} when not is_nil(state.session_id) ->
         Logging.transport_event("session_expired", %{session_id: state.session_id})
-        GenServer.cast(state.client, :session_expired)
-        {:reply, {:error, :session_expired}, %{state | session_id: nil}}
+        {:reply, {:error, :session_expired}, %{new_state | session_id: nil}}
 
       {:error, reason} ->
         Logging.transport_event("http_request_error", %{reason: inspect(reason)}, level: :error)
-
         log_error(reason)
-        {:reply, {:error, reason}, state}
+        {:reply, {:error, reason}, %{new_state | active_request: nil}}
     end
   end
 
@@ -224,13 +232,31 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   # Private functions
 
-  defp send_http_request(state, message) do
-    headers =
+  defp send_http_request(state, message, additional_headers) do
+    base_headers =
       state.headers
       |> Map.put("accept", "application/json, text/event-stream")
       |> Map.put("content-type", "application/json")
       |> put_session_header(state.session_id)
 
+    case additional_headers do
+      nil ->
+        do_send_http_request(state, message, base_headers)
+
+      headers when is_map(headers) ->
+        case validate_headers(headers) do
+          :ok ->
+            final_headers = Map.merge(base_headers, headers)
+            do_send_http_request(state, message, final_headers)
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  # Common HTTP request logic
+  defp do_send_http_request(state, message, headers) do
     options = [transport_opts: state.transport_opts] ++ state.http_options
     url = URI.to_string(state.mcp_url)
 
@@ -253,7 +279,6 @@ defmodule Hermes.Transport.StreamableHTTP do
 
       {:error, reason} = error ->
         Logging.transport_event("http_request_failed", %{reason: reason}, level: :error)
-
         error
     end
   end
@@ -322,6 +347,23 @@ defmodule Hermes.Transport.StreamableHTTP do
 
   defp handle_sse_event(event, _state) do
     Logging.transport_event("unknown_sse_event", event, level: :warning)
+  end
+
+  # Header validation - fail fast with clear error messages
+  defp validate_headers(headers) when is_map(headers) do
+    case find_invalid_header(headers) do
+      nil ->
+        :ok
+
+      {key, value} ->
+        {:error, "Invalid header value for '#{key}': HTTP headers must be strings, got #{inspect(value)}"}
+    end
+  end
+
+  defp find_invalid_header(headers) do
+    Enum.find(headers, fn {_key, value} ->
+      not is_binary(value) and not is_nil(value)
+    end)
   end
 
   defp put_session_header(headers, nil), do: headers

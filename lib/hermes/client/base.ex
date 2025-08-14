@@ -6,7 +6,6 @@ defmodule Hermes.Client.Base do
 
   import Peri
 
-  alias Hermes.Client.Cache
   alias Hermes.Client.Operation
   alias Hermes.Client.Request
   alias Hermes.Client.State
@@ -15,6 +14,7 @@ defmodule Hermes.Client.Base do
   alias Hermes.MCP.Response
   alias Hermes.Protocol
   alias Hermes.Telemetry
+  alias Hermes.Transport.StreamableHTTP
 
   require Message
 
@@ -81,7 +81,7 @@ defmodule Hermes.Client.Base do
              Hermes.Transport.STDIO
              | Hermes.Transport.SSE
              | Hermes.Transport.WebSocket
-             | Hermes.Transport.StreamableHTTP}
+             | StreamableHTTP}
             | {:name, GenServer.server()}
           )
 
@@ -325,6 +325,7 @@ defmodule Hermes.Client.Base do
     * `:progress` - Progress tracking options
       * `:token` - A unique token to track progress (string or integer)
       * `:callback` - A function to call when progress updates are received
+    * `:headers` - HTTP headers to send with this request (map, only for StreamableHTTP transport)
   """
   @spec call_tool(t, String.t(), map() | nil, keyword) ::
           {:ok, Response.t()} | {:error, Error.t()}
@@ -337,7 +338,8 @@ defmodule Hermes.Client.Base do
         method: "tools/call",
         params: params,
         progress_opts: Keyword.get(opts, :progress),
-        timeout: Keyword.get(opts, :timeout)
+        timeout: Keyword.get(opts, :timeout),
+        headers: Keyword.get(opts, :headers)
       })
 
     buffer_timeout = operation.timeout + to_timeout(second: 1)
@@ -429,7 +431,7 @@ defmodule Hermes.Client.Base do
       ref = %{"type" => "ref/prompt", "name" => "code_review"}
       argument = %{"name" => "language", "value" => "py"}
       {:ok, response} = Hermes.Client.complete(client, ref, argument)
-      
+
       # Access the completion values
       values = get_in(Response.unwrap(response), ["completion", "values"])
   """
@@ -706,14 +708,14 @@ defmodule Hermes.Client.Base do
 
       MyClient.register_sampling_callback(fn params ->
         messages = params["messages"]
-        
+
         # Show UI for user approval
         case MyUI.approve_sampling(messages) do
           {:approved, edited_messages} ->
             # Call LLM with approved/edited messages
             response = MyLLM.generate(edited_messages, params["modelPreferences"])
             {:ok, response}
-            
+
           :rejected ->
             {:error, "User rejected sampling request"}
         end
@@ -791,6 +793,7 @@ defmodule Hermes.Client.Base do
   @impl true
   def handle_call({:operation, %Operation{} = operation}, from, state) do
     method = operation.method
+    opts = [headers: operation.headers, timeout: operation.timeout]
 
     params_with_token =
       State.add_progress_token_to_params(operation.params, operation.progress_opts)
@@ -799,7 +802,7 @@ defmodule Hermes.Client.Base do
          {request_id, updated_state} =
            State.add_request_from_operation(state, operation, from),
          {:ok, request_data} <- encode_request(method, params_with_token, request_id),
-         :ok <- send_to_transport(state.transport, request_data) do
+         :ok <- send_to_transport(state.transport, request_data, opts) do
       Telemetry.execute(
         Telemetry.event_client_request(),
         %{system_time: System.system_time()},
@@ -1107,8 +1110,6 @@ defmodule Hermes.Client.Base do
       })
     end
 
-    Cache.cleanup(state.client_info["name"])
-
     state.transport.layer.shutdown(state.transport.name)
   end
 
@@ -1175,15 +1176,15 @@ defmodule Hermes.Client.Base do
       method: request.method
     })
 
-    meta =
-      if is_map(error),
-        do: %{error_code: error["code"], error_message: error["message"]},
-        else: %{errors: Enum.map(error, &Peri.Error.error_to_map/1)}
-
     Telemetry.execute(
       Telemetry.event_client_error(),
       %{duration: elapsed_ms, system_time: System.system_time()},
-      Map.merge(%{id: id, method: request.method}, meta)
+      %{
+        id: id,
+        method: request.method,
+        error_code: error["code"],
+        error_message: error["message"]
+      }
     )
   end
 
@@ -1222,44 +1223,6 @@ defmodule Hermes.Client.Base do
     end
   end
 
-  defp process_successful_response(%{method: "tools/call"} = request, result, id, state) do
-    response = Response.from_json_rpc(%{"result" => result, "id" => id})
-    response = %{response | method: request.method}
-    elapsed_ms = Request.elapsed_time(request)
-
-    client = state.client_info["name"]
-    structured = result["structuredContent"]
-    tool = request.params["name"]
-    validator = Cache.get_tool_validator(client, tool)
-
-    if is_map(structured) and is_function(validator, 1) do
-      case validator.(structured) do
-        {:ok, _} ->
-          GenServer.reply(request.from, {:ok, response})
-
-        {:error, errors} ->
-          log_error_response(request, id, elapsed_ms, errors)
-
-          GenServer.reply(
-            request.from,
-            {:error,
-             Error.protocol(:parse_error, %{
-               errors: errors,
-               tool: tool,
-               request_id: request.id,
-               request_params: request.params,
-               request_method: request.method
-             })}
-          )
-      end
-    else
-      log_success_response(request, id, elapsed_ms)
-      GenServer.reply(request.from, {:ok, response})
-    end
-
-    state
-  end
-
   defp process_successful_response(request, result, id, state) do
     response = Response.from_json_rpc(%{"result" => result, "id" => id})
     response = %{response | method: request.method}
@@ -1269,13 +1232,6 @@ defmodule Hermes.Client.Base do
 
     method = request.method
     from = request.from
-
-    if method == "tools/list" do
-      tools = response.result["tools"]
-      client = state.client_info["name"]
-      Cache.clear_tool_validators(client)
-      Cache.put_tool_validators(client, tools)
-    end
 
     if method == "ping",
       do: GenServer.reply(from, :pong),
@@ -1466,8 +1422,8 @@ defmodule Hermes.Client.Base do
     send_notification(state, "notifications/cancelled", params)
   end
 
-  defp send_to_transport(transport, data) do
-    with {:error, reason} <- transport.layer.send_message(transport.name, data) do
+  defp send_to_transport(transport, data, opts \\ []) do
+    with {:error, reason} <- transport.layer.send_message(transport.name, data, opts) do
       {:error, Error.transport(:send_failure, %{original_reason: reason})}
     end
   end
@@ -1565,7 +1521,7 @@ defmodule Hermes.Client.Base do
 
   defp send_sampling_response(id, response, state) do
     transport = state.transport
-    :ok = transport.layer.send_message(transport.name, response)
+    :ok = transport.layer.send_message(transport.name, response, [])
 
     Telemetry.execute(
       Telemetry.event_client_response(),
@@ -1577,7 +1533,7 @@ defmodule Hermes.Client.Base do
   defp send_sampling_error(id, message, code, reason, %{transport: transport} = state) do
     error = %Error{code: -1, message: message, data: %{"reason" => reason}}
     {:ok, response} = Error.to_json_rpc(error, id)
-    :ok = transport.layer.send_message(transport.name, response)
+    :ok = transport.layer.send_message(transport.name, response, [])
 
     Logging.client_event(
       "sampling_error",
