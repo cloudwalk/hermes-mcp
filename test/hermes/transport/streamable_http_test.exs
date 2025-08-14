@@ -53,7 +53,8 @@ defmodule Hermes.Transport.StreamableHTTPTest do
 
       Process.sleep(100)
 
-      _state = :sys.get_state(transport)
+      state = :sys.get_state(transport)
+      assert state.mcp_url.path == "/"
 
       StreamableHTTP.shutdown(transport)
       StubClient.clear_messages()

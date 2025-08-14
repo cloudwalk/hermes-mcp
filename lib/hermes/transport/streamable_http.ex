@@ -266,10 +266,10 @@ defmodule Hermes.Transport.StreamableHTTP do
       headers: headers
     })
 
-    request = HTTP.build(:post, url, headers, message, options) |> dbg()
+    request = HTTP.build(:post, url, headers, message, options)
 
     request
-    |> HTTP.follow_redirect() |> dbg()
+    |> HTTP.follow_redirect()
     |> case do
       {:ok, %{status: status} = response} when status in 200..299 ->
         {:ok, response}
