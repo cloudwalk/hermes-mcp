@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.14.1](https://github.com/cloudwalk/hermes-mcp/compare/v0.14.0...v0.14.1) (2025-08-14)
+
+
+### Bug Fixes
+
+* remove the default mcp path for streamable http ([#226](https://github.com/cloudwalk/hermes-mcp/issues/226)) ([7163ce3](https://github.com/cloudwalk/hermes-mcp/commit/7163ce3dca72d24e07b3aebe0f025d0ab0f23611))
+
 ## [0.14.0](https://github.com/cloudwalk/hermes-mcp/compare/v0.13.4...v0.14.0) (2025-08-06)
 
 
