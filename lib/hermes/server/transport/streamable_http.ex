@@ -64,10 +64,12 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   - `:server` - The server process (required)
   - `:name` - Name for registering the GenServer (required)
+  - `:call_timeout` - Timeout for internal GenServer calls in milliseconds (default: 30 seconds)
   """
   @type option ::
           {:server, GenServer.server()}
           | {:name, GenServer.name()}
+          | {:call_timeout, pos_integer()}
           | GenServer.option()
 
   defschema(:parse_options, [
@@ -75,6 +77,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
     {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}},
+    {:call_timeout, {:integer, {:default, to_timeout(second: 30)}}},
     {:task_supervisor, {:required, {:custom, &Hermes.genserver_name/1}}}
   ])
 
@@ -106,8 +109,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   """
   @impl Transport
   @spec send_message(GenServer.server(), binary(), keyword()) :: :ok | {:error, term()}
-  def send_message(transport, message, _opts \\ []) when is_binary(message) do
-    GenServer.call(transport, {:send_message, message})
+  def send_message(transport, message, opts \\ []) when is_binary(message) do
+    timeout = Keyword.get(opts, :call_timeout, 5000)
+    GenServer.call(transport, {:send_message, message}, timeout)
   end
 
   @doc """
@@ -133,10 +137,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   Called by the Plug when establishing an SSE connection.
   The calling process becomes the SSE handler for the session.
   """
-  @spec register_sse_handler(GenServer.server(), String.t()) ::
+  @spec register_sse_handler(GenServer.server(), String.t(), keyword()) ::
           :ok | {:error, term()}
-  def register_sse_handler(transport, session_id) do
-    GenServer.call(transport, {:register_sse_handler, session_id, self()})
+  def register_sse_handler(transport, session_id, opts \\ []) do
+    timeout = Keyword.get(opts, :call_timeout, 5000)
+    GenServer.call(transport, {:register_sse_handler, session_id, self()}, timeout)
   end
 
   @doc """
@@ -154,10 +159,11 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), map() | list(map), map()) ::
+  @spec handle_message(GenServer.server(), String.t(), map() | list(map), map(), keyword()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message, context) do
-    GenServer.call(transport, {:handle_message, session_id, message, context})
+  def handle_message(transport, session_id, message, context, opts \\ []) do
+    timeout = Keyword.get(opts, :call_timeout, 5000)
+    GenServer.call(transport, {:handle_message, session_id, message, context}, timeout)
   end
 
   @doc """
@@ -166,12 +172,15 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   This allows the Plug to know whether to stream the response via SSE
   or return it as a regular HTTP response.
   """
-  @spec handle_message_for_sse(GenServer.server(), String.t(), map(), map()) ::
+  @spec handle_message_for_sse(GenServer.server(), String.t(), map(), map(), keyword()) ::
           {:ok, binary()} | {:sse, binary()} | {:error, term()}
-  def handle_message_for_sse(transport, session_id, message, context) do
+  def handle_message_for_sse(transport, session_id, message, context, opts \\ []) do
+    timeout = Keyword.get(opts, :call_timeout, 5000)
+
     GenServer.call(
       transport,
-      {:handle_message_for_sse, session_id, message, context}
+      {:handle_message_for_sse, session_id, message, context},
+      timeout
     )
   end
 
@@ -181,9 +190,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   Returns the pid of the process handling SSE for this session,
   or nil if no SSE connection exists.
   """
-  @spec get_sse_handler(GenServer.server(), String.t()) :: pid() | nil
-  def get_sse_handler(transport, session_id) do
-    GenServer.call(transport, {:get_sse_handler, session_id})
+  @spec get_sse_handler(GenServer.server(), String.t(), keyword()) :: pid() | nil
+  def get_sse_handler(transport, session_id, opts \\ []) do
+    timeout = Keyword.get(opts, :call_timeout, 5000)
+    GenServer.call(transport, {:get_sse_handler, session_id}, timeout)
   end
 
   @doc """
@@ -207,6 +217,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       server: server,
       registry: opts.registry,
       request_timeout: opts.request_timeout,
+      call_timeout: opts.call_timeout,
       task_supervisor: opts.task_supervisor,
       # Map of session_id => {pid, monitor_ref}
       sse_handlers: %{},
