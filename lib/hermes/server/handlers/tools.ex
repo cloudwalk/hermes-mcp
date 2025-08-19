@@ -79,6 +79,10 @@ defmodule Hermes.Server.Handlers.Tools do
     {:reply, Response.to_protocol(resp), frame}
   end
 
+  defp maybe_validate_output_schema(_tool, %Response{isError: true} = resp, frame) do
+    {:reply, Response.to_protocol(resp), frame}
+  end
+
   defp maybe_validate_output_schema(%Tool{} = tool, %Response{structured_content: nil}, frame) do
     metadata = %{tool_name: tool.name}
     {:error, Error.execution(@output_schema_err, metadata), frame}
