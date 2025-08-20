@@ -98,6 +98,36 @@ defmodule Hermes.Client.BaseTest do
       assert response.is_error == false
     end
 
+    test "list_resource_templates sends correct request", %{client: client} do
+      expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
+        decoded = JSON.decode!(message)
+        assert decoded["method"] == "resources/templates/list"
+        assert decoded["params"] == %{}
+        :ok
+      end)
+
+      task = Task.async(fn -> Hermes.Client.Base.list_resource_templates(client) end)
+
+      Process.sleep(50)
+
+      request_id = get_request_id(client, "resources/templates/list")
+      assert request_id
+
+      resources = [%{"name" => "test", "uriTemplate" => "test://uri/{some-param}"}]
+      response = resources_templates_list_response(request_id, resources)
+      send_response(client, response)
+
+      expected_result = %{
+        "resourceTemplates" => resources,
+        "nextCursor" => nil
+      }
+
+      assert {:ok, response} = Task.await(task)
+      assert %Response{} = response
+      assert response.result == expected_result
+      assert response.is_error == false
+    end
+
     test "list_resources with cursor", %{client: client} do
       expect(Hermes.MockTransport, :send_message, fn _, message, _opts ->
         decoded = JSON.decode!(message)

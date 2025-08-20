@@ -93,6 +93,10 @@ defmodule Hermes.MCP.Builders do
     build_response(%{"resources" => resources, "nextCursor" => nil}, request_id)
   end
 
+  def resources_templates_list_response(request_id, resources) do
+    build_response(%{"resourceTemplates" => resources, "nextCursor" => nil}, request_id)
+  end
+
   def resources_read_response(request_id, contents) do
     build_response(%{"contents" => contents}, request_id)
   end

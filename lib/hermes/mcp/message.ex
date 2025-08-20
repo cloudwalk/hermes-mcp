@@ -9,7 +9,7 @@ defmodule Hermes.MCP.Message do
 
   # MCP message schemas
 
-  @request_methods ~w(initialize ping resources/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete roots/list sampling/createMessage)
+  @request_methods ~w(initialize ping resources/list resources/templates/list resources/read prompts/get prompts/list tools/call tools/list logging/setLevel completion/complete roots/list sampling/createMessage)
 
   @init_params_schema %{
     "protocolVersion" => {:required, :string},
