@@ -166,6 +166,18 @@ defmodule Hermes.Client do
       def list_resources(opts \\ []), do: Base.list_resources(__MODULE__, opts)
 
       @doc """
+      Lists all available resource templates from the server.
+
+      ## Options
+        * `:cursor` - Pagination cursor
+        * `:timeout` - Request timeout in milliseconds
+
+      ## Examples
+          {:ok, resources} = MyClient.list_resources_templates()
+      """
+      def list_resource_templates(opts \\ []), do: Base.list_resource_templates(__MODULE__, opts)
+
+      @doc """
       Reads a specific resource by URI.
 
       ## Examples

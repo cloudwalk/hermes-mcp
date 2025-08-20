@@ -208,6 +208,34 @@ defmodule Hermes.Client.Base do
   end
 
   @doc """
+  Lists available resource templates from the server.
+
+  ## Options
+
+    * `:cursor` - Pagination cursor for continuing a previous request
+    * `:timeout` - Request timeout in milliseconds
+    * `:progress` - Progress tracking options
+      * `:token` - A unique token to track progress (string or integer)
+      * `:callback` - A function to call when progress updates are received
+  """
+  @spec list_resource_templates(t, keyword) :: {:ok, Response.t()} | {:error, Error.t()}
+  def list_resource_templates(client, opts \\ []) do
+    cursor = Keyword.get(opts, :cursor)
+    params = if cursor, do: %{"cursor" => cursor}, else: %{}
+
+    operation =
+      Operation.new(%{
+        method: "resources/templates/list",
+        params: params,
+        progress_opts: Keyword.get(opts, :progress),
+        timeout: Keyword.get(opts, :timeout)
+      })
+
+    buffer_timeout = operation.timeout + to_timeout(second: 1)
+    GenServer.call(client, {:operation, operation}, buffer_timeout)
+  end
+
+  @doc """
   Reads a specific resource from the server.
 
   ## Options
