@@ -33,6 +33,8 @@ defmodule MyApp.MCPServer do
     version: "1.0.0",
     capabilities: [:tools]
 
+  require Logger
+
   @impl true
   # this callback will be called when the
   # MCP initialize lifecycle completes
@@ -48,7 +50,7 @@ defmodule MyApp.MCPServer do
   end
 
   @impl true
-  def handle_tool("echo", %{text: text}, frame) do
+  def handle_tool_call("echo", %{text: text}, frame) do
     Logger.info("This tool was called #{frame.assigns.counter + 1}")
     {:reply, text, assign(frame, counter: frame.assigns.counter + 1)}
   end
