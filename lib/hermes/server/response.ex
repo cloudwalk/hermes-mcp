@@ -33,7 +33,7 @@ defmodule Hermes.Server.Response do
           total: integer | nil,
           hasMore: boolean,
           isError: boolean,
-          structured_content: map | nil,
+          structured_content: term,
           metadata: map
         }
 
@@ -180,7 +180,7 @@ defmodule Hermes.Server.Response do
         isError: false
       }
   """
-  @spec json(t(), data :: map, annotations) :: t
+  @spec json(t(), data :: term, annotations) :: t
   def json(%{type: type} = r, data, opts \\ []) when type in ~w(tool resource)a do
     text(r, JSON.encode!(data), opts)
   end
@@ -194,7 +194,7 @@ defmodule Hermes.Server.Response do
   ## Parameters
 
     * `response` - A tool response struct
-    * `data` - A map containing the structured data
+    * `data` - Any JSON-encodable data (typically map or list)
 
   ## Examples
 
@@ -205,9 +205,17 @@ defmodule Hermes.Server.Response do
         structured_content: %{temperature: 22.5, conditions: "Partly cloudy"},
         isError: false
       }
+
+      iex> Response.tool() |> Response.structured([1, 2, 3])
+      %Response{
+        type: :tool,
+        content: [%{"type" => "text", "text" => "[1,2,3]"}],
+        structured_content: [1, 2, 3],
+        isError: false
+      }
   """
-  @spec structured(t(), data :: map) :: t
-  def structured(%{type: :tool} = r, data) when is_map(data) do
+  @spec structured(t(), data :: term) :: t
+  def structured(%{type: :tool} = r, data) do
     r
     |> json(data)
     |> Map.put(:structured_content, data)

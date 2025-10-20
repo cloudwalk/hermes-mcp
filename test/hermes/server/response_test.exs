@@ -159,7 +159,7 @@ defmodule Hermes.Server.ResponseTest do
              }
     end
 
-    test "builds a structured response" do
+    test "builds a structured response with map" do
       result =
         Response.tool()
         |> Response.structured(%{temperature: 22.5, conditions: "Partly cloudy"})
@@ -178,6 +178,27 @@ defmodule Hermes.Server.ResponseTest do
 
       assert {:ok, decoded} = JSON.decode(text)
       assert decoded == %{"temperature" => 22.5, "conditions" => "Partly cloudy"}
+    end
+
+    test "builds a structured response with list" do
+      result =
+        Response.tool()
+        |> Response.structured([1, 2, 3])
+        |> Response.to_protocol()
+
+      assert %{
+               "content" => [
+                 %{
+                   "type" => "text",
+                   "text" => text
+                 }
+               ],
+               "structuredContent" => [1, 2, 3],
+               "isError" => false
+             } = result
+
+      assert {:ok, decoded} = JSON.decode(text)
+      assert decoded == [1, 2, 3]
     end
 
     test "builds content with annotations" do
