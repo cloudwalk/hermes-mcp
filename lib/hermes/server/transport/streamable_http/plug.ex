@@ -277,13 +277,23 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp route_sse_response(conn, transport, session_id, response, body, context, session_header) do
-      if handler_pid = StreamableHTTP.get_sse_handler(transport, session_id) do
+      handler_pid = StreamableHTTP.get_sse_handler(transport, session_id)
+
+      # Check Process.alive? to handle race condition where handler died but
+      # transport hasn't processed the :DOWN message yet. Without this check,
+      # send/2 silently drops the message to a dead process.
+      if handler_pid && Process.alive?(handler_pid) do
         send(handler_pid, {:sse_message, response})
 
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(202, "{}")
       else
+        # Handler is missing or stale - clean up stale entry if present
+        if handler_pid do
+          StreamableHTTP.unregister_sse_handler(transport, session_id)
+        end
+
         establish_sse_for_request(
           conn,
           transport,
