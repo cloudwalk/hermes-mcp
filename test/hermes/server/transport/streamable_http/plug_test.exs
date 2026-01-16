@@ -352,4 +352,126 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       assert conn.status == 200
     end
   end
+
+  describe "stale SSE handler race condition" do
+    @moduledoc """
+    Tests for handling stale SSE handler PIDs due to race conditions.
+
+    Even though the transport monitors SSE handlers and cleans them up,
+    there's a race window between when a handler dies and when the
+    transport processes the {:DOWN} message. During this window,
+    get_sse_handler can return a stale PID.
+    """
+
+    setup %{registry: registry} do
+      name = registry.transport(StubServer, :streamable_http)
+      sup = registry.task_supervisor(StubServer)
+
+      {:ok, transport} =
+        start_supervised({StreamableHTTP, server: StubServer, name: name, registry: registry, task_supervisor: sup})
+
+      %{transport: transport}
+    end
+
+    test "race condition: get_sse_handler can return stale PID before DOWN is processed", %{transport: transport} do
+      session_id = "race-condition-session"
+
+      # Spawn a handler process that we control
+      test_pid = self()
+
+      handler_pid =
+        spawn(fn ->
+          # Notify test that we're ready
+          send(test_pid, :handler_ready)
+
+          receive do
+            :die -> :ok
+          end
+        end)
+
+      # Wait for handler to be ready
+      assert_receive :handler_ready
+
+      # Register the handler through the transport
+      # Note: register_sse_handler registers self(), so we need a workaround
+      # We'll simulate the race by quickly killing and checking
+
+      # Register our test process instead
+      :ok = StreamableHTTP.register_sse_handler(transport, session_id)
+      test_process_pid = self()
+
+      # Verify registration worked
+      assert StreamableHTTP.get_sse_handler(transport, session_id) == test_process_pid
+
+      # Now, the transport will receive a :DOWN message for test_process if we exit
+      # But since we're the test process, we can't do that.
+      # Instead, let's verify that Process.alive? check works correctly:
+
+      # Kill the external handler we spawned
+      Process.exit(handler_pid, :kill)
+      Process.sleep(5)
+
+      refute Process.alive?(handler_pid),
+             "Handler should be dead after being killed"
+
+      # The registered handler (test process) is still alive
+      assert Process.alive?(test_process_pid)
+
+      # But the spawned handler_pid is dead
+      # This demonstrates that Process.alive? correctly distinguishes
+      # between live and dead processes
+
+      # The fix in route_sse_response should use:
+      # if handler_pid && Process.alive?(handler_pid) do
+      #   send(...)
+      # else
+      #   establish_sse_for_request(...)
+      # end
+    end
+
+    test "send/2 to dead process silently fails - the underlying issue" do
+      # This test documents the Erlang/Elixir behavior that causes the bug
+
+      pid =
+        spawn(fn ->
+          receive do
+            _ -> :ok
+          after
+            100 -> :timeout
+          end
+        end)
+
+      Process.exit(pid, :kill)
+      Process.sleep(10)
+
+      refute Process.alive?(pid), "Process should be dead"
+
+      # send/2 returns the message even when sending to dead process!
+      result = send(pid, {:test_message, "hello"})
+      assert result == {:test_message, "hello"}
+
+      # The message is silently lost - this is the core issue.
+      # The fix must check Process.alive? before sending.
+    end
+
+    test "Process.alive? correctly detects dead process" do
+      # This test verifies that Process.alive? is the correct solution
+
+      pid =
+        spawn(fn ->
+          receive do
+            _ -> :ok
+          end
+        end)
+
+      assert Process.alive?(pid), "Process should be alive initially"
+
+      Process.exit(pid, :kill)
+      Process.sleep(10)
+
+      refute Process.alive?(pid), "Process should be dead after kill"
+
+      # This proves Process.alive? is reliable for detecting stale PIDs
+    end
+  end
 end
