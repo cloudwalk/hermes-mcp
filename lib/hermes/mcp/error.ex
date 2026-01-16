@@ -53,6 +53,7 @@ defmodule Hermes.MCP.Error do
 
   # MCP-specific error codes
   @resource_not_found -32_002
+  @session_expired -32_001
 
   # Generic server error code for custom errors
   @server_error -32_000
@@ -65,6 +66,7 @@ defmodule Hermes.MCP.Error do
     invalid_params: "Invalid params",
     internal_error: "Internal error",
     resource_not_found: "Resource not found",
+    session_expired: "Session expired or not initialized. Please reconnect.",
     server_error: "Server error"
   }
 
@@ -133,6 +135,15 @@ defmodule Hermes.MCP.Error do
       code: @internal_error,
       reason: :internal_error,
       message: @error_messages.internal_error,
+      data: data
+    }
+  end
+
+  def protocol(:session_expired, data) do
+    %__MODULE__{
+      code: @session_expired,
+      reason: :session_expired,
+      message: @error_messages.session_expired,
       data: data
     }
   end
@@ -270,6 +281,7 @@ defmodule Hermes.MCP.Error do
   defp reason_from_code(@invalid_params), do: :invalid_params
   defp reason_from_code(@internal_error), do: :internal_error
   defp reason_from_code(@resource_not_found), do: :resource_not_found
+  defp reason_from_code(@session_expired), do: :session_expired
   defp reason_from_code(_), do: :server_error
 
   defp default_message(reason) do

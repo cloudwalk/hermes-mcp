@@ -378,11 +378,11 @@ defmodule Hermes.Server.Base do
   end
 
   defp handle_server_not_initialized(state) do
-    error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
+    error = Error.protocol(:session_expired)
 
     Logging.server_event(
       "request_error",
-      %{error: error, reason: "not_initialized"},
+      %{error: error, reason: "session_expired"},
       level: :warning
     )
 
