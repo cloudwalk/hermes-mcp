@@ -164,7 +164,7 @@ defmodule Hermes.Server.Component do
       # Simple field
       field :email, {:required, :string}, format: "email", description: "User's email address"
       field :age, :integer, description: "Age in years"
-      
+
       # Nested field
       field :user do
         field :name, {:required, :string}
@@ -310,6 +310,14 @@ defmodule Hermes.Server.Component do
   def get_description(module) when is_atom(module) do
     if function_exported?(module, :__description__, 0) do
       module.__description__()
+    else
+      ""
+    end
+  end
+
+  def get_title(module) when is_atom(module) do
+    if function_exported?(module, :__title__, 0) do
+      module.__title__()
     else
       ""
     end
