@@ -131,7 +131,7 @@ defmodule Hermes.Transport.SSETest do
       {:ok, ping_message} =
         Message.encode_request(%{"method" => "ping", "params" => %{}}, "1")
 
-      assert :ok = SSE.send_message(transport, ping_message)
+      assert :ok = SSE.send_message(transport, ping_message, [])
 
       # Give time for the response to come back
       Process.sleep(100)
@@ -168,7 +168,7 @@ defmodule Hermes.Transport.SSETest do
       Process.sleep(100)
 
       # Try to send a message without having an endpoint
-      assert {:error, :not_connected} = SSE.send_message(transport, "test message")
+      assert {:error, :not_connected} = SSE.send_message(transport, "test message", [])
 
       # Clean up
       SSE.shutdown(transport)
@@ -222,7 +222,7 @@ defmodule Hermes.Transport.SSETest do
 
       # Send a message and check for error response
       assert {:error, {:http_error, 500, "Internal Server Error"}} =
-               SSE.send_message(transport, "test message")
+               SSE.send_message(transport, "test message", [])
 
       # Clean up
       SSE.shutdown(transport)
@@ -380,7 +380,7 @@ defmodule Hermes.Transport.SSETest do
 
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url != nil
-      assert :ok = SSE.send_message(transport, "test message")
+      assert :ok = SSE.send_message(transport, "test message", [])
 
       SSE.shutdown(transport)
       StubClient.clear_messages()
@@ -420,7 +420,7 @@ defmodule Hermes.Transport.SSETest do
 
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url == "#{server_url}/messages/123"
-      assert :ok = SSE.send_message(transport, "test message")
+      assert :ok = SSE.send_message(transport, "test message", [])
 
       SSE.shutdown(transport)
       StubClient.clear_messages()
@@ -494,7 +494,7 @@ defmodule Hermes.Transport.SSETest do
       transport_state = :sys.get_state(transport)
       assert transport_state.message_url == "#{server_url}/messages/123"
       assert not String.contains?(transport_state.message_url, "/mcp/mcp/")
-      assert :ok = SSE.send_message(transport, "test message")
+      assert :ok = SSE.send_message(transport, "test message", [])
 
       SSE.shutdown(transport)
       StubClient.clear_messages()

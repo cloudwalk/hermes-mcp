@@ -16,7 +16,7 @@ Hermes MCP is a comprehensive Elixir SDK for the [Model Context Protocol](https:
 ```elixir
 def deps do
   [
-    {:hermes_mcp, "~> 0.13.0"}  # x-release-please-version
+    {:hermes_mcp, "~> 0.14.1"}  # x-release-please-version
   ]
 end
 ```
@@ -61,7 +61,7 @@ children = [
 ]
 
 # Add to your Plug/Phoenix router (if using HTTP)
-forward "/mcp", Hermes.Server.Transport.StreamableHTTP.Plug, server: MyApp.MCPServer
+forward "/mcp", to: Hermes.Server.Transport.StreamableHTTP.Plug, init_opts: [server: MyApp.MCPServer]
 ```
 
 Now you can achieve your MCP server on `http://localhost:<port>/mcp`

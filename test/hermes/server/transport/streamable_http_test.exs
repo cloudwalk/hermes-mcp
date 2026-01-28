@@ -115,7 +115,7 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
 
     test "send_message/2 works", %{transport: transport} do
       message = "test message"
-      assert :ok = StreamableHTTP.send_message(transport, message)
+      assert :ok = StreamableHTTP.send_message(transport, message, [])
     end
 
     test "shutdown/1 gracefully shuts down", %{transport: transport} do

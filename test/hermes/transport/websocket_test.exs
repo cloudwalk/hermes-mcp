@@ -112,7 +112,7 @@ if Code.ensure_loaded?(:gun) do
 
         assert Process.alive?(ws_pid)
 
-        assert :ok = WebSocket.send_message(ws_pid, test_message)
+        assert :ok = WebSocket.send_message(ws_pid, test_message, [])
 
         assert_receive {:message_sent, ^test_message}, 1000
 

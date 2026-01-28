@@ -11,7 +11,7 @@ defmodule Hermes.Transport.Behaviour do
   @type reason :: term() | Error.t()
 
   @callback start_link(keyword()) :: GenServer.on_start()
-  @callback send_message(t(), message()) :: :ok | {:error, reason()}
+  @callback send_message(t(), message(), keyword()) :: :ok | {:error, reason()}
   @callback shutdown(t()) :: :ok | {:error, reason()}
 
   @doc """

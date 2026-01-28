@@ -20,14 +20,16 @@ defmodule Hermes.Client.Operation do
           method: String.t(),
           params: map(),
           progress_opts: progress_options() | nil,
-          timeout: pos_integer()
+          timeout: pos_integer(),
+          headers: map() | nil
         }
 
   defstruct [
     :method,
     params: %{},
     progress_opts: [],
-    timeout: @default_timeout
+    timeout: @default_timeout,
+    headers: nil
   ]
 
   @doc """
@@ -40,19 +42,22 @@ defmodule Hermes.Client.Operation do
       * `:params` - The parameters to send to the server (required)
       * `:progress_opts` - Progress tracking options (optional)
       * `:timeout` - The timeout for this operation in milliseconds (optional, defaults to 30s)
+      * `:headers` - HTTP headers to send with this request (optional, only for StreamableHTTP transport)
   """
   @spec new(%{
           required(:method) => String.t(),
           optional(:params) => map(),
           optional(:progress_opts) => progress_options() | nil,
-          optional(:timeout) => pos_integer()
+          optional(:timeout) => pos_integer(),
+          optional(:headers) => map()
         }) :: t()
   def new(%{method: method} = attrs) do
     %__MODULE__{
       method: method,
       params: Map.get(attrs, :params) || %{},
       progress_opts: Map.get(attrs, :progress_opts),
-      timeout: Map.get(attrs, :timeout) || @default_timeout
+      timeout: Map.get(attrs, :timeout) || @default_timeout,
+      headers: Map.get(attrs, :headers)
     }
   end
 end
