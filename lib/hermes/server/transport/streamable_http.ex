@@ -154,10 +154,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   Called by the Plug when a message is received via HTTP POST.
   """
-  @spec handle_message(GenServer.server(), String.t(), map() | list(map), map()) ::
+  @spec handle_message(GenServer.server(), String.t(), map() | list(map), map(), timeout()) ::
           {:ok, binary() | nil} | {:error, term()}
-  def handle_message(transport, session_id, message, context) do
-    GenServer.call(transport, {:handle_message, session_id, message, context})
+  def handle_message(transport, session_id, message, context, timeout \\ :infinity) do
+    GenServer.call(transport, {:handle_message, session_id, message, context}, timeout)
   end
 
   @doc """
@@ -165,13 +165,18 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
 
   This allows the Plug to know whether to stream the response via SSE
   or return it as a regular HTTP response.
+
+  The `timeout` parameter controls how long the caller waits for the transport
+  GenServer to reply. Defaults to `:infinity` since the actual request timeout
+  is enforced internally by the transport's `request_timeout` option.
   """
-  @spec handle_message_for_sse(GenServer.server(), String.t(), map(), map()) ::
+  @spec handle_message_for_sse(GenServer.server(), String.t(), map(), map(), timeout()) ::
           {:ok, binary()} | {:sse, binary()} | {:error, term()}
-  def handle_message_for_sse(transport, session_id, message, context) do
+  def handle_message_for_sse(transport, session_id, message, context, timeout \\ :infinity) do
     GenServer.call(
       transport,
-      {:handle_message_for_sse, session_id, message, context}
+      {:handle_message_for_sse, session_id, message, context},
+      timeout
     )
   end
 
