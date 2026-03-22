@@ -261,6 +261,10 @@ if Code.ensure_loaded?(Plug) do
         {:error, error} ->
           handle_request_error(conn, error, body)
       end
+    catch
+      :exit, reason ->
+        Logging.transport_event("request_exit", %{reason: inspect(reason)}, level: :error)
+        handle_request_error(conn, {:exit, reason}, body)
     end
 
     defp handle_json_request(conn, transport, session_id, body, context, session_header) do
@@ -274,6 +278,10 @@ if Code.ensure_loaded?(Plug) do
         {:error, error} ->
           handle_request_error(conn, error, body)
       end
+    catch
+      :exit, reason ->
+        Logging.transport_event("request_exit", %{reason: inspect(reason)}, level: :error)
+        handle_request_error(conn, {:exit, reason}, body)
     end
 
     defp route_sse_response(conn, transport, session_id, response, body, context, session_header) do
