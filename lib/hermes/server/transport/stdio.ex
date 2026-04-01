@@ -240,7 +240,7 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case Message.decode(data) do
       {:ok, messages} ->
-        process_message(messages, state)
+        Enum.each(messages, &process_message(&1, state))
 
       {:error, reason} ->
         Logging.transport_event("parse_error", %{reason: reason}, level: :error)
