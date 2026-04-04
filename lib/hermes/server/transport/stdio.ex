@@ -144,6 +144,23 @@ defmodule Hermes.Server.Transport.STDIO do
     end
   end
 
+  def handle_info({:DOWN, _ref, :process, pid, reason}, %{reading_task: %Task{pid: pid}} = state) do
+    # Reading task crashed without delivering a result.
+    # Without this clause the catch-all swallows the signal
+    # and no new reading task is ever started — the transport
+    # stays alive but deaf to stdin.
+    Logging.transport_event("reading_task_crashed", %{reason: reason}, level: :error)
+    task = Task.async(fn -> read_from_stdin() end)
+    {:noreply, %{state | reading_task: task}}
+  end
+
+  def handle_info({:EXIT, pid, reason}, %{reading_task: %Task{pid: pid}} = state)
+      when reason != :normal do
+    Logging.transport_event("reading_task_exit", %{reason: reason}, level: :error)
+    task = Task.async(fn -> read_from_stdin() end)
+    {:noreply, %{state | reading_task: task}}
+  end
+
   def handle_info(_msg, state) do
     {:noreply, state}
   end
@@ -240,7 +257,7 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case Message.decode(data) do
       {:ok, messages} ->
-        process_message(messages, state)
+        Enum.each(messages, &process_message(&1, state))
 
       {:error, reason} ->
         Logging.transport_event("parse_error", %{reason: reason}, level: :error)
