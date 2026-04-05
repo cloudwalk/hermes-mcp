@@ -341,10 +341,13 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
     {:reply, :ok, state}
   end
 
-  defp forward_request_to_server(server, message, session_id, context, timeout, has_sse_handler \\ false) do
+  defp forward_request_to_server(server, message, session_id, context, _timeout, has_sse_handler \\ false) do
     msg = {:request, message, session_id, context}
 
-    case GenServer.call(server, msg, timeout) do
+    # Use :infinity — the server manages request lifecycle via deferred reply
+    # resolution, cancellation, caller DOWN monitoring, and session sweep.
+    # A finite timeout here silently drops deferred replies for long-running work.
+    case GenServer.call(server, msg, :infinity) do
       {:ok, response} when has_sse_handler ->
         {:sse, response}
 

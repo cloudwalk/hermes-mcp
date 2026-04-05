@@ -39,6 +39,15 @@ defmodule Hermes.Server.Base do
               metadata: map(),
               timer_ref: reference()
             }
+          },
+          deferred_replies: %{
+            required(reference()) => %{
+              from: GenServer.from(),
+              session: GenServer.name(),
+              request_id: String.t(),
+              cancel_notify: pid() | nil,
+              monitor_ref: reference()
+            }
           }
         }
 
@@ -90,7 +99,8 @@ defmodule Hermes.Server.Base do
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
       frame: Frame.new(),
-      server_requests: %{}
+      server_requests: %{},
+      deferred_replies: %{}
     }
 
     Logging.server_event("starting", %{
@@ -109,7 +119,7 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
+  def handle_call({:request, decoded, session_id, context}, from, state) when is_map(decoded) do
     with {:ok, {%Session{} = session, state}} <-
            maybe_attach_session(session_id, context, state) do
       case handle_single_request(decoded, session, state) do
@@ -129,6 +139,30 @@ defmodule Hermes.Server.Base do
           request_id = decoded["id"]
           if request_id, do: Session.complete_request(session.name, request_id)
           {:reply, {:error, error}, new_state}
+
+        {:defer, ref, opts, frame} ->
+          request_id = decoded["id"]
+          {caller_pid, _} = from
+          monitor_ref = Process.monitor(caller_pid)
+
+          entry = %{
+            from: from,
+            session: session.name,
+            request_id: request_id,
+            cancel_notify: opts[:cancel_notify],
+            monitor_ref: monitor_ref
+          }
+
+          new_state = %{state | frame: frame}
+          new_state = put_in(new_state.deferred_replies[ref], entry)
+
+          Logging.server_event("deferred_reply_registered", %{
+            ref: inspect(ref),
+            request_id: request_id,
+            session_id: session_id
+          })
+
+          {:noreply, new_state}
       end
     end
   end
@@ -192,6 +226,49 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  def handle_cast({:deferred_reply, ref, response}, state) do
+    case Map.pop(state.deferred_replies, ref) do
+      {nil, _} ->
+        Logging.server_event("deferred_reply_already_resolved", %{ref: inspect(ref)})
+        {:noreply, state}
+
+      {entry, remaining} ->
+        Process.demonitor(entry.monitor_ref, [:flush])
+
+        encoded = encode_deferred_response(response, entry.request_id)
+        GenServer.reply(entry.from, encoded)
+        Session.complete_request(entry.session, entry.request_id)
+
+        Logging.server_event("deferred_reply_resolved", %{
+          ref: inspect(ref),
+          request_id: entry.request_id
+        })
+
+        {:noreply, %{state | deferred_replies: remaining}}
+    end
+  end
+
+  def handle_cast({:cancel_deferred, ref}, state) do
+    case Map.pop(state.deferred_replies, ref) do
+      {nil, _} ->
+        Logging.server_event("deferred_cancel_already_resolved", %{ref: inspect(ref)})
+        {:noreply, state}
+
+      {entry, remaining} ->
+        Process.demonitor(entry.monitor_ref, [:flush])
+        GenServer.reply(entry.from, {:error, :cancelled})
+        Session.complete_request(entry.session, entry.request_id)
+        notify_cancel(entry.cancel_notify, ref)
+
+        Logging.server_event("deferred_reply_cancelled", %{
+          ref: inspect(ref),
+          request_id: entry.request_id
+        })
+
+        {:noreply, %{state | deferred_replies: remaining}}
+    end
+  end
+
   def handle_cast(request, %{module: module} = state) do
     case module.handle_cast(request, state.frame) do
       {:noreply, frame} -> {:noreply, %{state | frame: frame}}
@@ -201,7 +278,7 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, pid, reason}, state) do
     session_entry =
       Enum.find(state.sessions, fn
         {_id, {_name, ^ref}} -> true
@@ -217,6 +294,7 @@ defmodule Hermes.Server.Base do
 
         sessions = Map.delete(state.sessions, session_id)
         state = cancel_session_expiry(session_id, state)
+        state = sweep_deferred_for_session(session_id, state)
         frame = state.frame
 
         frame =
@@ -227,7 +305,31 @@ defmodule Hermes.Server.Base do
         {:noreply, %{state | sessions: sessions, frame: frame}}
 
       nil ->
-        {:noreply, state}
+        # Check if this is a deferred reply caller that died
+        deferred_entry =
+          Enum.find(state.deferred_replies, fn
+            {_ref, %{monitor_ref: ^ref}} -> true
+            _ -> false
+          end)
+
+        case deferred_entry do
+          {deferred_ref, entry} ->
+            Logging.server_event("deferred_caller_down", %{
+              ref: inspect(deferred_ref),
+              request_id: entry.request_id,
+              pid: inspect(pid),
+              reason: inspect(reason)
+            })
+
+            remaining = Map.delete(state.deferred_replies, deferred_ref)
+            Session.complete_request(entry.session, entry.request_id)
+            notify_cancel(entry.cancel_notify, deferred_ref)
+
+            {:noreply, %{state | deferred_replies: remaining}}
+
+          nil ->
+            {:noreply, state}
+        end
     end
   end
 
@@ -246,6 +348,7 @@ defmodule Hermes.Server.Base do
   def handle_info({:session_expired, session_id}, state) do
     if Map.get(state.sessions, session_id) do
       Logging.server_event("session_expired", %{session_id: session_id})
+      state = sweep_deferred_for_session(session_id, state)
       SessionSupervisor.close_session(state.registry, state.module, session_id)
       {:noreply, %{state | sessions: Map.delete(state.sessions, session_id)}}
     else
@@ -320,7 +423,7 @@ defmodule Hermes.Server.Base do
     end)
   end
 
-  @non_printable_keys ~w(transport sessions expiry_timers server_requests)a
+  @non_printable_keys ~w(transport sessions expiry_timers server_requests deferred_replies)a
 
   defp format_state(state) do
     pending_requests = format_pending_requests(state.server_requests)
@@ -331,7 +434,8 @@ defmodule Hermes.Server.Base do
     |> Map.merge(%{
       transport: state.transport[:layer],
       pending_requests: pending_requests,
-      active_sessions: sessions
+      active_sessions: sessions,
+      deferred_replies: map_size(state.deferred_replies)
     })
   end
 
@@ -493,33 +597,61 @@ defmodule Hermes.Server.Base do
     request_id = params["requestId"]
     reason = Map.get(params, "reason", "cancelled")
 
-    if Session.has_pending_request?(session.name, request_id) do
-      request_info = Session.complete_request(session.name, request_id)
+    state =
+      if Session.has_pending_request?(session.name, request_id) do
+        request_info = Session.complete_request(session.name, request_id)
 
-      Logging.server_event("request_cancelled", %{
-        session_id: session.id,
-        request_id: request_id,
-        reason: reason,
-        method: request_info[:method],
-        duration_ms: System.system_time(:millisecond) - request_info[:started_at]
-      })
+        Logging.server_event("request_cancelled", %{
+          session_id: session.id,
+          request_id: request_id,
+          reason: reason,
+          method: request_info[:method],
+          duration_ms: System.system_time(:millisecond) - request_info[:started_at]
+        })
 
-      Telemetry.execute(
-        Telemetry.event_server_notification(),
-        %{system_time: System.system_time()},
-        %{method: "cancelled", session_id: session.id, request_id: request_id}
-      )
+        Telemetry.execute(
+          Telemetry.event_server_notification(),
+          %{system_time: System.system_time()},
+          %{method: "cancelled", session_id: session.id, request_id: request_id}
+        )
 
-      {:noreply, state}
-    else
-      Logging.server_event("cancellation_for_unknown_request", %{
-        session_id: session.id,
-        request_id: request_id,
-        reason: reason
-      })
+        state
+      else
+        Logging.server_event("cancellation_for_unknown_request", %{
+          session_id: session.id,
+          request_id: request_id,
+          reason: reason
+        })
 
-      {:noreply, state}
-    end
+        state
+      end
+
+    # Also cancel any deferred entry blocked on this request_id
+    deferred_entry =
+      Enum.find(state.deferred_replies, fn {_ref, entry} ->
+        entry.request_id == request_id
+      end)
+
+    state =
+      case deferred_entry do
+        {deferred_ref, entry} ->
+          Process.demonitor(entry.monitor_ref, [:flush])
+          GenServer.reply(entry.from, {:error, :cancelled})
+          notify_cancel(entry.cancel_notify, deferred_ref)
+
+          Logging.server_event("deferred_reply_cancelled_by_notification", %{
+            ref: inspect(deferred_ref),
+            request_id: request_id,
+            session_id: session.id
+          })
+
+          %{state | deferred_replies: Map.delete(state.deferred_replies, deferred_ref)}
+
+        nil ->
+          state
+      end
+
+    {:noreply, state}
   end
 
   defp handle_notification(notification, _session, state) do
@@ -577,6 +709,16 @@ defmodule Hermes.Server.Base do
         frame = Frame.clear_request(frame)
 
         {:reply, {:ok, Error.build_json_rpc(error, request_id)}, %{state | frame: frame}}
+
+      {:defer, ref, opts, %Frame{} = frame} ->
+        Telemetry.execute(
+          Telemetry.event_server_response(),
+          %{system_time: System.system_time()},
+          %{id: request_id, method: method, status: :deferred}
+        )
+
+        frame = Frame.clear_request(frame)
+        {:defer, ref, opts, frame}
     end
   end
 
@@ -656,7 +798,8 @@ defmodule Hermes.Server.Base do
       client_capabilities: session.client_capabilities,
       protocol_version: session.protocol_version,
       server_registry: state.registry,
-      server_module: state.module
+      server_module: state.module,
+      server_pid: self()
     })
   end
 
@@ -909,6 +1052,65 @@ defmodule Hermes.Server.Base do
 
       {:stop, reason, new_frame} ->
         {:stop, reason, %{state | frame: new_frame}}
+    end
+  end
+
+  # Deferred reply helpers
+
+  defp notify_cancel(nil, _ref), do: :ok
+
+  defp notify_cancel(pid, ref) when is_pid(pid) do
+    if Process.alive?(pid), do: send(pid, {:deferred_cancelled, ref})
+    :ok
+  end
+
+  defp encode_deferred_response(%{"result" => _} = response, request_id) do
+    Message.encode_response(response, request_id)
+  end
+
+  defp encode_deferred_response(%{"error" => _} = response, request_id) do
+    Message.encode_error(response, request_id)
+  end
+
+  defp encode_deferred_response(result, request_id) when is_map(result) do
+    Message.encode_response(%{"result" => result}, request_id)
+  end
+
+  defp sweep_deferred_for_session(session_id, state) do
+    session_name =
+      case Map.get(state.sessions, session_id) do
+        {name, _ref} -> name
+        nil -> nil
+      end
+
+    if session_name do
+      {to_cancel, to_keep} =
+        Map.split_with(state.deferred_replies, fn {_ref, entry} ->
+          entry.session == session_name
+        end)
+
+      Enum.each(to_cancel, fn {ref, entry} ->
+        Process.demonitor(entry.monitor_ref, [:flush])
+        GenServer.reply(entry.from, {:error, :cancelled})
+
+        try do
+          Session.complete_request(entry.session, entry.request_id)
+        catch
+          :exit, _ -> :ok
+        end
+
+        notify_cancel(entry.cancel_notify, ref)
+
+        Logging.server_event("deferred_reply_swept", %{
+          ref: inspect(ref),
+          request_id: entry.request_id,
+          session_id: session_id
+        })
+      end)
+
+      %{state | deferred_replies: Map.new(to_keep)}
+    else
+      state
     end
   end
 end

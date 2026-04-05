@@ -57,6 +57,9 @@ defmodule Hermes.Server.Handlers.Tools do
 
       {:error, %Error{} = error, frame} ->
         {:error, error, frame}
+
+      {:defer, ref, opts, frame} ->
+        {:defer, ref, opts, frame}
     end
   end
 
@@ -70,12 +73,19 @@ defmodule Hermes.Server.Handlers.Tools do
 
       {:error, %Error{} = error, frame} ->
         {:error, error, frame}
+
+      {:defer, ref, opts, frame} ->
+        {:defer, ref, opts, frame}
     end
   end
 
   @output_schema_err "Tool doesnt conform for it output schema"
 
   defp maybe_validate_output_schema(%Tool{output_schema: nil}, resp, frame) do
+    {:reply, Response.to_protocol(resp), frame}
+  end
+
+  defp maybe_validate_output_schema(_tool, %Response{isError: true} = resp, frame) do
     {:reply, Response.to_protocol(resp), frame}
   end
 

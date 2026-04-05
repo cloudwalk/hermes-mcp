@@ -13,6 +13,7 @@ defmodule Hermes.Server.Handlers do
           {:reply, response :: Response.t(), new_state :: Frame.t()}
           | {:noreply, new_state :: Frame.t()}
           | {:error, error :: Error.t(), new_state :: Frame.t()}
+          | {:defer, ref :: reference(), opts :: map(), new_state :: Frame.t()}
   def handle(%{"method" => "tools/" <> action} = request, module, frame) do
     case action do
       "list" -> Tools.handle_list(request, frame, module)

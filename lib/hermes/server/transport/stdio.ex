@@ -36,7 +36,8 @@ defmodule Hermes.Server.Transport.STDIO do
     {:server, {:required, {:oneof, [{:custom, &Hermes.genserver_name/1}, :pid, {:tuple, [:atom, :any]}]}}},
     {:name, {:custom, &Hermes.genserver_name/1}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}}
+    {:request_timeout, {:integer, {:default, to_timeout(second: 30)}}},
+    {:task_supervisor, {:required, {:custom, &Hermes.genserver_name/1}}}
   ])
 
   @doc """
@@ -106,7 +107,9 @@ defmodule Hermes.Server.Transport.STDIO do
       server: opts.server,
       reading_task: nil,
       registry: opts.registry,
-      request_timeout: opts.request_timeout
+      request_timeout: opts.request_timeout,
+      task_supervisor: opts.task_supervisor,
+      active_tasks: %{}
     }
 
     Logger.metadata(mcp_transport: :stdio, mcp_server: state.server)
@@ -133,7 +136,7 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case result do
       {:ok, data} ->
-        handle_incoming_data(data, state)
+        state = handle_incoming_data(data, state)
 
         task = Task.async(fn -> read_from_stdin() end)
         {:noreply, %{state | reading_task: task}}
@@ -142,6 +145,37 @@ defmodule Hermes.Server.Transport.STDIO do
         Logging.transport_event("read_error", %{reason: reason}, level: :error)
         {:stop, {:error, reason}, state}
     end
+  end
+
+  # Handle successful request task completion
+  def handle_info({ref, result}, %{active_tasks: active_tasks} = state)
+      when is_reference(ref) and is_map_key(active_tasks, ref) do
+    {_task_info, active_tasks} = Map.pop(active_tasks, ref)
+    Process.demonitor(ref, [:flush])
+
+    case result do
+      {:ok, response} when is_binary(response) ->
+        send_message(self(), response, [])
+
+      {:error, reason} ->
+        Logging.transport_event("server_error", %{reason: reason}, level: :error)
+    end
+
+    {:noreply, %{state | active_tasks: active_tasks}}
+  end
+
+  # Handle request task crash
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %{active_tasks: active_tasks} = state)
+      when is_map_key(active_tasks, ref) do
+    {_task_info, active_tasks} = Map.pop(active_tasks, ref)
+
+    Logging.transport_event(
+      "task_crashed",
+      %{reason: inspect(reason, pretty: true)},
+      level: :error
+    )
+
+    {:noreply, %{state | active_tasks: active_tasks}}
   end
 
   def handle_info(_msg, state) do
@@ -167,8 +201,12 @@ defmodule Hermes.Server.Transport.STDIO do
   end
 
   @impl GenServer
-  def handle_cast(:shutdown, %{reading_task: task} = state) do
+  def handle_cast(:shutdown, %{reading_task: task, active_tasks: active_tasks} = state) do
     if task, do: Task.shutdown(task, :brutal_kill)
+
+    for {_ref, %{pid: pid}} <- active_tasks do
+      Task.Supervisor.terminate_child(state.task_supervisor, pid)
+    end
 
     Logging.transport_event("shutdown", "Transport shutting down", level: :info)
 
@@ -240,16 +278,16 @@ defmodule Hermes.Server.Transport.STDIO do
 
     case Message.decode(data) do
       {:ok, messages} ->
-        process_message(messages, state)
+        Enum.reduce(messages, state, &process_message/2)
 
       {:error, reason} ->
         Logging.transport_event("parse_error", %{reason: reason}, level: :error)
+        state
     end
   end
 
   defp process_message(message, %{server: server_name, registry: registry} = state) do
     server = registry.whereis_server(server_name)
-    timeout = state.request_timeout
 
     context = %{
       type: :stdio,
@@ -259,17 +297,25 @@ defmodule Hermes.Server.Transport.STDIO do
 
     if Message.is_notification(message) do
       GenServer.cast(server, {:notification, message, "stdio", context})
+      state
     else
-      case GenServer.call(server, {:request, message, "stdio", context}, timeout) do
-        {:ok, response} when is_binary(response) ->
-          send_message(self(), response, [])
+      task =
+        Task.Supervisor.async(state.task_supervisor, fn ->
+          forward_request_to_server(server, message, context)
+        end)
 
-        {:error, reason} ->
-          Logging.transport_event("server_error", %{reason: reason}, level: :error)
-      end
+      put_in(state.active_tasks[task.ref], %{type: :request, pid: task.pid})
     end
+  end
+
+  defp forward_request_to_server(server, message, context) do
+    # Use :infinity — the server manages request lifecycle via deferred reply
+    # resolution, cancellation, caller DOWN monitoring, and session sweep.
+    # A finite timeout here silently drops deferred replies for long-running work.
+    GenServer.call(server, {:request, message, "stdio", context}, :infinity)
   catch
     :exit, reason ->
       Logging.transport_event("server_call_failed", %{reason: reason}, level: :error)
+      {:error, :server_unavailable}
   end
 end
