@@ -157,7 +157,7 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   @spec handle_message(GenServer.server(), String.t(), map() | list(map), map()) ::
           {:ok, binary() | nil} | {:error, term()}
   def handle_message(transport, session_id, message, context) do
-    GenServer.call(transport, {:handle_message, session_id, message, context})
+    GenServer.call(transport, {:handle_message, session_id, message, context}, :infinity)
   end
 
   @doc """
@@ -171,7 +171,8 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
   def handle_message_for_sse(transport, session_id, message, context) do
     GenServer.call(
       transport,
-      {:handle_message_for_sse, session_id, message, context}
+      {:handle_message_for_sse, session_id, message, context},
+      :infinity
     )
   end
 
