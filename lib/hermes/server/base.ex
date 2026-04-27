@@ -115,19 +115,19 @@ defmodule Hermes.Server.Base do
       case handle_single_request(decoded, session, state) do
         {:reply, {:ok, %{"result" => result} = response}, new_state} ->
           request_id = response["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
+          if request_id, do: Session.complete_request(session.pid, request_id)
 
           {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
 
         {:reply, {:ok, %{"error" => error} = response}, new_state} ->
           request_id = response["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
+          if request_id, do: Session.complete_request(session.pid, request_id)
 
           {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
 
         {:reply, {:error, error}, new_state} ->
           request_id = decoded["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
+          if request_id, do: Session.complete_request(session.pid, request_id)
           {:reply, {:error, error}, new_state}
       end
     end
@@ -204,7 +204,7 @@ defmodule Hermes.Server.Base do
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     session_entry =
       Enum.find(state.sessions, fn
-        {_id, {_name, ^ref}} -> true
+        {_id, {_name, _pid, ^ref}} -> true
         _ -> false
       end)
 
@@ -343,7 +343,7 @@ defmodule Hermes.Server.Base do
 
   defp format_sessions(sessions) do
     sessions
-    |> Enum.map(fn {_id, {name, _}} -> Session.get(name) end)
+    |> Enum.map(fn {_id, {_name, pid, _ref}} -> Session.get(pid) end)
     |> Enum.reject(&is_nil/1)
   end
 
@@ -412,7 +412,7 @@ defmodule Hermes.Server.Base do
 
     :ok =
       Session.update_from_initialization(
-        session.name,
+        session.pid,
         protocol_version,
         client_info,
         client_capabilities
@@ -442,14 +442,14 @@ defmodule Hermes.Server.Base do
   defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
-    :ok = Session.set_log_level(session.name, level)
+    :ok = Session.set_log_level(session.pid, level)
     {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => method} = request, session, state) do
     Logging.server_event("handling_request", %{id: request_id, method: method})
 
-    :ok = Session.track_request(session.name, request_id, method)
+    :ok = Session.track_request(session.pid, request_id, method)
 
     Telemetry.execute(
       Telemetry.event_server_request(),
@@ -471,7 +471,7 @@ defmodule Hermes.Server.Base do
 
   defp handle_notification(%{"method" => "notifications/initialized"}, session, %{module: module} = state) do
     Logging.server_event("client_initialized", %{session_id: session.id})
-    :ok = Session.mark_initialized(session.name)
+    :ok = Session.mark_initialized(session.pid)
 
     Logging.server_event("session_marked_initialized", %{
       session_id: session.id,
@@ -493,8 +493,8 @@ defmodule Hermes.Server.Base do
     request_id = params["requestId"]
     reason = Map.get(params, "reason", "cancelled")
 
-    if Session.has_pending_request?(session.name, request_id) do
-      request_info = Session.complete_request(session.name, request_id)
+    if Session.has_pending_request?(session.pid, request_id) do
+      request_info = Session.complete_request(session.pid, request_id)
 
       Logging.server_event("request_cancelled", %{
         session_id: session.id,
@@ -599,48 +599,40 @@ defmodule Hermes.Server.Base do
   @spec maybe_attach_session(session_id :: String.t(), map, t) ::
           {:ok, {session :: Session.t(), t}}
   defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    {session_name, _ref} = sessions[session_id]
-    session = Session.get(session_name)
+    {_session_name, pid, _ref} = sessions[session_id]
+    session = Session.get(pid)
     state = reset_session_expiry(session_id, state)
 
     {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
-  defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
+  defp maybe_attach_session(session_id, context, %{sessions: _sessions, registry: registry} = state) do
     session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(registry, state.module, session_id) do
-      {:ok, pid} ->
-        ref = Process.monitor(pid)
-
-        state = %{
-          state
-          | sessions: Map.put(sessions, session_id, {session_name, ref})
-        }
-
-        state = reset_session_expiry(session_id, state)
-
-        session = Session.get(session_name)
-
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
-
-      {:error, {:already_started, pid}} ->
-        ref = Process.monitor(pid)
-
-        state = %{
-          state
-          | sessions: Map.put(sessions, session_id, {session_name, ref})
-        }
-
-        state = reset_session_expiry(session_id, state)
-
-        session = Session.get(session_name)
-
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
-
-      error ->
-        error
+      {:ok, pid} -> attach(pid, session_id, session_name, context, state)
+      {:error, {:already_started, pid}} -> attach(pid, session_id, session_name, context, state)
+      error -> error
     end
+  end
+
+  # Use the pid returned from create_session/start_link directly. Going
+  # through the registry's via tuple here would race with eventual
+  # consistency in distributed registries (e.g. Horde) where the
+  # registration may not yet be visible on this node even though the
+  # session pid is valid and reachable via Erlang distribution.
+  defp attach(pid, session_id, session_name, context, %{sessions: sessions} = state) do
+    ref = Process.monitor(pid)
+
+    state = %{
+      state
+      | sessions: Map.put(sessions, session_id, {session_name, pid, ref})
+    }
+
+    state = reset_session_expiry(session_id, state)
+    session = Session.get(pid)
+
+    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
   end
 
   defp populate_frame(frame, %Session{} = session, context, state) do
@@ -748,12 +740,12 @@ defmodule Hermes.Server.Base do
   defp validate_client_capability(%{frame: frame} = state, capability) do
     current_session = Frame.get_mcp_session_id(frame)
 
-    session_name =
-      Enum.find_value(state.sessions, fn {id, {name, _ref}} ->
-        if id == current_session, do: name
+    session_pid =
+      Enum.find_value(state.sessions, fn {id, {_name, pid, _ref}} ->
+        if id == current_session, do: pid
       end)
 
-    session = Session.get(session_name)
+    session = Session.get(session_pid)
 
     if Map.has_key?(session.client_capabilities || %{}, capability) do
       :ok

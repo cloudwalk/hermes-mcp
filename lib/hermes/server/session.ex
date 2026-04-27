@@ -7,6 +7,7 @@ defmodule Hermes.Server.Session do
           protocol_version: String.t() | nil,
           initialized: boolean(),
           name: GenServer.name() | nil,
+          pid: pid() | nil,
           client_info: map() | nil,
           client_capabilities: map() | nil,
           log_level: String.t(),
@@ -21,6 +22,7 @@ defmodule Hermes.Server.Session do
     :protocol_version,
     :log_level,
     :name,
+    :pid,
     initialized: false,
     client_info: nil,
     client_capabilities: nil,
@@ -35,7 +37,7 @@ defmodule Hermes.Server.Session do
     session_id = Keyword.fetch!(opts, :session_id)
     name = Keyword.fetch!(opts, :name)
 
-    Agent.start_link(fn -> new(id: session_id, name: name) end, name: name)
+    Agent.start_link(fn -> new(id: session_id, name: name, pid: self()) end, name: name)
   end
 
   @doc """
