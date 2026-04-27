@@ -39,7 +39,11 @@ defmodule Hermes.Server.Session.Supervisor do
     supervisor_opts = Keyword.get(opts, :supervisor_opts, [])
     name = registry.supervisor(@kind, server)
 
-    :persistent_term.put({__MODULE__, server}, supervisor_module)
+    # The supervisor `name` is unique per running instance (the registry
+    # adapter derives it from the server module + kind), so keying by
+    # `name` lets two instances of the same server module under different
+    # registries or supervisor modules coexist without colliding.
+    :persistent_term.put({__MODULE__, name}, supervisor_module)
 
     if supervisor_module == DynamicSupervisor do
       DynamicSupervisor.start_link(__MODULE__, server, name: name)
@@ -64,8 +68,8 @@ defmodule Hermes.Server.Session.Supervisor do
   same answer regardless of which node initiated the call.
   """
   def create_session(registry \\ Hermes.Server.Registry, server, session_id) do
-    supervisor_module = lookup_supervisor_module(server)
     name = registry.supervisor(@kind, server)
+    supervisor_module = lookup_supervisor_module(name)
     session_name = registry.server_session(server, session_id)
 
     supervisor_module.start_child(
@@ -78,8 +82,8 @@ defmodule Hermes.Server.Session.Supervisor do
   Terminates a session and cleans up its resources.
   """
   def close_session(registry \\ Hermes.Server.Registry, server, session_id) when is_binary(session_id) do
-    supervisor_module = lookup_supervisor_module(server)
     name = registry.supervisor(@kind, server)
+    supervisor_module = lookup_supervisor_module(name)
 
     if pid = registry.whereis_server_session(server, session_id) do
       supervisor_module.terminate_child(name, pid)
