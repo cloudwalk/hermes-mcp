@@ -48,28 +48,38 @@ defmodule Hermes.Server.Handlers.Prompts do
   end
 
   defp forward_to(server, %Prompt{handler: nil} = prompt, params, frame) do
-    case server.handle_prompt_get(prompt.name, params, frame) do
-      {:reply, %Response{} = response, frame} ->
-        {:reply, Response.to_protocol(response), frame}
+    invocation =
+      Handlers.safe_invoke({:prompt, prompt.name}, fn ->
+        server.handle_prompt_get(prompt.name, params, frame)
+      end)
 
-      {:noreply, frame} ->
-        {:reply, %{"content" => [], "isError" => false}, frame}
-
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+    handle_prompt_invocation(invocation, prompt, frame)
   end
 
-  defp forward_to(_server, %Prompt{handler: handler}, params, frame) do
-    case handler.get_messages(params, frame) do
-      {:reply, %Response{} = response, frame} ->
-        {:reply, Response.to_protocol(response), frame}
+  defp forward_to(_server, %Prompt{handler: handler} = prompt, params, frame) do
+    invocation =
+      Handlers.safe_invoke({:prompt, prompt.name}, fn ->
+        handler.get_messages(params, frame)
+      end)
 
-      {:noreply, frame} ->
-        {:reply, %{"content" => [], "isError" => false}, frame}
+    handle_prompt_invocation(invocation, prompt, frame)
+  end
 
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+  defp handle_prompt_invocation({:ok, {:reply, %Response{} = response, frame}}, _prompt, _frame),
+    do: {:reply, Response.to_protocol(response), frame}
+
+  defp handle_prompt_invocation({:ok, {:noreply, frame}}, _prompt, _frame),
+    do: {:reply, %{"content" => [], "isError" => false}, frame}
+
+  defp handle_prompt_invocation({:ok, {:error, %Error{} = error, frame}}, _prompt, _frame), do: {:error, error, frame}
+
+  defp handle_prompt_invocation({:caught, _kind, reason, _stack}, prompt, frame) do
+    message =
+      case reason do
+        %{__exception__: true} = e -> Exception.message(e)
+        other -> inspect(other)
+      end
+
+    {:error, Error.execution("Prompt execution failed: #{message}", %{prompt: prompt.name}), frame}
   end
 end

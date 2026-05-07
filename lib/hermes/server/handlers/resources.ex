@@ -54,32 +54,43 @@ defmodule Hermes.Server.Handlers.Resources do
   defp find_resource_module(resources, uri), do: Enum.find(resources, &(&1.uri == uri))
 
   defp read_single_resource(server, %Resource{handler: nil, uri: uri, mime_type: mime_type}, frame) do
-    case server.handle_resource_read(uri, frame) do
-      {:reply, %Response{} = response, frame} ->
-        content = Response.to_protocol(response, uri, mime_type)
-        {:reply, %{"contents" => [content]}, frame}
+    invocation =
+      Handlers.safe_invoke({:resource, uri}, fn ->
+        server.handle_resource_read(uri, frame)
+      end)
 
-      {:noreply, frame} ->
-        content = %{"uri" => uri, "mimeType" => mime_type, "text" => ""}
-        {:reply, %{"contents" => [content]}, frame}
-
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+    handle_resource_invocation(invocation, uri, mime_type, frame)
   end
 
   defp read_single_resource(_server, %Resource{handler: handler, uri: uri, mime_type: mime_type}, frame) do
-    case handler.read(%{"uri" => uri}, frame) do
-      {:reply, %Response{} = response, frame} ->
-        content = Response.to_protocol(response, uri, mime_type)
-        {:reply, %{"contents" => [content]}, frame}
+    invocation =
+      Handlers.safe_invoke({:resource, uri}, fn ->
+        handler.read(%{"uri" => uri}, frame)
+      end)
 
-      {:noreply, frame} ->
-        content = %{"uri" => uri, "mimeType" => mime_type, "text" => ""}
-        {:reply, %{"contents" => [content]}, frame}
+    handle_resource_invocation(invocation, uri, mime_type, frame)
+  end
 
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+  defp handle_resource_invocation({:ok, {:reply, %Response{} = response, frame}}, uri, mime_type, _frame) do
+    content = Response.to_protocol(response, uri, mime_type)
+    {:reply, %{"contents" => [content]}, frame}
+  end
+
+  defp handle_resource_invocation({:ok, {:noreply, frame}}, uri, mime_type, _frame) do
+    content = %{"uri" => uri, "mimeType" => mime_type, "text" => ""}
+    {:reply, %{"contents" => [content]}, frame}
+  end
+
+  defp handle_resource_invocation({:ok, {:error, %Error{} = error, frame}}, _uri, _mime_type, _frame),
+    do: {:error, error, frame}
+
+  defp handle_resource_invocation({:caught, _kind, reason, _stack}, uri, _mime_type, frame) do
+    message =
+      case reason do
+        %{__exception__: true} = e -> Exception.message(e)
+        other -> inspect(other)
+      end
+
+    {:error, Error.execution("Resource read failed: #{message}", %{uri: uri}), frame}
   end
 end

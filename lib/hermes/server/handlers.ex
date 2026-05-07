@@ -9,6 +9,8 @@ defmodule Hermes.Server.Handlers do
   alias Hermes.Server.Handlers.Tools
   alias Hermes.Server.Response
 
+  require Logger
+
   @spec handle(map, module, Frame.t()) ::
           {:reply, response :: Response.t(), new_state :: Frame.t()}
           | {:noreply, new_state :: Frame.t()}
@@ -83,5 +85,35 @@ defmodule Hermes.Server.Handlers do
     else
       {components, nil}
     end
+  end
+
+  @doc """
+  Invokes a user-supplied callback (tool/prompt/resource handler) and
+  catches any raised exception, exit, or thrown value. Without this any
+  uncaught error in user code propagates up through the GenServer.call
+  chain and crashes Hermes.Server.Base — the supervisor restarts within
+  ms but the in-flight transport task never gets a reply, leaving the
+  HTTP request to hang until the client times out.
+
+  Returns `{:ok, callback_return}` on success, or
+  `{:caught, kind, reason, stacktrace}` so the calling handler can shape
+  a JSON-RPC error response and log the failure with full context.
+
+  `label` is included in the error log only — never sent to the client.
+  """
+  @spec safe_invoke(term(), (-> any())) ::
+          {:ok, any()} | {:caught, :error | :exit | :throw, any(), Exception.stacktrace()}
+  def safe_invoke(label, fun) when is_function(fun, 0) do
+    {:ok, fun.()}
+  catch
+    kind, reason ->
+      stack = __STACKTRACE__
+
+      Logger.error(
+        "Hermes user handler #{inspect(label)} raised #{kind}: #{inspect(reason)}\n" <>
+          Exception.format_stacktrace(stack)
+      )
+
+      {:caught, kind, reason, stack}
   end
 end

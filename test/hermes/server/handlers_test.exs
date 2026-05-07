@@ -358,4 +358,85 @@ defmodule Hermes.Server.HandlersTest do
       end
     end
   end
+
+  describe "safe_invoke/2" do
+    test "wraps successful return as {:ok, value}" do
+      assert {:ok, 42} = Handlers.safe_invoke(:label, fn -> 42 end)
+    end
+
+    test "catches raised exception" do
+      assert {:caught, :error, %RuntimeError{message: "boom"}, stack} =
+               Handlers.safe_invoke(:label, fn -> raise "boom" end)
+
+      assert is_list(stack)
+    end
+
+    test "catches exit() so a misbehaving handler doesn't crash the calling GenServer" do
+      assert {:caught, :exit, :shutdown, _stack} =
+               Handlers.safe_invoke(:label, fn -> exit(:shutdown) end)
+    end
+
+    test "catches throw" do
+      assert {:caught, :throw, :token, _stack} =
+               Handlers.safe_invoke(:label, fn -> throw(:token) end)
+    end
+  end
+
+  describe "tool dispatch with raising user code (regression for ENA-9110)" do
+    alias Hermes.MCP.Error
+    alias Hermes.Server.Handlers.Tools
+    alias Hermes.Server.Response
+
+    defmodule RaisingTool do
+      @moduledoc false
+      def execute(_params, _frame), do: raise("boom from tool")
+    end
+
+    defmodule ExitingTool do
+      @moduledoc false
+      def execute(_params, _frame), do: exit(:shutdown)
+    end
+
+    defmodule HappyTool do
+      @moduledoc false
+      def execute(_params, frame), do: {:reply, Response.text(Response.tool(), "ok"), frame}
+    end
+
+    defmodule RegressionToolServer do
+      @moduledoc false
+
+      def __components__(:tool) do
+        validate_input = fn params -> {:ok, params} end
+
+        [
+          %Tool{name: "raising", handler: RaisingTool, validate_input: validate_input},
+          %Tool{name: "exiting", handler: ExitingTool, validate_input: validate_input},
+          %Tool{name: "happy", handler: HappyTool, validate_input: validate_input}
+        ]
+      end
+    end
+
+    defp run_tool(name) do
+      request = %{
+        "params" => %{"name" => name, "arguments" => %{}}
+      }
+
+      Tools.handle_call(request, Frame.new(), RegressionToolServer)
+    end
+
+    test "raised exception becomes a JSON-RPC error tuple, not a process crash" do
+      assert {:error, %Error{} = error, _frame} = run_tool("raising")
+      assert error.message =~ "Tool execution failed"
+      assert error.message =~ "boom from tool"
+    end
+
+    test "exit() becomes a JSON-RPC error tuple, not a process crash" do
+      assert {:error, %Error{} = error, _frame} = run_tool("exiting")
+      assert error.message =~ "Tool execution failed"
+    end
+
+    test "happy path still returns the tool response (regression guard)" do
+      assert {:reply, %{"content" => _}, _frame} = run_tool("happy")
+    end
+  end
 end
