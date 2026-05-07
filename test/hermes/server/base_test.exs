@@ -239,6 +239,67 @@ defmodule Hermes.Server.BaseTest do
       # The session process has been terminated by the supervisor
       assert catch_exit(Session.get(session_name))
     end
+
+    test "recovers when cached session pid has died (cross-node race)" do
+      transport = start_supervised!(StubTransport)
+
+      server =
+        start_supervised!(
+          {Base,
+           [
+             module: StubServer,
+             name: :stale_cache_server,
+             transport: [layer: StubTransport, name: transport],
+             session_idle_timeout: 60_000
+           ]}
+        )
+
+      session_id = "stale_cache_#{System.unique_integer()}"
+
+      # Establish + cache the session
+      init_msg = init_request("2025-03-26", %{"name" => "TestClient", "version" => "1.0.0"})
+      assert {:ok, _} = GenServer.call(server, {:request, init_msg, session_id, %{}})
+
+      session_name = Hermes.Server.Registry.server_session(StubServer, session_id)
+      original_pid = GenServer.whereis(session_name)
+      assert is_pid(original_pid)
+
+      # Simulate the production failure mode: in a cross-node scenario the
+      # session pid lives on a remote node and that node dies (Horde
+      # rebalance, Fly machine shutdown, idle expiry timer firing on
+      # another node). Locally we still hold the stale pid in our sessions
+      # map because the {:DOWN, ...} message from Erlang distribution
+      # hasn't propagated yet. Inject this state directly: kill the session
+      # but keep a dead pid in the cache so the next request hits
+      # clause 1 of maybe_attach_session/3 with a dead pid.
+      dead_pid =
+        spawn(fn ->
+          receive do
+            :never -> :ok
+          end
+        end)
+
+      Process.exit(dead_pid, :shutdown)
+      ref = Process.monitor(dead_pid)
+      assert_receive {:DOWN, ^ref, :process, ^dead_pid, _}, 1_000
+      refute Process.alive?(dead_pid)
+
+      :sys.replace_state(server, fn state ->
+        sessions =
+          Map.put(state.sessions, session_id, {session_name, dead_pid, make_ref()})
+
+        %{state | sessions: sessions}
+      end)
+
+      # Subsequent request must NOT crash with :shutdown EXIT. Pre-fix,
+      # maybe_attach_session/3 clause 1 called Session.get on the dead pid
+      # and the call exited :shutdown / :noproc, propagating up through
+      # the calling task and crashing the request. Post-fix, safe_session_get
+      # catches the exit, demonitors + drops the stale entry, and falls
+      # through to clause 2 to re-resolve via the registry.
+      ping = build_request("ping", %{}, System.unique_integer())
+      assert {:ok, _} = GenServer.call(server, {:request, ping, session_id, %{}}, 2_000)
+    end
   end
 
   describe "sampling requests" do

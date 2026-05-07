@@ -343,7 +343,12 @@ defmodule Hermes.Server.Base do
 
   defp format_sessions(sessions) do
     sessions
-    |> Enum.map(fn {_id, {_name, pid, _ref}} -> Session.get(pid) end)
+    |> Enum.map(fn {_id, {_name, pid, _ref}} ->
+      case safe_session_get(pid) do
+        {:ok, session} -> session
+        :dead -> nil
+      end
+    end)
     |> Enum.reject(&is_nil/1)
   end
 
@@ -597,13 +602,25 @@ defmodule Hermes.Server.Base do
   end
 
   @spec maybe_attach_session(session_id :: String.t(), map, t) ::
-          {:ok, {session :: Session.t(), t}}
+          {:ok, {session :: Session.t(), t}} | {:error, term()}
   defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    {_session_name, pid, _ref} = sessions[session_id]
-    session = Session.get(pid)
-    state = reset_session_expiry(session_id, state)
+    {_session_name, pid, ref} = sessions[session_id]
 
-    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+    case safe_session_get(pid) do
+      {:ok, session} ->
+        state = reset_session_expiry(session_id, state)
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+
+      :dead ->
+        # Cached pid is gone. Common in distributed deployments where
+        # sessions live on remote nodes that go away (Fly machine cycling,
+        # Horde rebalance, idle-expiry timer firing on another node).
+        # Drop the stale cache entry and re-resolve via the registry.
+        Process.demonitor(ref, [:flush])
+        sessions = Map.delete(sessions, session_id)
+        state = cancel_session_expiry(session_id, %{state | sessions: sessions})
+        maybe_attach_session(session_id, context, state)
+    end
   end
 
   defp maybe_attach_session(session_id, context, %{sessions: _sessions, registry: registry} = state) do
@@ -630,9 +647,26 @@ defmodule Hermes.Server.Base do
     }
 
     state = reset_session_expiry(session_id, state)
-    session = Session.get(pid)
 
-    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+    case safe_session_get(pid) do
+      {:ok, session} ->
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+
+      :dead ->
+        # Race: session died between create_session/whereis returning the
+        # pid and our Session.get call. Surface as an error rather than
+        # propagating a :shutdown EXIT through the calling task.
+        Process.demonitor(ref, [:flush])
+        sessions = Map.delete(state.sessions, session_id)
+        _state = cancel_session_expiry(session_id, %{state | sessions: sessions})
+        {:error, :session_terminated}
+    end
+  end
+
+  defp safe_session_get(pid) do
+    {:ok, Session.get(pid)}
+  catch
+    :exit, _reason -> :dead
   end
 
   defp populate_frame(frame, %Session{} = session, context, state) do
@@ -745,12 +779,16 @@ defmodule Hermes.Server.Base do
         if id == current_session, do: pid
       end)
 
-    session = Session.get(session_pid)
+    case safe_session_get(session_pid) do
+      {:ok, session} ->
+        if Map.has_key?(session.client_capabilities || %{}, capability) do
+          :ok
+        else
+          {:error, "No session initialzied for sending sampling request"}
+        end
 
-    if Map.has_key?(session.client_capabilities || %{}, capability) do
-      :ok
-    else
-      {:error, "No session initialzied for sending sampling request"}
+      :dead ->
+        {:error, "No session initialzied for sending sampling request"}
     end
   end
 
