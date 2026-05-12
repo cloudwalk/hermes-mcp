@@ -23,7 +23,7 @@ defmodule Upcase.MixProject do
   defp deps do
     [
       {:hermes_mcp, path: "../../../"},
-      {:plug, "~> 1.18"},
+      {:plug, "1.18.0"},
       {:bandit, "~> 1.6"}
     ]
   end

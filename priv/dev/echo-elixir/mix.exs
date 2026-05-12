@@ -25,7 +25,7 @@ defmodule Echo.MixProject do
 
   defp deps do
     [
-      {:phoenix, "~> 1.7.21"},
+      {:phoenix, "1.7.21"},
       {:bandit, "~> 1.5"},
       {:hermes_mcp, path: "../../../"}
     ]

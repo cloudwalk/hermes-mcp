@@ -49,16 +49,16 @@ defmodule Hermes.MixProject do
       {:finch, "~> 0.19"},
       {:peri, "~> 0.4"},
       {:telemetry, "~> 1.2"},
-      {:gun, "~> 2.2", optional: true},
+      {:gun, "2.2.0", optional: true},
       {:burrito, "~> 1.0", optional: true},
-      {:plug, "~> 1.18", optional: true},
-      {:mox, "~> 1.2", only: :test},
+      {:plug, "1.18.1", optional: true},
+      {:mox, "1.2.0", only: :test},
       {:mimic, "~> 1.7", only: :test},
-      {:bypass, "~> 2.1", only: :test},
+      {:bypass, "2.1.0", only: :test},
       {:cowboy, "~> 2.10", only: :test},
       {:styler, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "0.38.2", only: [:dev, :test], runtime: false},
+      {:credo, "1.7.12", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.3", only: [:dev, :test], runtime: false}
     ]
   end
