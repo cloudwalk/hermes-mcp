@@ -123,13 +123,22 @@ defmodule Hermes.Server.Base do
 
   @impl GenServer
   def handle_call({:request, decoded, session_id, context}, from, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <-
-           maybe_attach_session(session_id, context, state) do
-      if should_defer_for_init?(decoded, session, state) do
-        defer_request_until_initialized(from, decoded, session_id, context, @init_wait_total_ms, state)
-      else
-        handle_request_and_reply(decoded, session, state)
-      end
+    case maybe_attach_session(session_id, context, state) do
+      {:ok, {%Session{} = session, state}} ->
+        if should_defer_for_init?(decoded, session, state) do
+          defer_request_until_initialized(from, decoded, session_id, context, @init_wait_total_ms, state)
+        else
+          handle_request_and_reply(decoded, session, state)
+        end
+
+      {:error, :session_terminated, state} ->
+        # Race: session died between create_session/whereis and the
+        # subsequent Session.get. Reply with a JSON-RPC internal error
+        # bound to this request id rather than letting the bare
+        # {:error, _} tuple bubble out and crash this GenServer with
+        # bad_return_value.
+        error = Error.protocol(:internal_error, %{message: "Session unavailable"})
+        {:reply, {:ok, Error.build_json_rpc(error, decoded["id"])}, state}
     end
   end
 
@@ -157,19 +166,31 @@ defmodule Hermes.Server.Base do
 
   @impl GenServer
   def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <-
-           maybe_attach_session(session_id, context, state) do
-      if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
-        handle_notification(decoded, session, state)
-      else
-        Logging.server_event("session_not_initialized_check", %{
-          session_id: session.id,
-          initialized: session.initialized,
-          method: decoded["method"]
-        })
+    case maybe_attach_session(session_id, context, state) do
+      {:ok, {%Session{} = session, state}} ->
+        if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
+          handle_notification(decoded, session, state)
+        else
+          Logging.server_event("session_not_initialized_check", %{
+            session_id: session.id,
+            initialized: session.initialized,
+            method: decoded["method"]
+          })
+
+          {:noreply, state}
+        end
+
+      {:error, :session_terminated, state} ->
+        # Notifications have no reply — drop and continue with the
+        # cleaned-up state. Without this branch the bare {:error, _}
+        # tuple would crash the GenServer.
+        Logging.server_event(
+          "session_terminated_for_notification",
+          %{session_id: session_id, method: decoded["method"]},
+          level: :warning
+        )
 
         {:noreply, state}
-      end
     end
   end
 
@@ -446,8 +467,10 @@ defmodule Hermes.Server.Base do
             {:noreply, decrement_pending(state, session_id)}
         end
 
-      {:error, reason} ->
-        GenServer.reply(from, {:error, reason})
+      {:error, :session_terminated, state} ->
+        error = Error.protocol(:internal_error, %{message: "Session unavailable"})
+        encoded = Error.build_json_rpc(error, decoded["id"])
+        GenServer.reply(from, {:ok, encoded})
         {:noreply, decrement_pending(state, session_id)}
     end
   end
@@ -711,7 +734,7 @@ defmodule Hermes.Server.Base do
   end
 
   @spec maybe_attach_session(session_id :: String.t(), map, t) ::
-          {:ok, {session :: Session.t(), t}} | {:error, term()}
+          {:ok, {session :: Session.t(), t}} | {:error, reason :: term(), t}
   defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
     {_session_name, pid, ref} = sessions[session_id]
 
@@ -738,7 +761,7 @@ defmodule Hermes.Server.Base do
     case SessionSupervisor.create_session(registry, state.module, session_id) do
       {:ok, pid} -> attach(pid, session_id, session_name, context, state)
       {:error, {:already_started, pid}} -> attach(pid, session_id, session_name, context, state)
-      error -> error
+      {:error, reason} -> {:error, reason, state}
     end
   end
 
@@ -763,12 +786,13 @@ defmodule Hermes.Server.Base do
 
       :dead ->
         # Race: session died between create_session/whereis returning the
-        # pid and our Session.get call. Surface as an error rather than
-        # propagating a :shutdown EXIT through the calling task.
+        # pid and our Session.get call. Surface as an error and return
+        # the cleaned-up state so the GenServer caller can both reply
+        # with a JSON-RPC error and stop tracking the dead session.
         Process.demonitor(ref, [:flush])
         sessions = Map.delete(state.sessions, session_id)
-        _state = cancel_session_expiry(session_id, %{state | sessions: sessions})
-        {:error, :session_terminated}
+        state = cancel_session_expiry(session_id, %{state | sessions: sessions})
+        {:error, :session_terminated, state}
     end
   end
 
