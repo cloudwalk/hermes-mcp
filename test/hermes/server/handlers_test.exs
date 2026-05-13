@@ -383,6 +383,8 @@ defmodule Hermes.Server.HandlersTest do
   end
 
   describe "tool dispatch with raising user code (regression for ENA-9110)" do
+    import ExUnit.CaptureLog
+
     alias Hermes.MCP.Error
     alias Hermes.Server.Handlers.Tools
     alias Hermes.Server.Response
@@ -425,14 +427,28 @@ defmodule Hermes.Server.HandlersTest do
     end
 
     test "raised exception becomes a JSON-RPC error tuple, not a process crash" do
-      assert {:error, %Error{} = error, _frame} = run_tool("raising")
-      assert error.message =~ "Tool execution failed"
-      assert error.message =~ "boom from tool"
+      log =
+        capture_log(fn ->
+          assert {:error, %Error{} = error, _frame} = run_tool("raising")
+          assert error.message == "Tool execution failed"
+          # Client-facing message must NOT carry the raw exception text —
+          # exception messages from user code commonly contain internal
+          # details (query snippets, upstream API errors, secrets).
+          refute error.message =~ "boom from tool"
+        end)
+
+      # The underlying reason still gets logged for operators.
+      assert log =~ "boom from tool"
     end
 
     test "exit() becomes a JSON-RPC error tuple, not a process crash" do
-      assert {:error, %Error{} = error, _frame} = run_tool("exiting")
-      assert error.message =~ "Tool execution failed"
+      log =
+        capture_log(fn ->
+          assert {:error, %Error{} = error, _frame} = run_tool("exiting")
+          assert error.message == "Tool execution failed"
+        end)
+
+      assert log =~ "exit"
     end
 
     test "happy path still returns the tool response (regression guard)" do

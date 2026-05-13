@@ -73,13 +73,9 @@ defmodule Hermes.Server.Handlers.Prompts do
 
   defp handle_prompt_invocation({:ok, {:error, %Error{} = error, frame}}, _prompt, _frame), do: {:error, error, frame}
 
-  defp handle_prompt_invocation({:caught, _kind, reason, _stack}, prompt, frame) do
-    message =
-      case reason do
-        %{__exception__: true} = e -> Exception.message(e)
-        other -> inspect(other)
-      end
-
-    {:error, Error.execution("Prompt execution failed: #{message}", %{prompt: prompt.name}), frame}
+  defp handle_prompt_invocation({:caught, _kind, _reason, _stack}, prompt, frame) do
+    # See note in tools.ex — full reason already logged by safe_invoke,
+    # don't leak it across the JSON-RPC boundary.
+    {:error, Error.execution("Prompt execution failed", %{prompt: prompt.name}), frame}
   end
 end

@@ -77,14 +77,13 @@ defmodule Hermes.Server.Handlers.Tools do
     {:error, error, frame}
   end
 
-  defp handle_tool_invocation({:caught, _kind, reason, _stack}, tool, frame) do
-    message =
-      case reason do
-        %{__exception__: true} = e -> Exception.message(e)
-        other -> inspect(other)
-      end
-
-    {:error, Error.execution("Tool execution failed: #{message}", %{tool: tool.name}), frame}
+  defp handle_tool_invocation({:caught, _kind, _reason, _stack}, tool, frame) do
+    # Full reason + stacktrace is already logged at `:error` level by
+    # Handlers.safe_invoke/2. Don't echo it back to the client — exception
+    # messages from user code commonly contain internal details (query
+    # snippets, upstream API error text, secrets) that shouldn't leak
+    # across the JSON-RPC boundary.
+    {:error, Error.execution("Tool execution failed", %{tool: tool.name}), frame}
   end
 
   @output_schema_err "Tool doesnt conform for it output schema"

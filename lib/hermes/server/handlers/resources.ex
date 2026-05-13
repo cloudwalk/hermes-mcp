@@ -84,13 +84,9 @@ defmodule Hermes.Server.Handlers.Resources do
   defp handle_resource_invocation({:ok, {:error, %Error{} = error, frame}}, _uri, _mime_type, _frame),
     do: {:error, error, frame}
 
-  defp handle_resource_invocation({:caught, _kind, reason, _stack}, uri, _mime_type, frame) do
-    message =
-      case reason do
-        %{__exception__: true} = e -> Exception.message(e)
-        other -> inspect(other)
-      end
-
-    {:error, Error.execution("Resource read failed: #{message}", %{uri: uri}), frame}
+  defp handle_resource_invocation({:caught, _kind, _reason, _stack}, uri, _mime_type, frame) do
+    # See note in tools.ex — full reason already logged by safe_invoke,
+    # don't leak it across the JSON-RPC boundary.
+    {:error, Error.execution("Resource read failed", %{uri: uri}), frame}
   end
 end
