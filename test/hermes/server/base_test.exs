@@ -106,52 +106,59 @@ defmodule Hermes.Server.BaseTest do
       refute encoded =~ "Server not initialized"
     end
 
-    # Regression for cloudwalk-review-agent finding on PR #257: if the
-    # session pid dies between create_session/whereis and the subsequent
-    # Session.get (Horde rebalance, idle expiry, Fly machine cycling), the
-    # GenServer must reply with a JSON-RPC error rather than letting a raw
-    # `{:error, _}` tuple bubble out as the callback return value and
-    # crash with `bad_return_value`.
-    test "replies with JSON-RPC internal_error if session pid is dead at attach time", %{server: server} do
+    # Regression for cloudwalk-review-agent findings on PR #257.
+    #
+    # Two invariants this exercises end-to-end:
+    #
+    # 1. ENCODING CONTRACT: the synchronous return value of
+    #    handle_call({:request, ...}, ...) must be an encoded JSON
+    #    binary suitable for `Plug.Conn.send_resp/3`, not an unencoded
+    #    `{:ok, map}` tuple. An unencoded map would crash the StreamableHTTP
+    #    plug at runtime.
+    #
+    # 2. NO-CRASH ON ATTACH FAILURE: any failure path returned by
+    #    maybe_attach_session/3 (`:session_terminated` from a stale cached
+    #    pid, `:noproc` from a supervisor under cluster pressure, etc.) must
+    #    not crash the GenServer with `bad_return_value` or
+    #    `CaseClauseError`. The unified `{:error, reason, state}` clause in
+    #    handle_call/3 covers any reason — narrowing it would also need to
+    #    change the @spec, so this is structurally protected.
+    #
+    # Setup: pre-install a sessions-map entry pointing at a dead pid.
+    # The :dead branch in attach/5 drops the stale entry and recurses
+    # into the second maybe_attach_session/3 clause, which then creates
+    # a fresh session. The request is then deferred for the
+    # `notifications/initialized` notification (which never arrives in this
+    # test) and times out via `handle_retry_pending_request/6` — the same
+    # code path that previously returned an unencoded `{:ok, map}` via
+    # GenServer.reply and that this fix corrected to an encoded binary.
+    test "replies with encoded JSON binary when session attach goes through the error path", %{server: server} do
       session_id = "dead_session_#{System.unique_integer([:positive])}"
-
-      # Force a pre-existing entry in the sessions map that points at a dead pid.
-      dead_pid =
-        spawn(fn -> :ok end)
-        |> tap(fn p ->
-          ref = Process.monitor(p)
-          assert_receive {:DOWN, ^ref, :process, ^p, _}, 500
-        end)
+      dead_pid = make_dead_pid()
 
       :sys.replace_state(server, fn state ->
         ref = Process.monitor(dead_pid)
         %{state | sessions: Map.put(state.sessions, session_id, {nil, dead_pid, ref})}
       end)
 
-      request = build_request("tools/list", 99)
+      request = build_request("tools/list", %{}, 99)
 
-      # First attempt: cached pid is dead, error path fires.
-      # NB: session creation may then succeed via the registry, but the
-      # specific code path under test is "cached pid found, but dead at
-      # Session.get time" — we just need to confirm the server doesn't
-      # crash and replies with something valid.
-      assert {:ok, _encoded_or_other} =
+      assert {:ok, encoded} =
                GenServer.call(server, {:request, request, session_id, %{}}, 2_000)
+
+      assert is_binary(encoded), "transport contract requires an encoded JSON binary, got: #{inspect(encoded)}"
+      decoded = JSON.decode!(encoded)
+      assert is_map(decoded["error"]), "expected a JSON-RPC error response, got: #{inspect(decoded)}"
+      assert decoded["id"] == 99
 
       assert Process.alive?(server)
     end
 
-    # Regression for cloudwalk-review-agent finding on PR #257: same race
-    # but on a notification cast. Must drop quietly and not crash.
+    # Same race on the notification cast path. The cast must drop quietly
+    # (no crash, no reply — notifications have no response).
     test "drops notification without crashing if session pid is dead", %{server: server} do
       session_id = "dead_session_cast_#{System.unique_integer([:positive])}"
-
-      dead_pid =
-        spawn(fn -> :ok end)
-        |> tap(fn p ->
-          ref = Process.monitor(p)
-          assert_receive {:DOWN, ^ref, :process, ^p, _}, 500
-        end)
+      dead_pid = make_dead_pid()
 
       :sys.replace_state(server, fn state ->
         ref = Process.monitor(dead_pid)
@@ -162,9 +169,18 @@ defmodule Hermes.Server.BaseTest do
 
       assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
 
-      # Give the cast a moment to land and assert the server is still alive.
       Process.sleep(20)
       assert Process.alive?(server)
+    end
+
+    defp make_dead_pid do
+      p = spawn(fn -> :ok end)
+      ref = Process.monitor(p)
+      receive do
+        {:DOWN, ^ref, :process, ^p, _} -> p
+      after
+        500 -> flunk("test helper: spawned process did not exit")
+      end
     end
 
     test "deferred requests time out with not-initialized error if init never arrives", %{server: server} do

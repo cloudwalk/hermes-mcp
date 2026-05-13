@@ -131,14 +131,23 @@ defmodule Hermes.Server.Base do
           handle_request_and_reply(decoded, session, state)
         end
 
-      {:error, :session_terminated, state} ->
-        # Race: session died between create_session/whereis and the
-        # subsequent Session.get. Reply with a JSON-RPC internal error
-        # bound to this request id rather than letting the bare
-        # {:error, _} tuple bubble out and crash this GenServer with
-        # bad_return_value.
+      {:error, reason, state} ->
+        # Either the session died between create_session/whereis and the
+        # subsequent Session.get (`:session_terminated`), or SessionSupervisor
+        # itself failed (e.g. `:noproc` / timeout under cluster pressure).
+        # In both cases reply with a JSON-RPC internal error bound to this
+        # request id rather than letting the bare {:error, _, _} tuple
+        # bubble out and crash this GenServer with bad_return_value.
+        Logging.server_event(
+          "session_attach_failed",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
+          level: :warning
+        )
+
         error = Error.protocol(:internal_error, %{message: "Session unavailable"})
-        {:reply, {:ok, Error.build_json_rpc(error, decoded["id"])}, state}
+        error_response = Error.build_json_rpc(error, decoded["id"])
+        encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+        {:reply, encoded, state}
     end
   end
 
@@ -180,13 +189,14 @@ defmodule Hermes.Server.Base do
           {:noreply, state}
         end
 
-      {:error, :session_terminated, state} ->
+      {:error, reason, state} ->
         # Notifications have no reply — drop and continue with the
-        # cleaned-up state. Without this branch the bare {:error, _}
-        # tuple would crash the GenServer.
+        # cleaned-up state. Without this branch a bare {:error, _, _}
+        # tuple would crash the GenServer for any session attach
+        # failure (dead pid, :noproc, supervisor timeout).
         Logging.server_event(
-          "session_terminated_for_notification",
-          %{session_id: session_id, method: decoded["method"]},
+          "session_attach_failed_for_notification",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
           level: :warning
         )
 
@@ -467,10 +477,17 @@ defmodule Hermes.Server.Base do
             {:noreply, decrement_pending(state, session_id)}
         end
 
-      {:error, :session_terminated, state} ->
+      {:error, reason, state} ->
+        Logging.server_event(
+          "session_attach_failed_on_retry",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
+          level: :warning
+        )
+
         error = Error.protocol(:internal_error, %{message: "Session unavailable"})
-        encoded = Error.build_json_rpc(error, decoded["id"])
-        GenServer.reply(from, {:ok, encoded})
+        error_response = Error.build_json_rpc(error, decoded["id"])
+        encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+        GenServer.reply(from, encoded)
         {:noreply, decrement_pending(state, session_id)}
     end
   end
