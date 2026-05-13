@@ -50,7 +50,8 @@ defmodule Hermes.Server.Base do
               metadata: map(),
               timer_ref: reference()
             }
-          }
+          },
+          pending_init_requests: %{required(String.t()) => non_neg_integer()}
         }
 
   @typedoc """
