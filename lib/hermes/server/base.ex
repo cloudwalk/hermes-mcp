@@ -21,6 +21,17 @@ defmodule Hermes.Server.Base do
 
   @default_session_idle_timeout to_timeout(minute: 30)
 
+  # When a non-lifecycle request arrives for a session that hasn't yet
+  # received `notifications/initialized`, defer the reply and poll the
+  # session state. mcp-remote / TS SDK clients fire `notifications/initialized`
+  # and the first real request (e.g. tools/list) as back-to-back HTTP POSTs
+  # without serializing them; the cast carrying the notification can land in
+  # this GenServer's mailbox AFTER the request call, producing a spurious
+  # "Server not initialized" error and a broken connection. The total wait
+  # is bounded so a truly broken client still gets an error.
+  @init_wait_total_ms 500
+  @init_wait_interval_ms 25
+
   @type t :: %{
           module: module,
           server_info: map,
@@ -90,7 +101,8 @@ defmodule Hermes.Server.Base do
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
       frame: Frame.new(),
-      server_requests: %{}
+      server_requests: %{},
+      pending_init_requests: %{}
     }
 
     Logging.server_event("starting", %{
@@ -109,26 +121,13 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
+  def handle_call({:request, decoded, session_id, context}, from, state) when is_map(decoded) do
     with {:ok, {%Session{} = session, state}} <-
            maybe_attach_session(session_id, context, state) do
-      case handle_single_request(decoded, session, state) do
-        {:reply, {:ok, %{"result" => result} = response}, new_state} ->
-          request_id = response["id"]
-          if request_id, do: Session.complete_request(session.pid, request_id)
-
-          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
-
-        {:reply, {:ok, %{"error" => error} = response}, new_state} ->
-          request_id = response["id"]
-          if request_id, do: Session.complete_request(session.pid, request_id)
-
-          {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
-
-        {:reply, {:error, error}, new_state} ->
-          request_id = decoded["id"]
-          if request_id, do: Session.complete_request(session.pid, request_id)
-          {:reply, {:error, error}, new_state}
+      if should_defer_for_init?(decoded, session, state) do
+        defer_request_until_initialized(from, decoded, session_id, context, @init_wait_total_ms, state)
+      else
+        handle_request_and_reply(decoded, session, state)
       end
     end
   end
@@ -271,6 +270,10 @@ defmodule Hermes.Server.Base do
     handle_roots_timeout(request_id, state)
   end
 
+  def handle_info({:retry_pending_request, from, decoded, session_id, context, remaining_ms}, state) do
+    handle_retry_pending_request(from, decoded, session_id, context, remaining_ms, state)
+  end
+
   def handle_info(event, %{module: module} = state) do
     if Hermes.exported?(module, :handle_info, 2) do
       case module.handle_info(event, state.frame) do
@@ -355,6 +358,111 @@ defmodule Hermes.Server.Base do
   defguardp is_server_initialized(decoded, session)
             when Message.is_initialize_lifecycle(decoded) or
                    Session.is_initialized(session)
+
+  defp should_defer_for_init?(decoded, session, state) do
+    Message.is_request(decoded) and
+      not Message.is_initialize_lifecycle(decoded) and
+      not Message.is_ping(decoded) and
+      not server_request?(decoded["id"], state) and
+      not Session.is_initialized(session)
+  end
+
+  defp defer_request_until_initialized(from, decoded, session_id, context, remaining_ms, state) do
+    Logging.server_event(
+      "deferring_request_pending_init",
+      %{
+        session_id: session_id,
+        method: decoded["method"],
+        request_id: decoded["id"],
+        remaining_ms: remaining_ms
+      }
+    )
+
+    Process.send_after(
+      self(),
+      {:retry_pending_request, from, decoded, session_id, context, remaining_ms},
+      @init_wait_interval_ms
+    )
+
+    pending = Map.update(state.pending_init_requests, session_id, 1, &(&1 + 1))
+    {:noreply, %{state | pending_init_requests: pending}}
+  end
+
+  defp handle_request_and_reply(decoded, session, state) do
+    case handle_single_request(decoded, session, state) do
+      {:reply, {:ok, %{"result" => result} = response}, new_state} ->
+        request_id = response["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+
+        {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
+
+      {:reply, {:ok, %{"error" => error} = response}, new_state} ->
+        request_id = response["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+
+        {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
+
+      {:reply, {:error, error}, new_state} ->
+        request_id = decoded["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+        {:reply, {:error, error}, new_state}
+    end
+  end
+
+  defp handle_retry_pending_request(from, decoded, session_id, context, remaining_ms, state) do
+    case maybe_attach_session(session_id, context, state) do
+      {:ok, {%Session{} = session, state}} ->
+        cond do
+          Session.is_initialized(session) ->
+            {:reply, reply, new_state} = handle_request_and_reply(decoded, session, state)
+            GenServer.reply(from, reply)
+            {:noreply, decrement_pending(new_state, session_id)}
+
+          remaining_ms - @init_wait_interval_ms > 0 ->
+            Process.send_after(
+              self(),
+              {:retry_pending_request, from, decoded, session_id, context, remaining_ms - @init_wait_interval_ms},
+              @init_wait_interval_ms
+            )
+
+            {:noreply, state}
+
+          true ->
+            Logging.server_event(
+              "init_wait_timeout",
+              %{
+                session_id: session_id,
+                method: decoded["method"],
+                request_id: decoded["id"]
+              },
+              level: :warning
+            )
+
+            error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
+            error_response = Error.build_json_rpc(error)
+            encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+            GenServer.reply(from, encoded)
+            {:noreply, decrement_pending(state, session_id)}
+        end
+
+      {:error, reason} ->
+        GenServer.reply(from, {:error, reason})
+        {:noreply, decrement_pending(state, session_id)}
+    end
+  end
+
+  defp decrement_pending(state, session_id) do
+    case Map.get(state.pending_init_requests, session_id) do
+      nil ->
+        state
+
+      count when count <= 1 ->
+        %{state | pending_init_requests: Map.delete(state.pending_init_requests, session_id)}
+
+      count ->
+        %{state | pending_init_requests: Map.put(state.pending_init_requests, session_id, count - 1)}
+    end
+  end
 
   defp handle_single_request(decoded, session, state) do
     cond do

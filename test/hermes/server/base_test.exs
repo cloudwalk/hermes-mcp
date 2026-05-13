@@ -62,6 +62,69 @@ defmodule Hermes.Server.BaseTest do
       request = build_request("ping", 123)
       assert {:ok, _} = GenServer.call(server, {:request, request, session_id, %{}})
     end
+
+    # Regression: streamable HTTP clients (mcp-remote, the TS SDK) fire
+    # `notifications/initialized` and the first real request as back-to-back
+    # HTTP POSTs without serializing them. The cast carrying the notification
+    # can land in the GenServer's mailbox AFTER the request call. Previously
+    # that produced a spurious "Server not initialized" error and a broken
+    # MCP connection ("This connector has no tools available" in Claude
+    # Desktop). The fix defers non-init requests on uninitialized sessions
+    # and retries until init lands or a 500ms timeout elapses.
+    test "defers requests until session is initialized then processes them", %{server: server} do
+      session_id = "race_test_#{System.unique_integer([:positive])}"
+
+      # Open the session without sending notifications/initialized.
+      init_request = build_request("initialize", "init_id_1")
+
+      init_request =
+        Map.put(init_request, "params", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "TestClient", "version" => "1.0.0"},
+          "capabilities" => %{}
+        })
+
+      assert {:ok, _} = GenServer.call(server, {:request, init_request, session_id, %{}})
+
+      test_pid = self()
+
+      task =
+        Task.async(fn ->
+          send(test_pid, :request_sent)
+          GenServer.call(server, {:request, build_request("tools/list", %{}, 42), session_id, %{}}, 2_000)
+        end)
+
+      assert_receive :request_sent, 500
+
+      # Simulate the notification arriving just after — well within the 500ms wait window.
+      Process.sleep(50)
+      notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+      assert {:ok, encoded} = Task.await(task, 2_000)
+      assert encoded =~ ~s("tools")
+      refute encoded =~ "Server not initialized"
+    end
+
+    test "deferred requests time out with not-initialized error if init never arrives", %{server: server} do
+      session_id = "timeout_test_#{System.unique_integer([:positive])}"
+
+      init_request = build_request("initialize", "init_id_2")
+
+      init_request =
+        Map.put(init_request, "params", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "TestClient", "version" => "1.0.0"},
+          "capabilities" => %{}
+        })
+
+      assert {:ok, _} = GenServer.call(server, {:request, init_request, session_id, %{}})
+
+      {:ok, encoded} =
+        GenServer.call(server, {:request, build_request("tools/list", %{}, 43), session_id, %{}}, 2_000)
+
+      assert encoded =~ "Server not initialized"
+    end
   end
 
   describe "handle_cast/2 for notifications" do
