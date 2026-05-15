@@ -5,6 +5,7 @@ defmodule Hermes.Server.BaseTest do
   alias Hermes.Server.Base
   alias Hermes.Server.Frame
   alias Hermes.Server.Session
+  alias Hermes.Server.Session.Supervisor, as: SessionSupervisor
 
   require Message
 
@@ -48,11 +49,26 @@ defmodule Hermes.Server.BaseTest do
       assert {:ok, _} = GenServer.call(server, {:request, error, "123", %{}})
     end
 
-    test "rejects requests when not initialized", %{server: server} do
+    # ENA-9175: a non-initialize request bearing a session id that was
+    # never created (unknown / terminated / resumed-after-restart) MUST
+    # be rejected immediately with `:session_not_found` so the transport
+    # can answer HTTP 404 per the MCP Streamable HTTP spec — NOT silently
+    # vivified into a fresh uninitialized session that parks 500ms and
+    # then returns "Server not initialized" inside an HTTP 2xx (which a
+    # spec-correct client never treats as a re-initialize signal).
+    test "rejects an unknown session id immediately with :session_not_found", %{server: server} do
       request = build_request("tools/list", 123)
+      ctx = %{transport: :streamable_http}
 
-      assert {:ok, _} =
-               GenServer.call(server, {:request, request, "not_initialized", %{}})
+      {elapsed_us, reply} =
+        :timer.tc(fn ->
+          GenServer.call(server, {:request, request, "not_initialized", ctx})
+        end)
+
+      assert reply == {:error, :session_not_found}
+
+      assert elapsed_us < 200_000,
+             "expected immediate rejection, took #{elapsed_us}µs (init-wait window is #{500}ms — must not park)"
     end
 
     test "accept ping requests when not initialized", %{
@@ -106,33 +122,73 @@ defmodule Hermes.Server.BaseTest do
       refute encoded =~ "Server not initialized"
     end
 
-    # Regression for cloudwalk-review-agent findings on PR #257.
+    # ENA-9175 keystone no-regression: the discriminator must distinguish
+    # "unknown session" (→ :session_not_found / 404) from "session exists
+    # but notifications/initialized hasn't landed yet" (PR #257 problem
+    # #3 → MUST still defer, never 404). A session opened by `initialize`
+    # is in state.sessions, so a follow-up request is `known?` → it takes
+    # the unchanged defer path, not the new short-circuit.
+    test "a session opened by initialize is deferred, never :session_not_found", %{server: server} do
+      session_id = "keystone_#{System.unique_integer([:positive])}"
+
+      init_request =
+        "initialize"
+        |> build_request("init_keystone")
+        |> Map.put("params", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "TestClient", "version" => "1.0.0"},
+          "capabilities" => %{}
+        })
+
+      ctx = %{transport: :streamable_http}
+      assert {:ok, _} = GenServer.call(server, {:request, init_request, session_id, ctx})
+
+      test_pid = self()
+
+      task =
+        Task.async(fn ->
+          send(test_pid, :sent)
+          GenServer.call(server, {:request, build_request("tools/list", %{}, 7), session_id, ctx}, 2_000)
+        end)
+
+      assert_receive :sent, 500
+      Process.sleep(50)
+      notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+
+      # {:ok, encoded} (not {:error, :session_not_found}) proves the
+      # known-but-uninitialized session was deferred, not 404'd.
+      assert {:ok, encoded} = Task.await(task, 2_000)
+      assert encoded =~ ~s("tools")
+      refute encoded =~ "Server not initialized"
+    end
+
+    # Regression for cloudwalk-review-agent findings on PR #257, updated
+    # for ENA-9175. The two PR #257 structural invariants still hold; the
+    # ENA-9175 discriminator changes only WHAT is returned:
     #
-    # Two invariants this exercises end-to-end:
+    # 1. NO-CRASH ON ATTACH FAILURE: a dead/terminated session pid must
+    #    not crash the GenServer with `bad_return_value` /`CaseClauseError`.
+    #    Still asserted via `Process.alive?(server)`.
     #
-    # 1. ENCODING CONTRACT: the synchronous return value of
-    #    handle_call({:request, ...}, ...) must be an encoded JSON
-    #    binary suitable for `Plug.Conn.send_resp/3`, not an unencoded
-    #    `{:ok, map}` tuple. An unencoded map would crash the StreamableHTTP
-    #    plug at runtime.
-    #
-    # 2. NO-CRASH ON ATTACH FAILURE: any failure path returned by
-    #    maybe_attach_session/3 (`:session_terminated` from a stale cached
-    #    pid, `:noproc` from a supervisor under cluster pressure, etc.) must
-    #    not crash the GenServer with `bad_return_value` or
-    #    `CaseClauseError`. The unified `{:error, reason, state}` clause in
-    #    handle_call/3 covers any reason — narrowing it would also need to
-    #    change the @spec, so this is structurally protected.
+    # 2. TRANSPORT-HANDLEABLE REPLY: the synchronous return must be a
+    #    value the transport can turn into an HTTP response, never an
+    #    unencoded `{:ok, map}` reaching `send_resp/3`. Under ENA-9175 a
+    #    request whose session id has no live process is `:session_not_found`
+    #    — `streamable_http.ex` `forward_request_to_server/6`'s
+    #    `{:error, reason}` arm carries it to the plug, which encodes a
+    #    JSON-RPC body + HTTP 404 (covered end-to-end by the plug test
+    #    "POST request with unknown session id returns 404 fast").
     #
     # Setup: pre-install a sessions-map entry pointing at a dead pid.
-    # The :dead branch in attach/5 drops the stale entry and recurses
-    # into the second maybe_attach_session/3 clause, which then creates
-    # a fresh session. The request is then deferred for the
-    # `notifications/initialized` notification (which never arrives in this
-    # test) and times out via `handle_retry_pending_request/6` — the same
-    # code path that previously returned an unencoded `{:ok, map}` via
-    # GenServer.reply and that this fix corrected to an encoded binary.
-    test "replies with encoded JSON binary when session attach goes through the error path", %{server: server} do
+    # `Process.monitor/1` on an already-dead pid (run inside the server
+    # via `:sys.replace_state`) immediately queues `{:DOWN, …}` into the
+    # server mailbox; it is processed before this request, pruning the
+    # stale entry. The discriminator then correctly sees an unknown
+    # session and short-circuits to `:session_not_found` instead of
+    # silently vivifying a fresh uninitialized session that parks 500ms
+    # and returns "Server not initialized" inside an HTTP 2xx (the bug).
+    test "an attach-failed / dead session id replies :session_not_found without crashing", %{server: server} do
       session_id = "dead_session_#{System.unique_integer([:positive])}"
       dead_pid = make_dead_pid()
 
@@ -143,15 +199,63 @@ defmodule Hermes.Server.BaseTest do
 
       request = build_request("tools/list", %{}, 99)
 
-      assert {:ok, encoded} =
-               GenServer.call(server, {:request, request, session_id, %{}}, 2_000)
+      assert {:error, :session_not_found} =
+               GenServer.call(server, {:request, request, session_id, %{transport: :streamable_http}}, 2_000)
 
-      assert is_binary(encoded), "transport contract requires an encoded JSON binary, got: #{inspect(encoded)}"
-      decoded = JSON.decode!(encoded)
-      assert is_map(decoded["error"]), "expected a JSON-RPC error response, got: #{inspect(decoded)}"
-      assert decoded["id"] == 99
-
+      # PR #257 invariant: no bad_return_value / CaseClauseError crash.
       assert Process.alive?(server)
+    end
+
+    test "a stale cached Streamable HTTP session is not recreated before DOWN cleanup", %{server: server} do
+      session_id = "stale_cached_#{System.unique_integer([:positive])}"
+      dead_pid = make_dead_pid()
+
+      :sys.replace_state(server, fn state ->
+        %{state | sessions: Map.put(state.sessions, session_id, {nil, dead_pid, make_ref()})}
+      end)
+
+      request = build_request("tools/list", %{}, 100)
+
+      assert {:error, :session_not_found} =
+               GenServer.call(server, {:request, request, session_id, %{transport: :streamable_http}}, 2_000)
+
+      refute Map.has_key?(:sys.get_state(server).sessions, session_id)
+      assert :not_found == SessionSupervisor.whereis_session(Hermes.Server.Registry, StubServer, session_id)
+      assert Process.alive?(server)
+    end
+
+    test "a live registry-resolvable Streamable HTTP session attaches without local cache", %{server: server} do
+      session_id = "registry_live_#{System.unique_integer([:positive])}"
+
+      init_request =
+        "initialize"
+        |> build_request("init_registry_live")
+        |> Map.put("params", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "TestClient", "version" => "1.0.0"},
+          "capabilities" => %{}
+        })
+
+      ctx = %{transport: :streamable_http}
+      assert {:ok, _} = GenServer.call(server, {:request, init_request, session_id, ctx})
+      notification = build_notification("notifications/initialized", %{})
+      assert :ok = GenServer.cast(server, {:notification, notification, session_id, %{}})
+      Process.sleep(50)
+
+      {_, pid, ref} = :sys.get_state(server).sessions[session_id]
+
+      :sys.replace_state(server, fn state ->
+        Process.demonitor(ref, [:flush])
+        %{state | sessions: Map.delete(state.sessions, session_id)}
+      end)
+
+      request = build_request("tools/list", %{}, 101)
+
+      assert {:ok, encoded} =
+               GenServer.call(server, {:request, request, session_id, ctx}, 2_000)
+
+      assert encoded =~ ~s("tools")
+      assert {_, ^pid, _} = :sys.get_state(server).sessions[session_id]
     end
 
     # Same race on the notification cast path. The cast must drop quietly
@@ -176,6 +280,7 @@ defmodule Hermes.Server.BaseTest do
     defp make_dead_pid do
       p = spawn(fn -> :ok end)
       ref = Process.monitor(p)
+
       receive do
         {:DOWN, ^ref, :process, ^p, _} -> p
       after
@@ -236,7 +341,7 @@ defmodule Hermes.Server.BaseTest do
     setup do
       start_supervised!(Hermes.Server.Registry)
 
-      start_supervised!({Session.Supervisor, server: StubServer, registry: Hermes.Server.Registry})
+      start_supervised!({SessionSupervisor, server: StubServer, registry: Hermes.Server.Registry})
 
       :ok
     end

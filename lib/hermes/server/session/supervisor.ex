@@ -79,6 +79,30 @@ defmodule Hermes.Server.Session.Supervisor do
   end
 
   @doc """
+  Looks up a live session **without** creating one.
+
+  Returns `{:ok, pid}` when a session process for `session_id` is
+  currently registered, or `:not_found` otherwise. Resolution goes
+  through the configured registry adapter's `whereis_server_session/2`,
+  so it is cluster-wide whenever that adapter is distributed (e.g. a
+  `Horde.Registry`-backed adapter) — the same resolution
+  `close_session/3` uses, minus the side effect.
+
+  Unlike `create_session/3` this never calls `start_child`: it is the
+  existence probe that distinguishes a resumable session from an
+  unknown/terminated one. Per the MCP Streamable HTTP spec a request
+  bearing an unknown session id must yield HTTP 404 rather than
+  silently vivifying a fresh, uninitialized session.
+  """
+  @spec whereis_session(module(), module(), String.t()) :: {:ok, pid()} | :not_found
+  def whereis_session(registry \\ Hermes.Server.Registry, server, session_id) when is_binary(session_id) do
+    case registry.whereis_server_session(server, session_id) do
+      pid when is_pid(pid) -> {:ok, pid}
+      nil -> :not_found
+    end
+  end
+
+  @doc """
   Terminates a session and cleans up its resources.
   """
   def close_session(registry \\ Hermes.Server.Registry, server, session_id) when is_binary(session_id) do

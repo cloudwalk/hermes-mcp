@@ -352,6 +352,15 @@ defmodule Hermes.Server.Transport.StreamableHTTP do
       {:ok, response} ->
         {:ok, response}
 
+      {:error, :session_not_found} ->
+        Logging.transport_event(
+          "session_not_found",
+          %{session_id: session_id},
+          level: :info
+        )
+
+        {:error, :session_not_found}
+
       {:error, reason} ->
         Logging.transport_event(
           "server_error",
