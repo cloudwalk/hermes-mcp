@@ -48,29 +48,42 @@ defmodule Hermes.Server.Handlers.Tools do
   end
 
   defp forward_to(server, %Tool{handler: nil} = tool, params, frame) do
-    case server.handle_tool_call(tool.name, params, frame) do
-      {:reply, %Response{} = response, frame} ->
-        maybe_validate_output_schema(tool, response, frame)
+    invocation =
+      Handlers.safe_invoke({:tool, tool.name}, fn ->
+        server.handle_tool_call(tool.name, params, frame)
+      end)
 
-      {:noreply, frame} ->
-        {:reply, %{"content" => [], "isError" => false}, frame}
-
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+    handle_tool_invocation(invocation, tool, frame)
   end
 
   defp forward_to(_server, %Tool{handler: handler} = tool, params, frame) do
-    case handler.execute(params, frame) do
-      {:reply, %Response{} = response, frame} ->
-        maybe_validate_output_schema(tool, response, frame)
+    invocation =
+      Handlers.safe_invoke({:tool, tool.name}, fn ->
+        handler.execute(params, frame)
+      end)
 
-      {:noreply, frame} ->
-        {:reply, %{"content" => [], "isError" => false}, frame}
+    handle_tool_invocation(invocation, tool, frame)
+  end
 
-      {:error, %Error{} = error, frame} ->
-        {:error, error, frame}
-    end
+  defp handle_tool_invocation({:ok, {:reply, %Response{} = response, frame}}, tool, _frame) do
+    maybe_validate_output_schema(tool, response, frame)
+  end
+
+  defp handle_tool_invocation({:ok, {:noreply, frame}}, _tool, _frame) do
+    {:reply, %{"content" => [], "isError" => false}, frame}
+  end
+
+  defp handle_tool_invocation({:ok, {:error, %Error{} = error, frame}}, _tool, _frame) do
+    {:error, error, frame}
+  end
+
+  defp handle_tool_invocation({:caught, _kind, _reason, _stack}, tool, frame) do
+    # Full reason + stacktrace is already logged at `:error` level by
+    # Handlers.safe_invoke/2. Don't echo it back to the client — exception
+    # messages from user code commonly contain internal details (query
+    # snippets, upstream API error text, secrets) that shouldn't leak
+    # across the JSON-RPC boundary.
+    {:error, Error.execution("Tool execution failed", %{tool: tool.name}), frame}
   end
 
   @output_schema_err "Tool doesnt conform for it output schema"

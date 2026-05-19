@@ -21,6 +21,17 @@ defmodule Hermes.Server.Base do
 
   @default_session_idle_timeout to_timeout(minute: 30)
 
+  # When a non-lifecycle request arrives for a session that hasn't yet
+  # received `notifications/initialized`, defer the reply and poll the
+  # session state. mcp-remote / TS SDK clients fire `notifications/initialized`
+  # and the first real request (e.g. tools/list) as back-to-back HTTP POSTs
+  # without serializing them; the cast carrying the notification can land in
+  # this GenServer's mailbox AFTER the request call, producing a spurious
+  # "Server not initialized" error and a broken connection. The total wait
+  # is bounded so a truly broken client still gets an error.
+  @init_wait_total_ms 500
+  @init_wait_interval_ms 25
+
   @type t :: %{
           module: module,
           server_info: map,
@@ -39,7 +50,8 @@ defmodule Hermes.Server.Base do
               metadata: map(),
               timer_ref: reference()
             }
-          }
+          },
+          pending_init_requests: %{required(String.t()) => non_neg_integer()}
         }
 
   @typedoc """
@@ -90,7 +102,8 @@ defmodule Hermes.Server.Base do
       session_idle_timeout: opts.session_idle_timeout,
       expiry_timers: %{},
       frame: Frame.new(),
-      server_requests: %{}
+      server_requests: %{},
+      pending_init_requests: %{}
     }
 
     Logging.server_event("starting", %{
@@ -109,27 +122,25 @@ defmodule Hermes.Server.Base do
   end
 
   @impl GenServer
-  def handle_call({:request, decoded, session_id, context}, _from, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <-
-           maybe_attach_session(session_id, context, state) do
-      case handle_single_request(decoded, session, state) do
-        {:reply, {:ok, %{"result" => result} = response}, new_state} ->
-          request_id = response["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
+  def handle_call({:request, decoded, session_id, context}, from, state) when is_map(decoded) do
+    if session_known?(decoded, session_id, context, state) do
+      attach_and_dispatch(decoded, session_id, context, from, state)
+    else
+      # Client supplied an Mcp-Session-Id with no live session anywhere
+      # (resumed/restarted/never-initialized) and this is not an
+      # initialize-lifecycle message. Per the MCP Streamable HTTP spec
+      # this MUST be answered with transport-level HTTP 404 so the client
+      # re-`initialize`s — NOT silently vivified into a fresh,
+      # uninitialized session that then deadlocks the defer/init-wait
+      # path and surfaces an unactionable JSON-RPC error inside HTTP 2xx.
+      # Expected on resume, so :info (not a fault).
+      Logging.server_event(
+        "session_not_found",
+        %{session_id: session_id, method: decoded["method"]},
+        level: :info
+      )
 
-          {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
-
-        {:reply, {:ok, %{"error" => error} = response}, new_state} ->
-          request_id = response["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
-
-          {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
-
-        {:reply, {:error, error}, new_state} ->
-          request_id = decoded["id"]
-          if request_id, do: Session.complete_request(session.name, request_id)
-          {:reply, {:error, error}, new_state}
-      end
+      {:reply, {:error, :session_not_found}, state}
     end
   end
 
@@ -155,21 +166,112 @@ defmodule Hermes.Server.Base do
     end
   end
 
+  # An initialize request always proceeds (the fresh handshake
+  # legitimately creates the session). Otherwise the session must already
+  # exist — either locally cached on this node OR live somewhere in the
+  # (possibly clustered) registry. The existing cached path performs the
+  # liveness check; this gate makes sure a dead cached pid does not then
+  # vivify a replacement session for Streamable HTTP. The registry probe
+  # MUST be the cluster-aware one (`SessionSupervisor.whereis_session/3` →
+  # `registry.whereis_server_session/2`, the same resolution
+  # `create_session`/`close_session` use, minus the side effect) so a
+  # session living on another node is never falsely 404'd into a
+  # cross-node reconnect storm.
+  #
+  # `session_id` is always a binary for `{:request, …}` in practice
+  # (Streamable-HTTP requests are gated by `determine_session_id` in the
+  # plug; SSE/stdio supply a binary). The explicit `is_binary/1` here is
+  # a defensive invariant guard so a non-binary id degrades to "unknown"
+  # (→ 404) rather than raising in `whereis_session/3`'s own guard.
+  defp session_known?(decoded, session_id, context, %{sessions: sessions, registry: registry, module: module}) do
+    Message.is_initialize(decoded) or
+      not streamable_http?(context) or
+      is_map_key(sessions, session_id) or
+      (is_binary(session_id) and
+         match?({:ok, _pid}, SessionSupervisor.whereis_session(registry, module, session_id)))
+  end
+
+  # The ENA-9175 unknown-session → 404 contract is the MCP Streamable
+  # HTTP (2025-03-26) spec. Only that transport tags the request context.
+  # For the deprecated HTTP+SSE transport, stdio, or any other caller
+  # (no/blank context) this returns false so `session_known?` stays
+  # `true` — i.e. the pre-ENA-9175 attach/create behavior is preserved
+  # for non-Streamable-HTTP paths (no regression of the old transport).
+  defp streamable_http?(context) when is_map(context), do: Map.get(context, :transport) == :streamable_http
+  defp streamable_http?(_), do: false
+
+  defp allow_session_create?(decoded, context) do
+    Message.is_initialize(decoded) or not streamable_http?(context)
+  end
+
+  defp attach_and_dispatch(decoded, session_id, context, from, state) do
+    allow_create? = allow_session_create?(decoded, context)
+
+    case maybe_attach_session(session_id, context, state, allow_create?) do
+      {:ok, {%Session{} = session, state}} ->
+        if should_defer_for_init?(decoded, session, state) do
+          defer_request_until_initialized(from, decoded, session_id, context, @init_wait_total_ms, state)
+        else
+          handle_request_and_reply(decoded, session, state)
+        end
+
+      {:error, reason, state} when reason in [:session_not_found, :session_terminated] and not allow_create? ->
+        Logging.server_event(
+          "session_not_found",
+          %{session_id: session_id, method: decoded["method"], reason: reason},
+          level: :info
+        )
+
+        {:reply, {:error, :session_not_found}, state}
+
+      {:error, reason, state} ->
+        # Either the session died between create_session/whereis and the
+        # subsequent Session.get (`:session_terminated`), or SessionSupervisor
+        # itself failed (e.g. `:noproc` / timeout under cluster pressure).
+        # In both cases reply with a JSON-RPC internal error bound to this
+        # request id rather than letting the bare {:error, _, _} tuple
+        # bubble out and crash this GenServer with bad_return_value.
+        Logging.server_event(
+          "session_attach_failed",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
+          level: :warning
+        )
+
+        error = Error.protocol(:internal_error, %{message: "Session unavailable"})
+        error_response = Error.build_json_rpc(error, decoded["id"])
+        encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+        {:reply, encoded, state}
+    end
+  end
+
   @impl GenServer
   def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
-    with {:ok, {%Session{} = session, state}} <-
-           maybe_attach_session(session_id, context, state) do
-      if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
-        handle_notification(decoded, session, state)
-      else
-        Logging.server_event("session_not_initialized_check", %{
-          session_id: session.id,
-          initialized: session.initialized,
-          method: decoded["method"]
-        })
+    case maybe_attach_session(session_id, context, state) do
+      {:ok, {%Session{} = session, state}} ->
+        if Message.is_initialize_lifecycle(decoded) or Session.is_initialized(session) do
+          handle_notification(decoded, session, state)
+        else
+          Logging.server_event("session_not_initialized_check", %{
+            session_id: session.id,
+            initialized: session.initialized,
+            method: decoded["method"]
+          })
+
+          {:noreply, state}
+        end
+
+      {:error, reason, state} ->
+        # Notifications have no reply — drop and continue with the
+        # cleaned-up state. Without this branch a bare {:error, _, _}
+        # tuple would crash the GenServer for any session attach
+        # failure (dead pid, :noproc, supervisor timeout).
+        Logging.server_event(
+          "session_attach_failed_for_notification",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
+          level: :warning
+        )
 
         {:noreply, state}
-      end
     end
   end
 
@@ -204,7 +306,7 @@ defmodule Hermes.Server.Base do
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     session_entry =
       Enum.find(state.sessions, fn
-        {_id, {_name, ^ref}} -> true
+        {_id, {_name, _pid, ^ref}} -> true
         _ -> false
       end)
 
@@ -269,6 +371,10 @@ defmodule Hermes.Server.Base do
 
   def handle_info({:roots_request_timeout, request_id}, state) do
     handle_roots_timeout(request_id, state)
+  end
+
+  def handle_info({:retry_pending_request, from, decoded, session_id, context, remaining_ms}, state) do
+    handle_retry_pending_request(from, decoded, session_id, context, remaining_ms, state)
   end
 
   def handle_info(event, %{module: module} = state) do
@@ -343,13 +449,132 @@ defmodule Hermes.Server.Base do
 
   defp format_sessions(sessions) do
     sessions
-    |> Enum.map(fn {_id, {name, _}} -> Session.get(name) end)
+    |> Enum.map(fn {_id, {_name, pid, _ref}} ->
+      case safe_session_get(pid) do
+        {:ok, session} -> session
+        :dead -> nil
+      end
+    end)
     |> Enum.reject(&is_nil/1)
   end
 
   defguardp is_server_initialized(decoded, session)
             when Message.is_initialize_lifecycle(decoded) or
                    Session.is_initialized(session)
+
+  defp should_defer_for_init?(decoded, session, state) do
+    Message.is_request(decoded) and
+      not Message.is_initialize_lifecycle(decoded) and
+      not Message.is_ping(decoded) and
+      not server_request?(decoded["id"], state) and
+      not Session.is_initialized(session)
+  end
+
+  defp defer_request_until_initialized(from, decoded, session_id, context, remaining_ms, state) do
+    Logging.server_event(
+      "deferring_request_pending_init",
+      %{
+        session_id: session_id,
+        method: decoded["method"],
+        request_id: decoded["id"],
+        remaining_ms: remaining_ms
+      }
+    )
+
+    Process.send_after(
+      self(),
+      {:retry_pending_request, from, decoded, session_id, context, remaining_ms},
+      @init_wait_interval_ms
+    )
+
+    pending = Map.update(state.pending_init_requests, session_id, 1, &(&1 + 1))
+    {:noreply, %{state | pending_init_requests: pending}}
+  end
+
+  defp handle_request_and_reply(decoded, session, state) do
+    case handle_single_request(decoded, session, state) do
+      {:reply, {:ok, %{"result" => result} = response}, new_state} ->
+        request_id = response["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+
+        {:reply, Message.encode_response(%{"result" => result}, response["id"]), new_state}
+
+      {:reply, {:ok, %{"error" => error} = response}, new_state} ->
+        request_id = response["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+
+        {:reply, Message.encode_error(%{"error" => error}, response["id"]), new_state}
+
+      {:reply, {:error, error}, new_state} ->
+        request_id = decoded["id"]
+        if request_id, do: Session.complete_request(session.pid, request_id)
+        {:reply, {:error, error}, new_state}
+    end
+  end
+
+  defp handle_retry_pending_request(from, decoded, session_id, context, remaining_ms, state) do
+    case maybe_attach_session(session_id, context, state) do
+      {:ok, {%Session{} = session, state}} ->
+        cond do
+          Session.is_initialized(session) ->
+            {:reply, reply, new_state} = handle_request_and_reply(decoded, session, state)
+            GenServer.reply(from, reply)
+            {:noreply, decrement_pending(new_state, session_id)}
+
+          remaining_ms - @init_wait_interval_ms > 0 ->
+            Process.send_after(
+              self(),
+              {:retry_pending_request, from, decoded, session_id, context, remaining_ms - @init_wait_interval_ms},
+              @init_wait_interval_ms
+            )
+
+            {:noreply, state}
+
+          true ->
+            Logging.server_event(
+              "init_wait_timeout",
+              %{
+                session_id: session_id,
+                method: decoded["method"],
+                request_id: decoded["id"]
+              },
+              level: :warning
+            )
+
+            error = Error.protocol(:invalid_request, %{message: "Server not initialized"})
+            error_response = Error.build_json_rpc(error)
+            encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+            GenServer.reply(from, encoded)
+            {:noreply, decrement_pending(state, session_id)}
+        end
+
+      {:error, reason, state} ->
+        Logging.server_event(
+          "session_attach_failed_on_retry",
+          %{session_id: session_id, reason: reason, method: decoded["method"]},
+          level: :warning
+        )
+
+        error = Error.protocol(:internal_error, %{message: "Session unavailable"})
+        error_response = Error.build_json_rpc(error, decoded["id"])
+        encoded = Message.encode_error(%{"error" => error_response["error"]}, decoded["id"])
+        GenServer.reply(from, encoded)
+        {:noreply, decrement_pending(state, session_id)}
+    end
+  end
+
+  defp decrement_pending(state, session_id) do
+    case Map.get(state.pending_init_requests, session_id) do
+      nil ->
+        state
+
+      count when count <= 1 ->
+        %{state | pending_init_requests: Map.delete(state.pending_init_requests, session_id)}
+
+      count ->
+        %{state | pending_init_requests: Map.put(state.pending_init_requests, session_id, count - 1)}
+    end
+  end
 
   defp handle_single_request(decoded, session, state) do
     cond do
@@ -412,7 +637,7 @@ defmodule Hermes.Server.Base do
 
     :ok =
       Session.update_from_initialization(
-        session.name,
+        session.pid,
         protocol_version,
         client_info,
         client_capabilities
@@ -442,14 +667,14 @@ defmodule Hermes.Server.Base do
   defp handle_request(%{"id" => request_id, "method" => "logging/setLevel"} = request, session, state)
        when Server.is_supported_capability(state.capabilities, "logging") do
     level = request["params"]["level"]
-    :ok = Session.set_log_level(session.name, level)
+    :ok = Session.set_log_level(session.pid, level)
     {:reply, {:ok, Message.build_response(%{}, request_id)}, state}
   end
 
   defp handle_request(%{"id" => request_id, "method" => method} = request, session, state) do
     Logging.server_event("handling_request", %{id: request_id, method: method})
 
-    :ok = Session.track_request(session.name, request_id, method)
+    :ok = Session.track_request(session.pid, request_id, method)
 
     Telemetry.execute(
       Telemetry.event_server_request(),
@@ -471,7 +696,7 @@ defmodule Hermes.Server.Base do
 
   defp handle_notification(%{"method" => "notifications/initialized"}, session, %{module: module} = state) do
     Logging.server_event("client_initialized", %{session_id: session.id})
-    :ok = Session.mark_initialized(session.name)
+    :ok = Session.mark_initialized(session.pid)
 
     Logging.server_event("session_marked_initialized", %{
       session_id: session.id,
@@ -493,8 +718,8 @@ defmodule Hermes.Server.Base do
     request_id = params["requestId"]
     reason = Map.get(params, "reason", "cancelled")
 
-    if Session.has_pending_request?(session.name, request_id) do
-      request_info = Session.complete_request(session.name, request_id)
+    if Session.has_pending_request?(session.pid, request_id) do
+      request_info = Session.complete_request(session.pid, request_id)
 
       Logging.server_event("request_cancelled", %{
         session_id: session.id,
@@ -597,50 +822,84 @@ defmodule Hermes.Server.Base do
   end
 
   @spec maybe_attach_session(session_id :: String.t(), map, t) ::
-          {:ok, {session :: Session.t(), t}}
-  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state) when is_map_key(sessions, session_id) do
-    {session_name, _ref} = sessions[session_id]
-    session = Session.get(session_name)
-    state = reset_session_expiry(session_id, state)
+          {:ok, {session :: Session.t(), t}} | {:error, reason :: term(), t}
+  defp maybe_attach_session(session_id, context, state), do: maybe_attach_session(session_id, context, state, true)
 
-    {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+  defp maybe_attach_session(session_id, context, %{sessions: sessions} = state, allow_create?)
+       when is_map_key(sessions, session_id) do
+    {_session_name, pid, ref} = sessions[session_id]
+
+    case safe_session_get(pid) do
+      {:ok, session} ->
+        state = reset_session_expiry(session_id, state)
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+
+      :dead ->
+        # Cached pid is gone. Common in distributed deployments where
+        # sessions live on remote nodes that go away (Fly machine cycling,
+        # Horde rebalance, idle-expiry timer firing on another node).
+        # Drop the stale cache entry and re-resolve via the registry.
+        Process.demonitor(ref, [:flush])
+        sessions = Map.delete(sessions, session_id)
+        state = cancel_session_expiry(session_id, %{state | sessions: sessions})
+        maybe_attach_session(session_id, context, state, allow_create?)
+    end
   end
 
-  defp maybe_attach_session(session_id, context, %{sessions: sessions, registry: registry} = state) do
+  defp maybe_attach_session(session_id, context, %{sessions: _sessions, registry: registry} = state, true) do
     session_name = registry.server_session(state.module, session_id)
 
     case SessionSupervisor.create_session(registry, state.module, session_id) do
-      {:ok, pid} ->
-        ref = Process.monitor(pid)
-
-        state = %{
-          state
-          | sessions: Map.put(sessions, session_id, {session_name, ref})
-        }
-
-        state = reset_session_expiry(session_id, state)
-
-        session = Session.get(session_name)
-
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
-
-      {:error, {:already_started, pid}} ->
-        ref = Process.monitor(pid)
-
-        state = %{
-          state
-          | sessions: Map.put(sessions, session_id, {session_name, ref})
-        }
-
-        state = reset_session_expiry(session_id, state)
-
-        session = Session.get(session_name)
-
-        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
-
-      error ->
-        error
+      {:ok, pid} -> attach(pid, session_id, session_name, context, state)
+      {:error, {:already_started, pid}} -> attach(pid, session_id, session_name, context, state)
+      {:error, reason} -> {:error, reason, state}
     end
+  end
+
+  defp maybe_attach_session(session_id, context, %{sessions: _sessions, registry: registry} = state, false) do
+    session_name = registry.server_session(state.module, session_id)
+
+    case SessionSupervisor.whereis_session(registry, state.module, session_id) do
+      {:ok, pid} -> attach(pid, session_id, session_name, context, state)
+      :not_found -> {:error, :session_not_found, state}
+    end
+  end
+
+  # Use the pid returned from create_session/start_link directly. Going
+  # through the registry's via tuple here would race with eventual
+  # consistency in distributed registries (e.g. Horde) where the
+  # registration may not yet be visible on this node even though the
+  # session pid is valid and reachable via Erlang distribution.
+  defp attach(pid, session_id, session_name, context, %{sessions: sessions} = state) do
+    ref = Process.monitor(pid)
+
+    state = %{
+      state
+      | sessions: Map.put(sessions, session_id, {session_name, pid, ref})
+    }
+
+    state = reset_session_expiry(session_id, state)
+
+    case safe_session_get(pid) do
+      {:ok, session} ->
+        {:ok, {session, %{state | frame: populate_frame(state.frame, session, context, state)}}}
+
+      :dead ->
+        # Race: session died between create_session/whereis returning the
+        # pid and our Session.get call. Surface as an error and return
+        # the cleaned-up state so the GenServer caller can both reply
+        # with a JSON-RPC error and stop tracking the dead session.
+        Process.demonitor(ref, [:flush])
+        sessions = Map.delete(state.sessions, session_id)
+        state = cancel_session_expiry(session_id, %{state | sessions: sessions})
+        {:error, :session_terminated, state}
+    end
+  end
+
+  defp safe_session_get(pid) do
+    {:ok, Session.get(pid)}
+  catch
+    :exit, _reason -> :dead
   end
 
   defp populate_frame(frame, %Session{} = session, context, state) do
@@ -748,17 +1007,21 @@ defmodule Hermes.Server.Base do
   defp validate_client_capability(%{frame: frame} = state, capability) do
     current_session = Frame.get_mcp_session_id(frame)
 
-    session_name =
-      Enum.find_value(state.sessions, fn {id, {name, _ref}} ->
-        if id == current_session, do: name
+    session_pid =
+      Enum.find_value(state.sessions, fn {id, {_name, pid, _ref}} ->
+        if id == current_session, do: pid
       end)
 
-    session = Session.get(session_name)
+    case safe_session_get(session_pid) do
+      {:ok, session} ->
+        if Map.has_key?(session.client_capabilities || %{}, capability) do
+          :ok
+        else
+          {:error, "No session initialzied for sending sampling request"}
+        end
 
-    if Map.has_key?(session.client_capabilities || %{}, capability) do
-      :ok
-    else
-      {:error, "No session initialzied for sending sampling request"}
+      :dead ->
+        {:error, "No session initialzied for sending sampling request"}
     end
   end
 

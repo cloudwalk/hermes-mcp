@@ -95,9 +95,14 @@ defmodule Hermes.Server.Supervisor do
           task_supervisor: task_supervisor
         )
 
+      session_supervisor_opts =
+        [server: server, registry: registry]
+        |> maybe_put(opts, :session_supervisor_module, :supervisor_module)
+        |> maybe_put(opts, :session_supervisor_opts, :supervisor_opts)
+
       children = [
         {Task.Supervisor, name: task_supervisor},
-        {Session.Supervisor, server: server, registry: registry},
+        {Session.Supervisor, session_supervisor_opts},
         {Base, server_opts},
         {layer, transport_opts}
       ]
@@ -105,6 +110,13 @@ defmodule Hermes.Server.Supervisor do
       Supervisor.init(children, strategy: :one_for_all)
     else
       :ignore
+    end
+  end
+
+  defp maybe_put(target_opts, source_opts, source_key, target_key) do
+    case Keyword.fetch(source_opts, source_key) do
+      {:ok, value} -> Keyword.put(target_opts, target_key, value)
+      :error -> target_opts
     end
   end
 

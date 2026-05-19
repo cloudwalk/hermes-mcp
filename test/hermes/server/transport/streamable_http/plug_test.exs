@@ -147,6 +147,9 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
     end
 
     test "POST request with notification returns 202", %{opts: opts} do
+      # Notifications have no JSON-RPC response id to preserve. With no
+      # session header, Streamable HTTP keeps the prior best-effort behavior
+      # and accepts the notification instead of fabricating an error response.
       notification =
         build_notification("notifications/message", %{
           "level" => "info",
@@ -166,7 +169,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       assert conn.resp_body == "{}"
     end
 
-    test "POST request with valid request returns response", %{opts: opts} do
+    test "POST non-initialize request without session header returns 400", %{opts: opts} do
+      # Spec: a server that requires a session id SHOULD answer a
+      # non-initialize request lacking Mcp-Session-Id with HTTP 400.
+      # (Previously this fabricated an id and returned 200 — the bug.)
       request = build_request("ping", %{})
       {:ok, body} = Message.encode_request(request, 1)
 
@@ -177,9 +183,10 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
         |> put_req_header("accept", "application/json, text/event-stream")
         |> StreamableHTTPPlug.call(opts)
 
-      assert conn.status == 200
+      assert conn.status == 400
       {:ok, response} = Jason.decode(conn.resp_body)
-      assert response["result"] == %{}
+      assert response["id"] == 1
+      assert response["error"]["message"] =~ "Invalid"
     end
 
     test "POST request with invalid JSON returns error", %{opts: opts} do
@@ -193,6 +200,56 @@ defmodule Hermes.Server.Transport.StreamableHTTP.PlugTest do
       assert conn.status == 400
       {:ok, body} = Jason.decode(conn.resp_body)
       assert body["error"]["code"] == -32_700
+    end
+
+    # ENA-9175 proof matrix (a): unknown / never-initialized session id
+    # on a real request → transport-level HTTP 404, immediately. Per the
+    # MCP Streamable HTTP spec only a 404 status obligates the client to
+    # re-`initialize`; a JSON-RPC error inside HTTP 2xx does not. Must be
+    # fast — no 500ms init-wait park.
+    test "POST request with unknown session id returns 404 fast", %{opts: opts} do
+      request = build_request("tools/list", %{})
+      {:ok, body} = Message.encode_request(request, 1)
+
+      {elapsed_us, conn} =
+        :timer.tc(fn ->
+          :post
+          |> conn("/", body)
+          |> put_req_header("content-type", "application/json")
+          |> put_req_header("accept", "application/json, text/event-stream")
+          |> put_req_header("mcp-session-id", "bogus-never-initialized")
+          |> StreamableHTTPPlug.call(opts)
+        end)
+
+      assert conn.status == 404
+      {:ok, response} = Jason.decode(conn.resp_body)
+      assert is_map(response["error"])
+
+      assert elapsed_us < 200_000,
+             "expected immediate 404, took #{elapsed_us}µs (init-wait window is 500ms — must not park)"
+    end
+
+    # ENA-9175 proof matrix (d): initialize is unaffected — it MUST work
+    # with no session header and the server mints + returns a fresh id.
+    test "POST initialize with no session header succeeds and issues an id", %{opts: opts} do
+      init_request =
+        build_request("initialize", %{
+          "protocolVersion" => "2025-03-26",
+          "clientInfo" => %{"name" => "test", "version" => "1.0.0"}
+        })
+
+      {:ok, body} = Message.encode_request(init_request, 1)
+
+      conn =
+        :post
+        |> conn("/", body)
+        |> put_req_header("content-type", "application/json")
+        |> put_req_header("accept", "application/json, text/event-stream")
+        |> StreamableHTTPPlug.call(opts)
+
+      assert conn.status == 200
+      assert [session_id] = get_resp_header(conn, "mcp-session-id")
+      assert is_binary(session_id) and session_id != ""
     end
   end
 

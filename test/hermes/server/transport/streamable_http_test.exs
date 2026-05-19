@@ -124,6 +124,64 @@ defmodule Hermes.Server.Transport.StreamableHTTPTest do
       Process.sleep(100)
       refute Process.alive?(transport)
     end
+
+    @tag timeout: 15_000
+    test "handle_message_for_sse outer GenServer.call uses :infinity so inner request_timeout is the real bound",
+         %{transport: transport} do
+      # Regression test: prior to the :infinity patch the outer
+      # GenServer.call relied on the default 5_000ms timeout, so any
+      # MCP tool call slower than 5s would crash the transport caller
+      # with {:timeout, {GenServer, :call, [...]}} even though the
+      # inner Task.Supervisor.async was bounded by state.request_timeout
+      # (default 30s).
+      #
+      # We register a fake server under the same registry key the
+      # transport looks up via `whereis_server/1` and have it sleep
+      # past the 5_000ms mark before replying. Without :infinity on the
+      # outer call this test exits with a timeout at 5s; with the patch
+      # the call returns normally.
+      test_pid = self()
+
+      fake_server =
+        spawn(fn ->
+          {:ok, _} =
+            Registry.register(Hermes.Server.Registry, {:server, StubServer}, nil)
+
+          send(test_pid, :fake_server_registered)
+
+          receive do
+            {:"$gen_call", from, {:request, _message, _session_id, _context}} ->
+              Process.sleep(5_500)
+              GenServer.reply(from, {:ok, ~s({"jsonrpc":"2.0","id":1,"result":{}})})
+          end
+
+          receive do
+            :stop -> :ok
+          after
+            1_000 -> :ok
+          end
+        end)
+
+      assert_receive :fake_server_registered, 1_000
+
+      session_id = "test-session-slow"
+      message = build_request("ping", %{})
+
+      start_ms = System.monotonic_time(:millisecond)
+
+      result =
+        StreamableHTTP.handle_message_for_sse(transport, session_id, message, %{})
+
+      elapsed_ms = System.monotonic_time(:millisecond) - start_ms
+
+      assert match?({:ok, _}, result) or match?({:sse, _}, result),
+             "expected slow tool call to return a successful response, got: #{inspect(result)}"
+
+      assert elapsed_ms >= 5_000,
+             "regression test must actually exceed the default 5_000ms outer timeout (elapsed: #{elapsed_ms}ms)"
+
+      send(fake_server, :stop)
+    end
   end
 
   describe "supported_protocol_versions/0" do

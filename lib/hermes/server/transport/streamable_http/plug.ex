@@ -121,15 +121,30 @@ if Code.ensure_loaded?(Plug) do
       with :ok <- validate_accept_header(conn),
            {:ok, body, conn} <- maybe_read_request_body(conn, opts),
            {:ok, [message]} <- maybe_parse_messages(body) do
-        session_id = determine_session_id(conn, session_header, message)
-        context = build_request_context(conn)
+        case determine_session_id(conn, session_header, message) do
+          {:ok, session_id} ->
+            context = build_request_context(conn)
 
-        Logging.transport_event("parsed_messages", %{
-          message: message,
-          session_id: session_id
-        })
+            Logging.transport_event("parsed_messages", %{
+              message: message,
+              session_id: session_id
+            })
 
-        process_message(message, conn, transport, session_id, context, session_header)
+            process_message(message, conn, transport, session_id, context, session_header)
+
+          {:error, :missing_session_header} ->
+            # Non-initialize request with no Mcp-Session-Id. Per the MCP
+            # Streamable HTTP spec a server that requires a session id
+            # SHOULD answer such a request with HTTP 400 (not fabricate an
+            # id, which masked the missing-session contract). The request is
+            # otherwise valid JSON-RPC, so preserve its id.
+            send_jsonrpc_error(
+              conn,
+              Error.protocol(:invalid_request, %{message: "Mcp-Session-Id header required"}),
+              extract_request_id(message),
+              400
+            )
+        end
       else
         {:error, :invalid_accept_header} ->
           send_error(
@@ -299,6 +314,27 @@ if Code.ensure_loaded?(Plug) do
       send_jsonrpc_error(conn, error, extract_request_id(body))
     end
 
+    # Unknown / terminated session id on a non-initialize request. Per the
+    # MCP Streamable HTTP spec the server MUST answer with transport-level
+    # HTTP 404 (the JSON-RPC error *body* is informational; only the 404
+    # *status* carries the client's MUST-re-`initialize` obligation — a
+    # JSON-RPC error inside HTTP 2xx does not). :info, not :error — this
+    # is the expected outcome of a client resuming a dead session.
+    defp handle_request_error(conn, :session_not_found, body) do
+      Logging.transport_event("session_not_found", %{}, level: :info)
+
+      send_jsonrpc_error(
+        conn,
+        Error.protocol(:invalid_request, %{message: "Session not found"}),
+        extract_request_id(body),
+        404
+      )
+    end
+
+    # Catch-all: generic internal error + HTTP 400. Any NEW transport-level
+    # error atom that needs distinct HTTP semantics (e.g. a future
+    # :session_terminated → 404) MUST be added as its own clause ABOVE
+    # this one — adding it after would be shadowed and lose the status.
     defp handle_request_error(conn, reason, body) do
       Logging.transport_event("request_error", %{reason: reason}, level: :error)
 
@@ -388,12 +424,35 @@ if Code.ensure_loaded?(Plug) do
       end
     end
 
-    defp determine_session_id(_conn, _header, [message]) when Message.is_initialize(message) do
-      ID.generate_session_id()
+    # An initialize request MUST start without a session id — the server
+    # mints a fresh one. (Note: `message` here is a single decoded map,
+    # not a list — the prior `[message]` head never matched, so initialize
+    # silently fell through to id fabrication; that is now explicit.)
+    defp determine_session_id(_conn, _header, message) when Message.is_initialize(message) do
+      {:ok, ID.generate_session_id()}
     end
 
+    # Any other (non-initialize) JSON-RPC *request* MUST carry the
+    # session header. Do NOT fabricate an id: fabricating produced a
+    # brand-new uninitialized session that wedged the defer/init-wait
+    # path and masked the spec-mandated HTTP 400 for a missing session
+    # header. (Spec scopes the 400 to requests; notifications follow.)
+    defp determine_session_id(conn, session_header, message) when Message.is_request(message) do
+      case get_req_header(conn, session_header) do
+        [session_id] when is_binary(session_id) and session_id != "" ->
+          {:ok, session_id}
+
+        _ ->
+          {:error, :missing_session_header}
+      end
+    end
+
+    # Notifications / responses (no id) cannot wedge a client — no reply
+    # is awaited — so a missing session id is best-effort, not a spec
+    # violation. Preserve prior behavior: use the supplied id or fall
+    # back to a generated one.
     defp determine_session_id(conn, session_header, _message) do
-      get_or_create_session_id(conn, session_header)
+      {:ok, get_or_create_session_id(conn, session_header)}
     end
 
     defp maybe_parse_messages(body) when is_binary(body) do
@@ -454,12 +513,16 @@ if Code.ensure_loaded?(Plug) do
     end
 
     defp send_jsonrpc_error(conn, %Error{} = error, id) do
+      send_jsonrpc_error(conn, error, id, 400)
+    end
+
+    defp send_jsonrpc_error(conn, %Error{} = error, id, status) do
       error_id = id || ID.generate_error_id()
       {:ok, encoded_error} = Error.to_json_rpc(error, error_id)
 
       conn
       |> put_resp_content_type("application/json")
-      |> send_resp(400, encoded_error)
+      |> send_resp(status, encoded_error)
     end
 
     defp extract_request_id(%{"id" => request_id}), do: request_id
@@ -469,6 +532,13 @@ if Code.ensure_loaded?(Plug) do
       %{
         assigns: conn.assigns,
         type: :http,
+        # Marks this request as coming through the Streamable HTTP
+        # transport so Base's unknown-session → :session_not_found (HTTP
+        # 404) discriminator applies ONLY here. The deprecated 2024-11-05
+        # HTTP+SSE transport has different session-lifecycle semantics
+        # and MUST keep its prior behavior (ENA-9175 is Streamable-HTTP
+        # scoped — see plan non-goals).
+        transport: :streamable_http,
         req_headers: conn.req_headers,
         query_params: fetch_query_params_safe(conn),
         remote_ip: conn.remote_ip,
